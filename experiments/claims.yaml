@@ -1,0 +1,58 @@
+- id: CLAIM_AUTH
+  module: auth
+  pitfall: legacyToken
+  claim_text: The login response legacyToken compatibility path must not be deleted.
+  validity_condition: The claim is valid only while old mobile clients still read
+    the legacyToken response field.
+  key_terms:
+  - legacyToken
+  - generateLegacyToken
+  - getLegacyToken
+  - old mobile clients
+- id: CLAIM_ORDER
+  module: order
+  pitfall: orderStatus/refundStatus
+  claim_text: Order status and refund status must remain separate fields.
+  validity_condition: The claim is valid only while refund reconciliation still depends
+    on separate lifecycle fields.
+  key_terms:
+  - orderStatus
+  - refundStatus
+  - RefundStatus
+  - refund accounting
+- id: CLAIM_USER
+  module: user
+  pitfall: status=2 soft delete
+  claim_text: User deletion must keep the row and mark status as deleted instead of
+    physically deleting it.
+  validity_condition: The claim is valid only while audit records require the user
+    row to remain queryable.
+  key_terms:
+  - markDeleted
+  - STATUS_DELETED
+  - deleteById
+  - audit
+- id: CLAIM_PAYMENT
+  module: payment
+  pitfall: amountInCent
+  claim_text: Payment signature verification must keep using amountInCent rather than
+    amountInYuan.
+  validity_condition: The claim is valid only while third-party callbacks still sign
+    the amount in cents.
+  key_terms:
+  - amountInCent
+  - amountInYuan
+  - signature
+  - third-party callbacks
+- id: CLAIM_JOB
+  module: job
+  pitfall: syncBatchId
+  claim_text: Bill sync must keep the syncBatchId idempotency check.
+  validity_condition: The claim is valid only while reruns can deliver the same bill
+    batch more than once.
+  key_terms:
+  - syncBatchId
+  - existsBySyncBatchId
+  - exactly-once
+  - rerun
+

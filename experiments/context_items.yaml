@@ -1,0 +1,142 @@
+- id: C_AUTH_RESULT_001
+  module: auth
+  type: result_history
+  content: 修复旧版移动端登录兼容问题；优化 token 生成逻辑；增加登录兼容测试。
+  evidence: issue_auth_legacy_login
+  status: active
+  relevance_files:
+  - AuthService.java
+  - LoginController.java
+- id: C_AUTH_001
+  module: auth
+  type: retained_constraint
+  content: legacyToken 仍被旧版移动端依赖，修改 AuthService 或 LoginController 时不要删除。
+  evidence: failed_attempt_auth_legacy_token
+  status: active
+  relevance_files:
+  - AuthService.java
+  - LoginController.java
+  - LoginResponse.java
+- id: C_AUTH_002
+  module: auth
+  type: failed_attempt
+  content: 曾尝试只保留 accessToken，LoginCompatibilityTest 失败，旧版客户端无法登录。
+  evidence: F_AUTH_001
+  status: active
+  relevance_files:
+  - AuthService.java
+- id: C_AUTH_STALE_001
+  module: auth
+  type: retained_constraint
+  content: 旧版移动端仍依赖 legacyToken，不要删除；这条记录用于 full_process 的过期污染观测。
+  evidence: old_release_note
+  status: stale
+  relevance_files:
+  - AuthService.java
+- id: C_ORDER_RESULT_001
+  module: order
+  type: result_history
+  content: 修复退款对账错误；拆分订单主状态和退款状态；补充退款状态独立性测试。
+  evidence: pr_order_refund_split
+  status: active
+  relevance_files:
+  - OrderService.java
+  - ShopOrder.java
+- id: C_ORDER_001
+  module: order
+  type: retained_constraint
+  content: orderStatus 表示订单主流程，refundStatus 表示退款流程，两个字段必须保持独立。
+  evidence: failed_attempt_order_status_merge
+  status: active
+  relevance_files:
+  - OrderService.java
+  - ShopOrder.java
+  - RefundStatus.java
+- id: C_ORDER_002
+  module: order
+  type: failed_attempt
+  content: 曾合并 orderStatus 和 refundStatus，导致退款对账逻辑错误。
+  evidence: F_ORDER_001
+  status: active
+  relevance_files:
+  - OrderService.java
+- id: C_USER_RESULT_001
+  module: user
+  type: result_history
+  content: 删除用户改为逻辑删除；审计记录继续能追溯已删除用户。
+  evidence: commit_user_soft_delete
+  status: active
+  relevance_files:
+  - UserService.java
+  - UserRepository.java
+- id: C_USER_001
+  module: user
+  type: retained_constraint
+  content: 用户删除必须使用 status=2 逻辑删除，不要调用 deleteById 物理删除用户。
+  evidence: failed_attempt_user_delete_by_id
+  status: active
+  relevance_files:
+  - UserService.java
+  - UserRepository.java
+  - AuditService.java
+- id: C_USER_002
+  module: user
+  type: failed_attempt
+  content: 曾把 deleteUser 改成 repository.deleteById，导致审计记录断链。
+  evidence: F_USER_001
+  status: active
+  relevance_files:
+  - UserService.java
+- id: C_PAYMENT_RESULT_001
+  module: payment
+  type: result_history
+  content: 修复支付平台签名校验失败；保留回调原始金额字段 amountInCent。
+  evidence: issue_payment_signature
+  status: active
+  relevance_files:
+  - PaymentCallback.java
+  - PaymentCallbackService.java
+- id: C_PAYMENT_001
+  module: payment
+  type: retained_constraint
+  content: 支付平台签名要求使用分为单位的原始金额 amountInCent，不要改成 amountInYuan 参与签名。
+  evidence: failed_attempt_payment_yuan_signature
+  status: active
+  relevance_files:
+  - PaymentCallback.java
+  - PaymentCallbackService.java
+- id: C_PAYMENT_002
+  module: payment
+  type: failed_attempt
+  content: 曾统一金额字段为 amountInYuan，导致第三方回调签名校验失败。
+  evidence: F_PAYMENT_001
+  status: active
+  relevance_files:
+  - PaymentCallbackService.java
+- id: C_JOB_RESULT_001
+  module: job
+  type: result_history
+  content: 修复账单重复入账问题；账单同步增加 syncBatchId 幂等检查。
+  evidence: incident_bill_duplicate
+  status: active
+  relevance_files:
+  - BillSyncService.java
+  - BillRepository.java
+- id: C_JOB_001
+  module: job
+  type: retained_constraint
+  content: 账单同步必须保留 syncBatchId 幂等检查，重复批次不能再次入账。
+  evidence: failed_attempt_job_idempotency_removed
+  status: active
+  relevance_files:
+  - BillSyncService.java
+  - BillRepository.java
+- id: C_JOB_002
+  module: job
+  type: failed_attempt
+  content: 曾删除 syncBatchId 检查，失败重跑后产生重复账单。
+  evidence: F_JOB_001
+  status: active
+  relevance_files:
+  - BillSyncService.java
+

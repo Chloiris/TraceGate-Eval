@@ -1,0 +1,101 @@
+- id: S2_AUTH_RESULT
+  module: auth
+  type: result_history
+  status: active
+  content: 历史记录：曾修复 legacyToken 相关线上问题，并补充兼容性说明。
+- id: S2_AUTH_ACTIVE
+  module: auth
+  type: process_constraint
+  status: active
+  content: 旧版移动端仍在使用，必须保留 legacyToken。
+- id: S2_AUTH_STALE
+  module: auth
+  type: process_constraint
+  status: stale
+  content: 旧版移动端已下线，可以删除 legacyToken。
+- id: S2_AUTH_FAILURE
+  module: auth
+  type: failed_attempt
+  status: active
+  content: 历史失败：错误处理 legacyToken 后导致测试或线上兼容性失败。
+- id: S2_ORDER_RESULT
+  module: order
+  type: result_history
+  status: active
+  content: 历史记录：曾修复 orderStatus/refundStatus 相关线上问题，并补充兼容性说明。
+- id: S2_ORDER_ACTIVE
+  module: order
+  type: process_constraint
+  status: active
+  content: 退款对账仍依赖订单主状态和退款状态两个字段，不能合并。
+- id: S2_ORDER_STALE
+  module: order
+  type: process_constraint
+  status: stale
+  content: 新对账系统已迁移，可以合并订单主状态和退款状态。
+- id: S2_ORDER_FAILURE
+  module: order
+  type: failed_attempt
+  status: active
+  content: 历史失败：错误处理 orderStatus/refundStatus 后导致测试或线上兼容性失败。
+- id: S2_USER_RESULT
+  module: user
+  type: result_history
+  status: active
+  content: 历史记录：曾修复 status=2 soft delete 相关线上问题，并补充兼容性说明。
+- id: S2_USER_ACTIVE
+  module: user
+  type: process_constraint
+  status: active
+  content: 审计仍依赖用户记录，必须使用 status=2 逻辑删除。
+- id: S2_USER_STALE
+  module: user
+  type: process_constraint
+  status: stale
+  content: 审计已快照化，可以改为 deleteById 物理删除。
+- id: S2_USER_FAILURE
+  module: user
+  type: failed_attempt
+  status: active
+  content: 历史失败：错误处理 status=2 soft delete 后导致测试或线上兼容性失败。
+- id: S2_PAYMENT_RESULT
+  module: payment
+  type: result_history
+  status: active
+  content: 历史记录：曾修复 amountInCent 相关线上问题，并补充兼容性说明。
+- id: S2_PAYMENT_ACTIVE
+  module: payment
+  type: process_constraint
+  status: active
+  content: 第三方签名仍要求分单位，必须保留 amountInCent 签名路径。
+- id: S2_PAYMENT_STALE
+  module: payment
+  type: process_constraint
+  status: stale
+  content: 新支付网关已统一金额单位，可以改为 amountInYuan 签名路径。
+- id: S2_PAYMENT_FAILURE
+  module: payment
+  type: failed_attempt
+  status: active
+  content: 历史失败：错误处理 amountInCent 后导致测试或线上兼容性失败。
+- id: S2_JOB_RESULT
+  module: job
+  type: result_history
+  status: active
+  content: 历史记录：曾修复 syncBatchId 相关线上问题，并补充兼容性说明。
+- id: S2_JOB_ACTIVE
+  module: job
+  type: process_constraint
+  status: active
+  content: 重跑仍可能重复入账，必须保留 syncBatchId 幂等检查。
+- id: S2_JOB_STALE
+  module: job
+  type: process_constraint
+  status: stale
+  content: 新队列已提供 exactly-once，可以简化旧 syncBatchId 幂等逻辑。
+- id: S2_JOB_FAILURE
+  module: job
+  type: failed_attempt
+  status: active
+  content: 历史失败：错误处理 syncBatchId 后导致测试或线上兼容性失败。
+

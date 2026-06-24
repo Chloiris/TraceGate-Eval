@@ -1,0 +1,36 @@
+- id: F_AUTH_001
+  module: auth
+  failed_attempt: 删除 legacyToken，仅保留 accessToken。
+  failure_reason: LoginCompatibilityTest 失败，旧版客户端无法登录。
+  final_decision: 保留 legacyToken 与 accessToken 双轨逻辑。
+  verification:
+  - mvn test -Dtest=LoginCompatibilityTest
+- id: F_ORDER_001
+  module: order
+  failed_attempt: 合并 orderStatus 和 refundStatus。
+  failure_reason: 退款对账无法区分订单主状态和退款状态。
+  final_decision: 两个状态字段保持独立。
+  verification:
+  - mvn test -Dtest=RefundStatusIndependenceTest
+- id: F_USER_001
+  module: user
+  failed_attempt: 把 deleteUser 改成 repository.deleteById。
+  failure_reason: 审计记录无法再引用已删除用户。
+  final_decision: 使用 status=2 逻辑删除。
+  verification:
+  - mvn test -Dtest=AuditLogStillReferencesDeletedUserTest
+- id: F_PAYMENT_001
+  module: payment
+  failed_attempt: 把签名里的 amountInCent 改为 amountInYuan。
+  failure_reason: 第三方支付平台签名校验失败。
+  final_decision: 签名 payload 继续使用分为单位的 amountInCent。
+  verification:
+  - mvn test -Dtest=PaymentSignatureTest
+- id: F_JOB_001
+  module: job
+  failed_attempt: 删除 syncBatchId 幂等检查。
+  failure_reason: 账单同步失败重跑后重复入账。
+  final_decision: 保留 syncBatchId 去重逻辑。
+  verification:
+  - mvn test -Dtest=BillSyncIdempotentTest
+

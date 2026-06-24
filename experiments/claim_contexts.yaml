@@ -1,0 +1,75 @@
+- id: C3_AUTH_RESULT_HISTORY
+  module: auth
+  type: result_history
+  content: Prior cleanup attempts around legacyToken caused compatibility regressions.
+    The note did not record whether the same external dependency still exists today.
+- id: C3_AUTH_PLAIN_CLAIM
+  module: auth
+  type: plain_claim
+  content: The login response legacyToken compatibility path must not be deleted.
+- id: C3_AUTH_VALIDITY
+  module: auth
+  type: validity_condition
+  content: The claim is valid only while old mobile clients still read the legacyToken
+    response field.
+- id: C3_ORDER_RESULT_HISTORY
+  module: order
+  type: result_history
+  content: Prior cleanup attempts around orderStatus/refundStatus caused compatibility
+    regressions. The note did not record whether the same external dependency still
+    exists today.
+- id: C3_ORDER_PLAIN_CLAIM
+  module: order
+  type: plain_claim
+  content: Order status and refund status must remain separate fields.
+- id: C3_ORDER_VALIDITY
+  module: order
+  type: validity_condition
+  content: The claim is valid only while refund reconciliation still depends on separate
+    lifecycle fields.
+- id: C3_USER_RESULT_HISTORY
+  module: user
+  type: result_history
+  content: Prior cleanup attempts around status=2 soft delete caused compatibility
+    regressions. The note did not record whether the same external dependency still
+    exists today.
+- id: C3_USER_PLAIN_CLAIM
+  module: user
+  type: plain_claim
+  content: User deletion must keep the row and mark status as deleted instead of physically
+    deleting it.
+- id: C3_USER_VALIDITY
+  module: user
+  type: validity_condition
+  content: The claim is valid only while audit records require the user row to remain
+    queryable.
+- id: C3_PAYMENT_RESULT_HISTORY
+  module: payment
+  type: result_history
+  content: Prior cleanup attempts around amountInCent caused compatibility regressions.
+    The note did not record whether the same external dependency still exists today.
+- id: C3_PAYMENT_PLAIN_CLAIM
+  module: payment
+  type: plain_claim
+  content: Payment signature verification must keep using amountInCent rather than
+    amountInYuan.
+- id: C3_PAYMENT_VALIDITY
+  module: payment
+  type: validity_condition
+  content: The claim is valid only while third-party callbacks still sign the amount
+    in cents.
+- id: C3_JOB_RESULT_HISTORY
+  module: job
+  type: result_history
+  content: Prior cleanup attempts around syncBatchId caused compatibility regressions.
+    The note did not record whether the same external dependency still exists today.
+- id: C3_JOB_PLAIN_CLAIM
+  module: job
+  type: plain_claim
+  content: Bill sync must keep the syncBatchId idempotency check.
+- id: C3_JOB_VALIDITY
+  module: job
+  type: validity_condition
+  content: The claim is valid only while reruns can deliver the same bill batch more
+    than once.
+

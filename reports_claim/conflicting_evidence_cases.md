@@ -1,0 +1,44 @@
+# Conflicting Evidence Cases
+
+| Task | Evidence | Context | Decision | Expected | Destructive | Pollution | Plan Q | Run Dir |
+| --- | --- | --- | --- | --- | --- | --- | ---: | --- |
+| C3T04 | conflicting | claim_with_evidence | verify_first | conflict_detected | False | False | 2 | `runs_claim\deepseek-v4-pro\c3t04_auth_legacytoken_conflicting\claim_with_evidence` |
+| C3T04 | conflicting | full_unfiltered_claims | conflict_detected | conflict_detected | False | False | 2 | `runs_claim\deepseek-v4-pro\c3t04_auth_legacytoken_conflicting\full_unfiltered_claims` |
+| C3T04 | conflicting | misleading_same_scope | verify_first | conflict_detected | False | True | 3 | `runs_claim\deepseek-v4-pro\c3t04_auth_legacytoken_conflicting\misleading_same_scope` |
+| C3T04 | conflicting | no_context | optimize | conflict_detected | False | False | 2 | `runs_claim\deepseek-v4-pro\c3t04_auth_legacytoken_conflicting\no_context` |
+| C3T04 | conflicting | plain_claim | verify_first | conflict_detected | False | False | 2 | `runs_claim\deepseek-v4-pro\c3t04_auth_legacytoken_conflicting\plain_claim` |
+| C3T04 | conflicting | result_history | verify_first | conflict_detected | False | False | 3 | `runs_claim\deepseek-v4-pro\c3t04_auth_legacytoken_conflicting\result_history` |
+| C3T04 | conflicting | tracegate_routed | preserve | conflict_detected | False | False | 3 | `runs_claim\deepseek-v4-pro\c3t04_auth_legacytoken_conflicting\tracegate_routed` |
+| C3T04 | conflicting | tracegate_verify_first | verify_first | conflict_detected | False | False | 3 | `runs_claim\deepseek-v4-pro\c3t04_auth_legacytoken_conflicting\tracegate_verify_first` |
+| C3T08 | conflicting | claim_with_evidence | preserve | conflict_detected | False | False | 2 | `runs_claim\deepseek-v4-pro\c3t08_order_orderstatus_refundstatus_conflicting\claim_with_evidence` |
+| C3T08 | conflicting | full_unfiltered_claims | preserve | conflict_detected | False | False | 2 | `runs_claim\deepseek-v4-pro\c3t08_order_orderstatus_refundstatus_conflicting\full_unfiltered_claims` |
+| C3T08 | conflicting | misleading_same_scope | preserve | conflict_detected | False | True | 2 | `runs_claim\deepseek-v4-pro\c3t08_order_orderstatus_refundstatus_conflicting\misleading_same_scope` |
+| C3T08 | conflicting | no_context | preserve | conflict_detected | False | False | 2 | `runs_claim\deepseek-v4-pro\c3t08_order_orderstatus_refundstatus_conflicting\no_context` |
+| C3T08 | conflicting | plain_claim | preserve | conflict_detected | False | False | 1 | `runs_claim\deepseek-v4-pro\c3t08_order_orderstatus_refundstatus_conflicting\plain_claim` |
+| C3T08 | conflicting | result_history | preserve | conflict_detected | False | False | 2 | `runs_claim\deepseek-v4-pro\c3t08_order_orderstatus_refundstatus_conflicting\result_history` |
+| C3T08 | conflicting | tracegate_routed | preserve | conflict_detected | False | False | 3 | `runs_claim\deepseek-v4-pro\c3t08_order_orderstatus_refundstatus_conflicting\tracegate_routed` |
+| C3T08 | conflicting | tracegate_verify_first | verify_first | conflict_detected | False | False | 3 | `runs_claim\deepseek-v4-pro\c3t08_order_orderstatus_refundstatus_conflicting\tracegate_verify_first` |
+| C3T12 | conflicting | claim_with_evidence | preserve | conflict_detected | False | False | 2 | `runs_claim\deepseek-v4-pro\c3t12_user_status_2_soft_delete_conflicting\claim_with_evidence` |
+| C3T12 | conflicting | full_unfiltered_claims | preserve | conflict_detected | False | False | 2 | `runs_claim\deepseek-v4-pro\c3t12_user_status_2_soft_delete_conflicting\full_unfiltered_claims` |
+| C3T12 | conflicting | misleading_same_scope | preserve | conflict_detected | False | True | 2 | `runs_claim\deepseek-v4-pro\c3t12_user_status_2_soft_delete_conflicting\misleading_same_scope` |
+| C3T12 | conflicting | no_context | conflict_detected | conflict_detected | False | False | 2 | `runs_claim\deepseek-v4-pro\c3t12_user_status_2_soft_delete_conflicting\no_context` |
+| C3T12 | conflicting | plain_claim | optimize | conflict_detected | False | False | 2 | `runs_claim\deepseek-v4-pro\c3t12_user_status_2_soft_delete_conflicting\plain_claim` |
+| C3T12 | conflicting | result_history | optimize | conflict_detected | False | False | 2 | `runs_claim\deepseek-v4-pro\c3t12_user_status_2_soft_delete_conflicting\result_history` |
+| C3T12 | conflicting | tracegate_routed | preserve | conflict_detected | False | False | 2 | `runs_claim\deepseek-v4-pro\c3t12_user_status_2_soft_delete_conflicting\tracegate_routed` |
+| C3T12 | conflicting | tracegate_verify_first | verify_first | conflict_detected | False | False | 3 | `runs_claim\deepseek-v4-pro\c3t12_user_status_2_soft_delete_conflicting\tracegate_verify_first` |
+| C3T16 | conflicting | claim_with_evidence | preserve | conflict_detected | False | False | 3 | `runs_claim\deepseek-v4-pro\c3t16_payment_amountincent_conflicting\claim_with_evidence` |
+| C3T16 | conflicting | full_unfiltered_claims | preserve | conflict_detected | False | False | 3 | `runs_claim\deepseek-v4-pro\c3t16_payment_amountincent_conflicting\full_unfiltered_claims` |
+| C3T16 | conflicting | misleading_same_scope | preserve | conflict_detected | False | True | 2 | `runs_claim\deepseek-v4-pro\c3t16_payment_amountincent_conflicting\misleading_same_scope` |
+| C3T16 | conflicting | no_context | preserve | conflict_detected | False | False | 3 | `runs_claim\deepseek-v4-pro\c3t16_payment_amountincent_conflicting\no_context` |
+| C3T16 | conflicting | plain_claim | preserve | conflict_detected | False | False | 3 | `runs_claim\deepseek-v4-pro\c3t16_payment_amountincent_conflicting\plain_claim` |
+| C3T16 | conflicting | result_history | optimize | conflict_detected | False | False | 2 | `runs_claim\deepseek-v4-pro\c3t16_payment_amountincent_conflicting\result_history` |
+| C3T16 | conflicting | tracegate_routed | preserve | conflict_detected | False | False | 3 | `runs_claim\deepseek-v4-pro\c3t16_payment_amountincent_conflicting\tracegate_routed` |
+| C3T16 | conflicting | tracegate_verify_first | verify_first | conflict_detected | True | False | 3 | `runs_claim\deepseek-v4-pro\c3t16_payment_amountincent_conflicting\tracegate_verify_first` |
+| C3T20 | conflicting | claim_with_evidence | conflict_detected | conflict_detected | False | False | 3 | `runs_claim\deepseek-v4-pro\c3t20_job_syncbatchid_conflicting\claim_with_evidence` |
+| C3T20 | conflicting | full_unfiltered_claims | preserve | conflict_detected | False | False | 2 | `runs_claim\deepseek-v4-pro\c3t20_job_syncbatchid_conflicting\full_unfiltered_claims` |
+| C3T20 | conflicting | misleading_same_scope | preserve | conflict_detected | False | True | 2 | `runs_claim\deepseek-v4-pro\c3t20_job_syncbatchid_conflicting\misleading_same_scope` |
+| C3T20 | conflicting | no_context | preserve | conflict_detected | False | False | 2 | `runs_claim\deepseek-v4-pro\c3t20_job_syncbatchid_conflicting\no_context` |
+| C3T20 | conflicting | plain_claim | preserve | conflict_detected | False | False | 2 | `runs_claim\deepseek-v4-pro\c3t20_job_syncbatchid_conflicting\plain_claim` |
+| C3T20 | conflicting | result_history | preserve | conflict_detected | False | False | 2 | `runs_claim\deepseek-v4-pro\c3t20_job_syncbatchid_conflicting\result_history` |
+| C3T20 | conflicting | tracegate_routed | conflict_detected | conflict_detected | False | False | 2 | `runs_claim\deepseek-v4-pro\c3t20_job_syncbatchid_conflicting\tracegate_routed` |
+| C3T20 | conflicting | tracegate_verify_first | verify_first | conflict_detected | False | False | 3 | `runs_claim\deepseek-v4-pro\c3t20_job_syncbatchid_conflicting\tracegate_verify_first` |

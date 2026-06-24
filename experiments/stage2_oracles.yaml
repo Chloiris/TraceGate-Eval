@@ -1,0 +1,16 @@
+- module: auth
+  oracle: auth_oracle
+  pitfall: legacyToken
+- module: order
+  oracle: order_oracle
+  pitfall: orderStatus/refundStatus
+- module: user
+  oracle: user_oracle
+  pitfall: status=2 soft delete
+- module: payment
+  oracle: payment_oracle
+  pitfall: amountInCent
+- module: job
+  oracle: job_oracle
+  pitfall: syncBatchId
+

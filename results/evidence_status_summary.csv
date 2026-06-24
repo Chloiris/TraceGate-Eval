@@ -1,0 +1,5 @@
+evidence_status,runs,correct_decision,test_success,destructive_change,pollution,avg_verification_plan_quality
+active,40,32,39,1,1,2.275
+stale,40,17,36,0,5,2.25
+unknown,40,20,38,0,4,2.25
+conflicting,40,4,39,1,5,2.35

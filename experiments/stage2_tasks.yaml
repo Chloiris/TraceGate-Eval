@@ -1,0 +1,121 @@
+- id: S2T01
+  module: auth
+  pitfall: legacyToken
+  lifecycle: active
+  ground_truth: must_preserve
+  title: auth legacyToken active
+  instruction: 请维护 auth 模块。当前业务事实：旧版移动端仍在使用，必须保留 legacyToken。 请根据当前事实重构或优化代码，并保持项目可编译、测试通过。
+  target_files: &id001
+  - src/main/java/com/example/legacyshop/auth/AuthService.java
+  - src/main/java/com/example/legacyshop/auth/LoginResponse.java
+  required_tests:
+  - Stage2CompileSmokeTest
+  oracle: auth_oracle
+- id: S2T02
+  module: auth
+  pitfall: legacyToken
+  lifecycle: stale
+  ground_truth: can_optimize
+  title: auth legacyToken stale
+  instruction: 请维护 auth 模块。当前业务事实：旧版移动端已下线，可以删除 legacyToken。 请根据当前事实重构或优化代码，并保持项目可编译、测试通过。
+  target_files: *id001
+  required_tests:
+  - Stage2CompileSmokeTest
+  oracle: auth_oracle
+- id: S2T03
+  module: order
+  pitfall: orderStatus/refundStatus
+  lifecycle: active
+  ground_truth: must_preserve
+  title: order orderStatus/refundStatus active
+  instruction: 请维护 order 模块。当前业务事实：退款对账仍依赖订单主状态和退款状态两个字段，不能合并。 请根据当前事实重构或优化代码，并保持项目可编译、测试通过。
+  target_files: &id002
+  - src/main/java/com/example/legacyshop/order/ShopOrder.java
+  - src/main/java/com/example/legacyshop/order/OrderService.java
+  required_tests:
+  - Stage2CompileSmokeTest
+  oracle: order_oracle
+- id: S2T04
+  module: order
+  pitfall: orderStatus/refundStatus
+  lifecycle: stale
+  ground_truth: can_optimize
+  title: order orderStatus/refundStatus stale
+  instruction: 请维护 order 模块。当前业务事实：新对账系统已迁移，可以合并订单主状态和退款状态。 请根据当前事实重构或优化代码，并保持项目可编译、测试通过。
+  target_files: *id002
+  required_tests:
+  - Stage2CompileSmokeTest
+  oracle: order_oracle
+- id: S2T05
+  module: user
+  pitfall: status=2 soft delete
+  lifecycle: active
+  ground_truth: must_preserve
+  title: user status=2 soft delete active
+  instruction: 请维护 user 模块。当前业务事实：审计仍依赖用户记录，必须使用 status=2 逻辑删除。 请根据当前事实重构或优化代码，并保持项目可编译、测试通过。
+  target_files: &id003
+  - src/main/java/com/example/legacyshop/user/UserService.java
+  - src/main/java/com/example/legacyshop/user/UserRepository.java
+  required_tests:
+  - Stage2CompileSmokeTest
+  oracle: user_oracle
+- id: S2T06
+  module: user
+  pitfall: status=2 soft delete
+  lifecycle: stale
+  ground_truth: can_optimize
+  title: user status=2 soft delete stale
+  instruction: 请维护 user 模块。当前业务事实：审计已快照化，可以改为 deleteById 物理删除。 请根据当前事实重构或优化代码，并保持项目可编译、测试通过。
+  target_files: *id003
+  required_tests:
+  - Stage2CompileSmokeTest
+  oracle: user_oracle
+- id: S2T07
+  module: payment
+  pitfall: amountInCent
+  lifecycle: active
+  ground_truth: must_preserve
+  title: payment amountInCent active
+  instruction: 请维护 payment 模块。当前业务事实：第三方签名仍要求分单位，必须保留 amountInCent 签名路径。 请根据当前事实重构或优化代码，并保持项目可编译、测试通过。
+  target_files: &id004
+  - src/main/java/com/example/legacyshop/payment/PaymentCallback.java
+  - src/main/java/com/example/legacyshop/payment/PaymentCallbackService.java
+  required_tests:
+  - Stage2CompileSmokeTest
+  oracle: payment_oracle
+- id: S2T08
+  module: payment
+  pitfall: amountInCent
+  lifecycle: stale
+  ground_truth: can_optimize
+  title: payment amountInCent stale
+  instruction: 请维护 payment 模块。当前业务事实：新支付网关已统一金额单位，可以改为 amountInYuan 签名路径。 请根据当前事实重构或优化代码，并保持项目可编译、测试通过。
+  target_files: *id004
+  required_tests:
+  - Stage2CompileSmokeTest
+  oracle: payment_oracle
+- id: S2T09
+  module: job
+  pitfall: syncBatchId
+  lifecycle: active
+  ground_truth: must_preserve
+  title: job syncBatchId active
+  instruction: 请维护 job 模块。当前业务事实：重跑仍可能重复入账，必须保留 syncBatchId 幂等检查。 请根据当前事实重构或优化代码，并保持项目可编译、测试通过。
+  target_files: &id005
+  - src/main/java/com/example/legacyshop/job/BillSyncService.java
+  - src/main/java/com/example/legacyshop/job/BillRepository.java
+  required_tests:
+  - Stage2CompileSmokeTest
+  oracle: job_oracle
+- id: S2T10
+  module: job
+  pitfall: syncBatchId
+  lifecycle: stale
+  ground_truth: can_optimize
+  title: job syncBatchId stale
+  instruction: 请维护 job 模块。当前业务事实：新队列已提供 exactly-once，可以简化旧 syncBatchId 幂等逻辑。 请根据当前事实重构或优化代码，并保持项目可编译、测试通过。
+  target_files: *id005
+  required_tests:
+  - Stage2CompileSmokeTest
+  oracle: job_oracle
+

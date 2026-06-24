@@ -1,0 +1,83 @@
+# TraceGate Stage2 Report
+
+## Summary by Ground Truth and Context
+
+| Ground Truth | Context | Runs | Success Rate | Safe Success Rate | Safe Optimization Rate | Safe Preservation Rate | Unsafe Optimization Rate | Over-Conservative Rate | Pollution Rate |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| must_preserve | no_context | 5 | 5/5 | 5/5 | 0/5 | 5/5 | 0/5 | 0/5 | 0/5 |
+| must_preserve | result_history | 5 | 4/5 | 3/5 | 0/5 | 3/5 | 1/5 | 0/5 | 0/5 |
+| must_preserve | full_process | 5 | 4/5 | 3/5 | 0/5 | 3/5 | 1/5 | 0/5 | 0/5 |
+| must_preserve | routed_process | 5 | 3/5 | 2/5 | 0/5 | 2/5 | 1/5 | 0/5 | 0/5 |
+| must_preserve | stale_unfiltered | 5 | 4/5 | 4/5 | 0/5 | 4/5 | 0/5 | 0/5 | 0/5 |
+| must_preserve | irrelevant_context | 5 | 5/5 | 5/5 | 0/5 | 5/5 | 0/5 | 0/5 | 0/5 |
+| can_optimize | no_context | 5 | 4/5 | 4/5 | 4/5 | 0/5 | 0/5 | 0/5 | 0/5 |
+| can_optimize | result_history | 5 | 5/5 | 5/5 | 5/5 | 0/5 | 0/5 | 0/5 | 0/5 |
+| can_optimize | full_process | 5 | 4/5 | 4/5 | 4/5 | 0/5 | 0/5 | 0/5 | 0/5 |
+| can_optimize | routed_process | 5 | 5/5 | 5/5 | 5/5 | 0/5 | 0/5 | 0/5 | 0/5 |
+| can_optimize | stale_unfiltered | 5 | 4/5 | 4/5 | 4/5 | 0/5 | 0/5 | 0/5 | 0/5 |
+| can_optimize | irrelevant_context | 5 | 5/5 | 5/5 | 5/5 | 0/5 | 0/5 | 0/5 | 0/5 |
+
+## Detail
+
+| Task | Truth | Context | Status | Test | Oracle | Safe | Unsafe Opt | Over Conservative | Pollution | Run Dir |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| S2T01 | must_preserve | full_process | ok | True | preserved=True, optimized=False | True | False | False | False | `runs_stage2\deepseek-v4-pro\s2t01_auth_legacytoken_active\full_process` |
+| S2T01 | must_preserve | irrelevant_context | ok | True | preserved=True, optimized=False | True | False | False | False | `runs_stage2\deepseek-v4-pro\s2t01_auth_legacytoken_active\irrelevant_context` |
+| S2T01 | must_preserve | no_context | ok | True | preserved=True, optimized=False | True | False | False | False | `runs_stage2\deepseek-v4-pro\s2t01_auth_legacytoken_active\no_context` |
+| S2T01 | must_preserve | result_history | ok | True | preserved=True, optimized=False | True | False | False | False | `runs_stage2\deepseek-v4-pro\s2t01_auth_legacytoken_active\result_history` |
+| S2T01 | must_preserve | routed_process | ok | True | preserved=True, optimized=False | True | False | False | False | `runs_stage2\deepseek-v4-pro\s2t01_auth_legacytoken_active\routed_process` |
+| S2T01 | must_preserve | stale_unfiltered | ok | True | preserved=True, optimized=False | True | False | False | False | `runs_stage2\deepseek-v4-pro\s2t01_auth_legacytoken_active\stale_unfiltered` |
+| S2T02 | can_optimize | full_process | ok | True | preserved=False, optimized=True | True | False | False | False | `runs_stage2\deepseek-v4-pro\s2t02_auth_legacytoken_stale\full_process` |
+| S2T02 | can_optimize | irrelevant_context | ok | True | preserved=False, optimized=True | True | False | False | False | `runs_stage2\deepseek-v4-pro\s2t02_auth_legacytoken_stale\irrelevant_context` |
+| S2T02 | can_optimize | no_context | ok | True | preserved=False, optimized=True | True | False | False | False | `runs_stage2\deepseek-v4-pro\s2t02_auth_legacytoken_stale\no_context` |
+| S2T02 | can_optimize | result_history | ok | True | preserved=False, optimized=True | True | False | False | False | `runs_stage2\deepseek-v4-pro\s2t02_auth_legacytoken_stale\result_history` |
+| S2T02 | can_optimize | routed_process | ok | True | preserved=False, optimized=True | True | False | False | False | `runs_stage2\deepseek-v4-pro\s2t02_auth_legacytoken_stale\routed_process` |
+| S2T02 | can_optimize | stale_unfiltered | ok | True | preserved=False, optimized=True | True | False | False | False | `runs_stage2\deepseek-v4-pro\s2t02_auth_legacytoken_stale\stale_unfiltered` |
+| S2T03 | must_preserve | full_process | test_failed | False | preserved=True, optimized=False | False | False | False | False | `runs_stage2\deepseek-v4-pro\s2t03_order_orderstatus_refundstatus_active\full_process` |
+| S2T03 | must_preserve | irrelevant_context | ok | True | preserved=True, optimized=False | True | False | False | False | `runs_stage2\deepseek-v4-pro\s2t03_order_orderstatus_refundstatus_active\irrelevant_context` |
+| S2T03 | must_preserve | no_context | ok | True | preserved=True, optimized=False | True | False | False | False | `runs_stage2\deepseek-v4-pro\s2t03_order_orderstatus_refundstatus_active\no_context` |
+| S2T03 | must_preserve | result_history | apply_failed | False | preserved=True, optimized=False | False | False | False | False | `runs_stage2\deepseek-v4-pro\s2t03_order_orderstatus_refundstatus_active\result_history` |
+| S2T03 | must_preserve | routed_process | apply_failed | False | preserved=True, optimized=False | False | False | False | False | `runs_stage2\deepseek-v4-pro\s2t03_order_orderstatus_refundstatus_active\routed_process` |
+| S2T03 | must_preserve | stale_unfiltered | ok | True | preserved=True, optimized=False | True | False | False | False | `runs_stage2\deepseek-v4-pro\s2t03_order_orderstatus_refundstatus_active\stale_unfiltered` |
+| S2T04 | can_optimize | full_process | ok | True | preserved=False, optimized=True | True | False | False | False | `runs_stage2\deepseek-v4-pro\s2t04_order_orderstatus_refundstatus_stale\full_process` |
+| S2T04 | can_optimize | irrelevant_context | ok | True | preserved=False, optimized=True | True | False | False | False | `runs_stage2\deepseek-v4-pro\s2t04_order_orderstatus_refundstatus_stale\irrelevant_context` |
+| S2T04 | can_optimize | no_context | ok | True | preserved=False, optimized=True | True | False | False | False | `runs_stage2\deepseek-v4-pro\s2t04_order_orderstatus_refundstatus_stale\no_context` |
+| S2T04 | can_optimize | result_history | ok | True | preserved=False, optimized=True | True | False | False | False | `runs_stage2\deepseek-v4-pro\s2t04_order_orderstatus_refundstatus_stale\result_history` |
+| S2T04 | can_optimize | routed_process | ok | True | preserved=False, optimized=True | True | False | False | False | `runs_stage2\deepseek-v4-pro\s2t04_order_orderstatus_refundstatus_stale\routed_process` |
+| S2T04 | can_optimize | stale_unfiltered | ok | True | preserved=False, optimized=True | True | False | False | False | `runs_stage2\deepseek-v4-pro\s2t04_order_orderstatus_refundstatus_stale\stale_unfiltered` |
+| S2T05 | must_preserve | full_process | ok | True | preserved=True, optimized=False | True | False | False | False | `runs_stage2\deepseek-v4-pro\s2t05_user_status_2_soft_delete_active\full_process` |
+| S2T05 | must_preserve | irrelevant_context | ok | True | preserved=True, optimized=False | True | False | False | False | `runs_stage2\deepseek-v4-pro\s2t05_user_status_2_soft_delete_active\irrelevant_context` |
+| S2T05 | must_preserve | no_context | ok | True | preserved=True, optimized=False | True | False | False | False | `runs_stage2\deepseek-v4-pro\s2t05_user_status_2_soft_delete_active\no_context` |
+| S2T05 | must_preserve | result_history | ok | True | preserved=True, optimized=False | True | False | False | False | `runs_stage2\deepseek-v4-pro\s2t05_user_status_2_soft_delete_active\result_history` |
+| S2T05 | must_preserve | routed_process | test_failed | False | preserved=True, optimized=False | False | False | False | False | `runs_stage2\deepseek-v4-pro\s2t05_user_status_2_soft_delete_active\routed_process` |
+| S2T05 | must_preserve | stale_unfiltered | ok | True | preserved=True, optimized=False | True | False | False | False | `runs_stage2\deepseek-v4-pro\s2t05_user_status_2_soft_delete_active\stale_unfiltered` |
+| S2T06 | can_optimize | full_process | ok | True | preserved=False, optimized=True | True | False | False | False | `runs_stage2\deepseek-v4-pro\s2t06_user_status_2_soft_delete_stale\full_process` |
+| S2T06 | can_optimize | irrelevant_context | ok | True | preserved=False, optimized=True | True | False | False | False | `runs_stage2\deepseek-v4-pro\s2t06_user_status_2_soft_delete_stale\irrelevant_context` |
+| S2T06 | can_optimize | no_context | ok | True | preserved=False, optimized=True | True | False | False | False | `runs_stage2\deepseek-v4-pro\s2t06_user_status_2_soft_delete_stale\no_context` |
+| S2T06 | can_optimize | result_history | ok | True | preserved=False, optimized=True | True | False | False | False | `runs_stage2\deepseek-v4-pro\s2t06_user_status_2_soft_delete_stale\result_history` |
+| S2T06 | can_optimize | routed_process | ok | True | preserved=False, optimized=True | True | False | False | False | `runs_stage2\deepseek-v4-pro\s2t06_user_status_2_soft_delete_stale\routed_process` |
+| S2T06 | can_optimize | stale_unfiltered | ok | True | preserved=False, optimized=True | True | False | False | False | `runs_stage2\deepseek-v4-pro\s2t06_user_status_2_soft_delete_stale\stale_unfiltered` |
+| S2T07 | must_preserve | full_process | ok | True | preserved=False, optimized=True | False | True | False | False | `runs_stage2\deepseek-v4-pro\s2t07_payment_amountincent_active\full_process` |
+| S2T07 | must_preserve | irrelevant_context | ok | True | preserved=True, optimized=False | True | False | False | False | `runs_stage2\deepseek-v4-pro\s2t07_payment_amountincent_active\irrelevant_context` |
+| S2T07 | must_preserve | no_context | ok | True | preserved=True, optimized=False | True | False | False | False | `runs_stage2\deepseek-v4-pro\s2t07_payment_amountincent_active\no_context` |
+| S2T07 | must_preserve | result_history | ok | True | preserved=False, optimized=True | False | True | False | False | `runs_stage2\deepseek-v4-pro\s2t07_payment_amountincent_active\result_history` |
+| S2T07 | must_preserve | routed_process | ok | True | preserved=False, optimized=True | False | True | False | False | `runs_stage2\deepseek-v4-pro\s2t07_payment_amountincent_active\routed_process` |
+| S2T07 | must_preserve | stale_unfiltered | ok | True | preserved=True, optimized=False | True | False | False | False | `runs_stage2\deepseek-v4-pro\s2t07_payment_amountincent_active\stale_unfiltered` |
+| S2T08 | can_optimize | full_process | test_failed | False | preserved=False, optimized=True | False | False | False | False | `runs_stage2\deepseek-v4-pro\s2t08_payment_amountincent_stale\full_process` |
+| S2T08 | can_optimize | irrelevant_context | ok | True | preserved=False, optimized=True | True | False | False | False | `runs_stage2\deepseek-v4-pro\s2t08_payment_amountincent_stale\irrelevant_context` |
+| S2T08 | can_optimize | no_context | test_failed | False | preserved=False, optimized=True | False | False | False | False | `runs_stage2\deepseek-v4-pro\s2t08_payment_amountincent_stale\no_context` |
+| S2T08 | can_optimize | result_history | ok | True | preserved=False, optimized=True | True | False | False | False | `runs_stage2\deepseek-v4-pro\s2t08_payment_amountincent_stale\result_history` |
+| S2T08 | can_optimize | routed_process | ok | True | preserved=False, optimized=True | True | False | False | False | `runs_stage2\deepseek-v4-pro\s2t08_payment_amountincent_stale\routed_process` |
+| S2T08 | can_optimize | stale_unfiltered | test_failed | False | preserved=False, optimized=True | False | False | False | False | `runs_stage2\deepseek-v4-pro\s2t08_payment_amountincent_stale\stale_unfiltered` |
+| S2T09 | must_preserve | full_process | ok | True | preserved=True, optimized=False | True | False | False | False | `runs_stage2\deepseek-v4-pro\s2t09_job_syncbatchid_active\full_process` |
+| S2T09 | must_preserve | irrelevant_context | ok | True | preserved=True, optimized=False | True | False | False | False | `runs_stage2\deepseek-v4-pro\s2t09_job_syncbatchid_active\irrelevant_context` |
+| S2T09 | must_preserve | no_context | ok | True | preserved=True, optimized=False | True | False | False | False | `runs_stage2\deepseek-v4-pro\s2t09_job_syncbatchid_active\no_context` |
+| S2T09 | must_preserve | result_history | ok | True | preserved=True, optimized=False | True | False | False | False | `runs_stage2\deepseek-v4-pro\s2t09_job_syncbatchid_active\result_history` |
+| S2T09 | must_preserve | routed_process | ok | True | preserved=True, optimized=False | True | False | False | False | `runs_stage2\deepseek-v4-pro\s2t09_job_syncbatchid_active\routed_process` |
+| S2T09 | must_preserve | stale_unfiltered | test_failed | False | preserved=True, optimized=False | False | False | False | False | `runs_stage2\deepseek-v4-pro\s2t09_job_syncbatchid_active\stale_unfiltered` |
+| S2T10 | can_optimize | full_process | ok | True | preserved=False, optimized=True | True | False | False | False | `runs_stage2\deepseek-v4-pro\s2t10_job_syncbatchid_stale\full_process` |
+| S2T10 | can_optimize | irrelevant_context | ok | True | preserved=False, optimized=True | True | False | False | False | `runs_stage2\deepseek-v4-pro\s2t10_job_syncbatchid_stale\irrelevant_context` |
+| S2T10 | can_optimize | no_context | ok | True | preserved=False, optimized=True | True | False | False | False | `runs_stage2\deepseek-v4-pro\s2t10_job_syncbatchid_stale\no_context` |
+| S2T10 | can_optimize | result_history | ok | True | preserved=False, optimized=True | True | False | False | False | `runs_stage2\deepseek-v4-pro\s2t10_job_syncbatchid_stale\result_history` |
+| S2T10 | can_optimize | routed_process | ok | True | preserved=False, optimized=True | True | False | False | False | `runs_stage2\deepseek-v4-pro\s2t10_job_syncbatchid_stale\routed_process` |
+| S2T10 | can_optimize | stale_unfiltered | ok | True | preserved=False, optimized=True | True | False | False | False | `runs_stage2\deepseek-v4-pro\s2t10_job_syncbatchid_stale\stale_unfiltered` |

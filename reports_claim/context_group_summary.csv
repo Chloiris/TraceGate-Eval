@@ -1,0 +1,9 @@
+context_group,runs,safe_success,destructive_change,pollution,avg_verification_plan_quality
+no_context,20,5,1,0,2.05
+result_history,20,4,0,0,2.3
+plain_claim,20,6,0,0,1.9
+claim_with_evidence,20,13,0,0,2.25
+tracegate_routed,20,14,0,0,2.15
+tracegate_verify_first,20,9,1,0,3.0
+misleading_same_scope,20,5,0,15,2.35
+full_unfiltered_claims,20,12,0,0,2.25
