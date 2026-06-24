@@ -211,10 +211,51 @@ python scripts/plot_results.py
 
 The existing checked-in Stage3 summary is under [results/](results/) and is generated from [reports_claim/](reports_claim/).
 
+## Web Dashboard / API Prototype
+
+v0.1 also includes a lightweight FastAPI layer that wraps the benchmark as a local demo platform. It is meant for project walkthroughs, interviews, and API-level inspection of the Stage3 benchmark. It is not a full online evaluation platform and it does not call a real model API.
+
+Start the service:
+
+```bash
+python -m pip install -r requirements.txt
+uvicorn tracegate.web.app:app --reload
+```
+
+Optional CLI shortcut:
+
+```bash
+python -m tracegate web --reload
+```
+
+Open the dashboard:
+
+```text
+http://127.0.0.1:8000/
+```
+
+API endpoints:
+
+| Endpoint | Purpose |
+| --- | --- |
+| `GET /api/health` | Service health and version. |
+| `GET /api/overview` | Project, Stage3 scale, model, and key metrics. |
+| `GET /api/context-groups` | The 8 context groups with result summaries. |
+| `GET /api/evidence-status` | The 4 evidence statuses with expected decisions and summaries. |
+| `GET /api/tasks` | Stage3 task summaries from `experiments/claim_tasks.yaml`. |
+| `GET /api/tasks/{task_id}` | One task plus available run summaries. |
+| `GET /api/results` | Run-level summary rows with optional `context_group`, `evidence_status`, and `module` filters. |
+| `POST /api/analyze-demo` | Rule-based decision-schema demo. No model call, no patch generation. |
+
+Data loading prefers real checked-in summaries: `results/*.csv`, `reports_claim/claim_stage_results.csv`, and `experiments/claim_tasks.yaml`. If structured summary files are missing, the API falls back to aggregate project-summary data and returns `data_source: "project_summary_fallback"`; it never fabricates full run logs.
+
+The dashboard includes the Stage3 scale, current `deepseek-v4-pro` result summary, context/evidence tables, risk counts, and a rule-based demo analyze form. More detail: [docs/api.md](docs/api.md).
+
 ## Project Structure
 
 ```text
 tracegate/                Core benchmark, runners, metrics, reports, oracles
+tracegate/web/            Lightweight FastAPI service and static dashboard
 experiments/              Generated task, claim, context, and model specs
 sample_repos/             Controlled legacy-shop Java sample repos
 runs_claim/               Generated Stage3 run directories and model outputs

@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>TraceGate Eval Dashboard</title>
+    <link rel="stylesheet" href="/static/dashboard.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div>
+        <h1>TraceGate Eval</h1>
+        <p id="intro">AI Coding Agent historical-experience validity benchmark.</p>
+      </div>
+      <span id="source-badge">loading</span>
+    </header>
+
+    <main>
+      <section class="metrics-grid" aria-label="Stage3 benchmark summary">
+        <div class="metric"><span>Modules</span><strong>5</strong></div>
+        <div class="metric"><span>Evidence Statuses</span><strong>4</strong></div>
+        <div class="metric"><span>Context Groups</span><strong>8</strong></div>
+        <div class="metric"><span>Runs</span><strong id="total-runs">160</strong></div>
+      </section>
+
+      <section class="band">
+        <div class="section-heading">
+          <h2>deepseek-v4-pro Result Summary</h2>
+          <p id="stage-line"></p>
+        </div>
+        <div class="metrics-grid compact" id="key-metrics"></div>
+      </section>
+
+      <section class="band two-column">
+        <div>
+          <h2>Context Group Comparison</h2>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Context</th>
+                  <th>Safe</th>
+                  <th>Risk</th>
+                  <th>Plan Q</th>
+                </tr>
+              </thead>
+              <tbody id="context-table"></tbody>
+            </table>
+          </div>
+        </div>
+        <div>
+          <h2>Evidence Status Comparison</h2>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Status</th>
+                  <th>Decision</th>
+                  <th>Correct</th>
+                  <th>Test</th>
+                </tr>
+              </thead>
+              <tbody id="evidence-table"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <section class="band">
+        <h2>Risk Signals</h2>
+        <div class="metrics-grid compact" id="risk-metrics"></div>
+      </section>
+
+      <section class="band">
+        <h2>Demo Analyze</h2>
+        <form id="demo-form" class="demo-form">
+          <label>
+            Claim
+            <textarea id="claim" rows="3">Payment signature verification must keep using amountInCent rather than amountInYuan.</textarea>
+          </label>
+          <label>
+            Evidence
+            <textarea id="evidence" rows="3">The payment gateway migration record does not identify which amount unit is canonical.</textarea>
+          </label>
+          <label>
+            Context Group
+            <select id="context-group"></select>
+          </label>
+          <button type="submit">Analyze</button>
+        </form>
+        <div id="demo-result" class="demo-result" aria-live="polite"></div>
+      </section>
+
+      <section class="band figures">
+        <h2>Generated Figures</h2>
+        <img src="/figures/context_group_safe_success.png" alt="Context group safe success chart" onerror="this.style.display='none'" />
+      </section>
+    </main>
+
+    <script src="/static/dashboard.js"></script>
+  </body>
+</html>

@@ -221,6 +221,14 @@ def report_claimbench_command() -> None:
         print(f"- {path}")
 
 
+def web_command(host: str, port: int, reload: bool) -> None:
+    try:
+        import uvicorn
+    except ImportError as exc:
+        raise SystemExit("Install web dependencies first: python -m pip install -r requirements.txt") from exc
+    uvicorn.run("tracegate.web.app:app", host=host, port=port, reload=reload)
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="tracegate", description="TraceGate Eval MVP CLI")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -287,6 +295,11 @@ def build_parser() -> argparse.ArgumentParser:
     claim_run.add_argument("--api-timeout-seconds", type=int, default=240)
     claim_run.add_argument("--test-timeout-seconds", type=int, default=300)
     claim_run.add_argument("--dry-run", action="store_true")
+
+    web = subparsers.add_parser("web", help="Start the lightweight Web/API dashboard.")
+    web.add_argument("--host", default="127.0.0.1")
+    web.add_argument("--port", type=int, default=8000)
+    web.add_argument("--reload", action="store_true")
 
     subparsers.add_parser("collect-results", help="Collect test, diff, and constraint metrics.")
     subparsers.add_parser("report", help="Generate Markdown, CSV, and HTML reports.")
@@ -370,5 +383,7 @@ def main(argv: Sequence[str] | None = None) -> None:
         collect_claim_results_command()
     elif args.command == "report-claimbench":
         report_claimbench_command()
+    elif args.command == "web":
+        web_command(host=args.host, port=args.port, reload=args.reload)
     else:  # pragma: no cover - argparse enforces command choices
         parser.print_help()
