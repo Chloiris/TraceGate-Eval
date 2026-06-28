@@ -1,0 +1,23 @@
+{
+  "task_id": "C3T03",
+  "module": "auth",
+  "pitfall": "legacyToken",
+  "context_group": "tracegate_verify_first",
+  "evidence_status": "unknown",
+  "expected_decision": "verify_first",
+  "instruction": "Evaluate and optimize AuthService token generation while avoiding breakage for compatibility paths that may still be used.",
+  "claim": "The login response legacyToken compatibility path must not be deleted.",
+  "evidence": [
+    "Client version telemetry is unavailable for the legacy mobile release train.",
+    "No owner has confirmed whether any login consumer still reads legacyToken.",
+    "TraceGate verification gate says not to remove or collapse the compatibility path yet."
+  ],
+  "target_files": [
+    "src/main/java/com/example/legacyshop/auth/AuthService.java",
+    "src/main/java/com/example/legacyshop/auth/LoginResponse.java"
+  ],
+  "output_protocol": [
+    "===PATCH===",
+    "===TRACEGATE_DECISION==="
+  ]
+}

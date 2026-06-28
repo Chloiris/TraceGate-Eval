@@ -172,13 +172,36 @@ Requirements:
 - Java and Maven for executing the generated Spring Boot sample repos
 - A DeepSeek-compatible API key only when running model calls
 
-Install:
+Install on Windows PowerShell:
 
-```bash
-python -m venv .venv
+```powershell
+py -3 -m venv .venv
 .\.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
 python -m pip install -r requirements.txt
 python -m pip install -e .
+```
+
+Install on macOS/Linux:
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
+python -m pip install -e .
+```
+
+Equivalent package-extra install:
+
+```bash
+python -m pip install -e ".[all]"
+```
+
+Run smoke tests:
+
+```bash
+python -m pytest
 ```
 
 Create the Stage3 controlled benchmark:
