@@ -6,21 +6,93 @@ The current repository focus is **v0.1 Controlled Benchmark**, centered on the
 **Stage3 Controlled Claim Benchmark / ClaimBench**. It is not an online SaaS,
 not an industrial agent-safety platform, and not a general model leaderboard.
 
-## Windows to M5 Mac Handoff Status
+## Windows to M5 Mac Continuation Status
 
-This branch is the Windows to Apple Silicon M5 Mac handoff branch:
-`chore/win11-to-m5-handoff`.
+This work continues from the Windows to Apple Silicon M5 Mac handoff branch
+`chore/win11-to-m5-handoff` onto
+`feature/tracegate-pr-advisory-real-data-mac`.
 
 - TraceGate's next direction is an AI-generated Pull Request risk advisor plus
   a TraceGate EvalOps engine.
 - In this repository, PR means Pull Request, not Public Relations.
-- This handoff branch is for cross-platform cleanup, documentation, and local
-  validation only. It does not mean a real-data MVP is complete.
-- The current checked-in benchmark is a controlled ClaimBench run over a
+- The handoff branch was for cross-platform cleanup, documentation, and local
+  validation only.
+- This feature branch adds the first minimal real-data PR advisory path.
+- The existing controlled benchmark is a ClaimBench run over a
   synthetic legacy-shop sample project. Demo, mock, synthetic, and fixture data
   are not real evaluation data.
-- No real Pull Request dataset is claimed to be fully wired or validated here.
-- Continue Mac-side setup from [docs/MACOS_M5_HANDOFF.md](docs/MACOS_M5_HANDOFF.md).
+- The real-data path is separate from the synthetic ClaimBench artifacts.
+- Continue Mac-side setup from [docs/MACOS_M5_SETUP.md](docs/MACOS_M5_SETUP.md).
+
+## Real-Data PR Advisory MVP
+
+This branch now adds a minimal real-data Pull Request advisory path for the Mac continuation work. In TraceGate, **PR means Pull Request, not Public Relations**.
+
+TraceGate is not a general code review bot and does not try to replace CodeRabbit. The P0 scope is narrower: historical claim validity, evidence routing, context pollution measurement, `active | stale | unknown | conflicting | needs_manual_review` evidence status, verify-first behavior, and repo-level historical constraint risk.
+
+The current real dataset is intentionally small:
+
+- Source: public GitHub REST API Pull Request metadata and changed-file provenance.
+- Dataset: `datasets/real_min/cases.jsonl`.
+- Manifest: `datasets/real_min/manifest.json`.
+- Raw API responses: `datasets/real_min/raw/`, ignored by Git.
+- Current normalized cases: 12.
+- Current scored cases: 12.
+- Current evidence status distribution: `active=12`.
+- Current source repositories: `psf/requests`, `pytest-dev/pytest`, `pydantic/pydantic`.
+
+This is a small real-data smoke benchmark, not a statistically significant benchmark. The deterministic advisor is a baseline, not a final LLM agent, and it does not replace human review.
+
+Real runs must use the guardrail flags:
+
+```bash
+python -m tracegate data discover
+python -m tracegate data fetch --source auto --limit 12 --real-only --no-fallback
+python -m tracegate data validate --dataset datasets/real_min/cases.jsonl --strict --min-cases 8
+python -m tracegate run --dataset datasets/real_min/cases.jsonl --advisor rule --real-only --no-mock --no-fallback
+python -m tracegate report --run runs/latest --format markdown,json
+python -m tracegate guardrails audit --run runs/latest --strict
+```
+
+Reality guardrails:
+
+- Real evaluation: `is_real=true`, `is_synthetic=false`, no mock model, no fallback data, at least 8 scored cases, and provenance-linked evidence.
+- Demo/mock/synthetic data: allowed only for tests or explicitly marked demos, and excluded from real metrics.
+- Data download failure: fails fast; TraceGate does not create sample records to keep the run alive.
+- Guardrail check: `python -m tracegate guardrails scan --strict`.
+
+On the M5 Mac continuation branch, the successful real run recorded:
+
+```text
+used_real_data: true
+used_synthetic_data: false
+used_mock_model: false
+used_fallback_data: false
+real_evaluation_succeeded: true
+```
+
+For reproduction on GitHub:
+
+```bash
+git clone https://github.com/Chloiris/TraceGate-Eval.git
+cd TraceGate-Eval
+git fetch origin
+git checkout feature/tracegate-pr-advisory-real-data-mac
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install -U pip
+python -m pip install -e ".[dev]"
+python -m compileall .
+pytest -q
+python -m tracegate --help
+python -m tracegate guardrails scan --strict
+```
+
+GitHub Action advisory skeleton:
+
+- Workflow: `.github/workflows/tracegate-advisory.yml`
+- Config example: `tracegate.yml`
+- Docs: [docs/GITHUB_ACTION.md](docs/GITHUB_ACTION.md)
 
 ## Project Highlights
 
