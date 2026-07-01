@@ -2,22 +2,18 @@
 
 TraceGate Eval is a controlled benchmark for evaluating whether AI coding agents can use historical engineering experience safely, not just produce patches that pass tests.
 
-The current repository focus is **v0.1 Controlled Benchmark**, centered on the
-**Stage3 Controlled Claim Benchmark / ClaimBench**. It is not an online SaaS,
-not an industrial agent-safety platform, and not a general model leaderboard.
+The current repository focus is **v0.1 Controlled Benchmark + Real-Data PR Advisory Smoke Path**. It includes the **Stage3 Controlled Claim Benchmark / ClaimBench** and a minimal real-data Pull Request advisory path. It is not an online SaaS, not an industrial agent-safety platform, and not a general model leaderboard.
 
-## Windows to M5 Mac Continuation Status
+## Current Main Status
 
-This work continues from the Windows to Apple Silicon M5 Mac handoff branch
-`chore/win11-to-m5-handoff` onto
-`feature/tracegate-pr-advisory-real-data-mac`.
+`main` now includes the Windows-to-M5 handoff cleanup and the first minimal real-data Pull Request advisory MVP.
 
 - TraceGate's next direction is an AI-generated Pull Request risk advisor plus
   a TraceGate EvalOps engine.
 - In this repository, PR means Pull Request, not Public Relations.
 - The handoff branch was for cross-platform cleanup, documentation, and local
   validation only.
-- This feature branch adds the first minimal real-data PR advisory path.
+- `main` includes the first minimal real-data PR advisory path.
 - The existing controlled benchmark is a ClaimBench run over a
   synthetic legacy-shop sample project. Demo, mock, synthetic, and fixture data
   are not real evaluation data.
@@ -26,7 +22,7 @@ This work continues from the Windows to Apple Silicon M5 Mac handoff branch
 
 ## Real-Data PR Advisory MVP
 
-This branch now adds a minimal real-data Pull Request advisory path for the Mac continuation work. In TraceGate, **PR means Pull Request, not Public Relations**.
+`main` now includes a minimal real-data Pull Request advisory path. In TraceGate, **PR means Pull Request, not Public Relations**.
 
 TraceGate is not a general code review bot and does not try to replace CodeRabbit. The P0 scope is narrower: historical claim validity, evidence routing, context pollution measurement, `active | stale | unknown | conflicting | needs_manual_review` evidence status, verify-first behavior, and repo-level historical constraint risk.
 
@@ -61,7 +57,7 @@ Reality guardrails:
 - Data download failure: fails fast; TraceGate does not create sample records to keep the run alive.
 - Guardrail check: `python -m tracegate guardrails scan --strict`.
 
-On the M5 Mac continuation branch, the successful real run recorded:
+The merged real-data smoke run recorded:
 
 ```text
 used_real_data: true
@@ -76,8 +72,6 @@ For reproduction on GitHub:
 ```bash
 git clone https://github.com/Chloiris/TraceGate-Eval.git
 cd TraceGate-Eval
-git fetch origin
-git checkout feature/tracegate-pr-advisory-real-data-mac
 python3 -m venv .venv
 source .venv/bin/activate
 python -m pip install -U pip
@@ -409,7 +403,10 @@ scripts/                  Helper entrypoints and plotting script
 - This is a controlled benchmark with manually constructed oracles.
 - The generated legacy-shop project is synthetic and intentionally small.
 - The current public Stage3 summary uses one complete `deepseek-v4-pro` run.
-- Real external data adapters exist as scaffolding, but v0.1 does not download or evaluate real external datasets.
+- v0.1 now includes a small real-data smoke path using public GitHub REST API Pull Request metadata.
+- The current real-data dataset has 12 normalized/scored cases and all current real-data cases are `active`.
+- The real-data smoke path is not a statistically significant benchmark.
+- Hard real cases for `stale`, `unknown`, and `conflicting` evidence are not covered yet.
 - The oracles are task-specific and rule-based, not general semantic judges.
 - The dashboard is local and file-based; it is not an online benchmark service.
 - `/api/analyze-demo` is rule-based and does not represent model output.

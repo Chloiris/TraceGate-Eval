@@ -1,4 +1,16 @@
-# TraceGate Eval v0.1 Controlled Benchmark Release Notes
+# TraceGate Eval v0.1 Release Notes
+
+## Post-Merge Real-Data Advisory Update
+
+`main` now includes the first minimal real-data Pull Request advisory smoke path.
+
+- Added `datasets/real_min/cases.jsonl` with 12 normalized and scored public GitHub REST API Pull Request cases.
+- Added data provenance, data card, reality guard, runbook, and post-merge status documentation.
+- Added deterministic rule-based advisory commands under `python -m tracegate`.
+- Added strict guardrail scan/audit commands to prevent mock, synthetic, or fallback data from being counted as real evaluation.
+- Added a warning-only GitHub Action advisory skeleton and Python CI on Ubuntu/macOS.
+
+This real-data path is a smoke benchmark only. It is not statistically significant, and the current real-data cases are all `active`; hard real cases for `stale`, `unknown`, and `conflicting` evidence remain future work.
 
 ## What Was Completed
 
@@ -74,11 +86,13 @@ python scripts/plot_results.py
 
 ## Current Limits
 
-- v0.1 uses a controlled synthetic benchmark, not downloaded real external datasets.
+- v0.1 includes both a controlled synthetic ClaimBench benchmark and a small real-data Pull Request advisory smoke path.
+- The current real-data smoke dataset has 12 scored GitHub REST API PR cases, all with `active` evidence.
+- The current real-data smoke path is not a statistically significant benchmark.
+- Hard real cases for `stale`, `unknown`, and `conflicting` evidence are not covered yet.
 - The public summary includes one complete `deepseek-v4-pro` Stage3 run.
 - Oracles are intentionally task-specific and manually constructed.
 - `conflicting` evidence remains the weakest and most important scenario to strengthen.
-- The local workspace has an invalid `.git` directory, so `git status` could not be used during validation.
 
 ## Next Steps
 
