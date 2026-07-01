@@ -7,6 +7,8 @@ __pycache__/
 .coverage
 htmlcov/
 *.egg-info/
+dist/
+build/
 
 # Local environment
 .env
@@ -15,6 +17,7 @@ htmlcov/
 .venv/
 venv/
 env/
+node_modules/
 
 # Java/Maven generated output
 .m2/
@@ -24,6 +27,8 @@ env/
 runs/
 runs_stage2/
 runs_claim/
+datasets/real_min/raw/
+datasets/real_min/cache/
 runs/**/results/
 runs_stage2/**/results/
 runs_claim/**/results/
