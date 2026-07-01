@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from tracegate.config import BASELINE_DIRNAME, RUN_REPO_DIRNAME, RUNS_CLAIM_DIR
+from tracegate.config import BASELINE_DIRNAME, PROJECT_ROOT, RUN_REPO_DIRNAME, RUNS_CLAIM_DIR
 from tracegate.dataio import read_json, write_json
 from tracegate.metrics.claim_semantic_metrics import claim_semantic_metrics
 from tracegate.metrics.evidence_metrics import evidence_decision_metrics
@@ -15,6 +15,13 @@ from tracegate.oracle.claim_oracle import evaluate_claim_decision
 from tracegate.oracle.code_oracle import evaluate_code_oracle
 from tracegate.oracle.plan_oracle import score_verification_plan
 from tracegate.runners.command_runner import find_run_dirs
+
+
+def _display_path(path: Path) -> str:
+    try:
+        return path.resolve().relative_to(PROJECT_ROOT).as_posix()
+    except ValueError:
+        return path.as_posix()
 
 
 def collect_claim_run(run_dir: Path) -> dict[str, Any]:
@@ -53,7 +60,7 @@ def collect_claim_run(run_dir: Path) -> dict[str, Any]:
     junit = (test_result or {}).get("junit", {})
     request = run_result.get("request", {})
     result = {
-        "run_dir": str(run_dir),
+        "run_dir": _display_path(run_dir),
         "model": metadata.get("model", {}).get("id"),
         "task_id": task.get("id"),
         "task_module": task.get("module"),

@@ -1,0 +1,10 @@
+claims:
+  - claim_id: "legacy-token-compat"
+    claim_text: "Do not remove legacy token compatibility without verifying old clients."
+    validity_condition: "Applies when auth/token parsing code changes."
+    evidence_status: "unknown"
+    source: "repo_config"
+    files:
+      - "src/auth/**"
+      - "tracegate/**/auth*"
+    recommended_decision: "verify_first"

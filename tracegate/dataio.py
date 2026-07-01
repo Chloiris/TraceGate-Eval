@@ -7,7 +7,7 @@ from typing import Any
 
 try:
     import yaml  # type: ignore
-except Exception:  # pragma: no cover - optional dependency
+except ImportError:  # pragma: no cover - optional dependency
     yaml = None
 
 
@@ -38,4 +38,3 @@ def read_json(path: Path, default: Any = None) -> Any:
     if not path.exists():
         return default
     return json.loads(path.read_text(encoding="utf-8"))
-

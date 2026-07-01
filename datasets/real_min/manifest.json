@@ -1,0 +1,23 @@
+{
+  "contains_synthetic": false,
+  "created_at": "2026-07-01T22:20:19.342158+00:00",
+  "dataset_path": "datasets/real_min/cases.jsonl",
+  "dataset_sha256": "08cf975fc5daffb19c0e0791bc60244f5e6f2b9a2394661147b7f36032a7f4e2",
+  "excluded_cases": [],
+  "is_real_dataset": true,
+  "num_cases_excluded": 0,
+  "num_cases_scored": 12,
+  "num_cases_total": 12,
+  "repos": [
+    "psf/requests",
+    "pydantic/pydantic",
+    "pytest-dev/pytest"
+  ],
+  "source_datasets": [
+    "github_api"
+  ],
+  "status_distribution": {
+    "active": 12
+  },
+  "used_fallback_data": false
+}

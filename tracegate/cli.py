@@ -20,6 +20,14 @@ from tracegate.dataset.context_generator import write_default_context_files
 from tracegate.dataset.legacy_shop_generator import generate_legacy_shop
 from tracegate.dataset.legacy_shop_v2_generator import generate_legacy_shop_v2
 from tracegate.dataset.task_generator import write_default_tasks
+from tracegate.data.discover import write_discovery_doc
+from tracegate.data.manifest import build_dataset_manifest
+from tracegate.data.normalize import normalize_raw_records
+from tracegate.data.sources.base import RealDataError
+from tracegate.data.sources.github_adapter import fetch_github_pull_requests
+from tracegate.data.validate import DatasetValidationError, validate_dataset
+from tracegate.core.guardrails import audit_run, strict_scan
+from tracegate.core.run import RealRunError, regenerate_report, run_real_advisory
 from tracegate.metrics.result_collector import collect_results
 from tracegate.metrics.claim_collector import collect_claim_results
 from tracegate.metrics.stage2_collector import collect_stage2_results
@@ -147,6 +155,110 @@ def report_command() -> None:
     print(f"Reports written to {REPORTS_DIR}:")
     for path in paths:
         print(f"- {path}")
+
+
+def data_discover_command() -> None:
+    path = write_discovery_doc()
+    print(f"Dataset discovery written to {path}")
+
+
+def data_fetch_command(source: str, limit: int, real_only: bool, no_fallback: bool) -> None:
+    if not real_only:
+        raise SystemExit("real data fetch requires --real-only")
+    if not no_fallback:
+        raise SystemExit("real data fetch requires --no-fallback")
+    if source not in {"auto", "github_api"}:
+        raise SystemExit("P0 supports --source auto or --source github_api")
+    raw_dir = Path("datasets/real_min/raw")
+    output_path = Path("datasets/real_min/cases.jsonl")
+    try:
+        result = fetch_github_pull_requests(raw_dir=raw_dir, limit=limit)
+        cases = normalize_raw_records(input_dir=raw_dir, output_path=output_path)
+        manifest = build_dataset_manifest(output_path)
+    except RealDataError as exc:
+        raise SystemExit(str(exc)) from exc
+    print(f"Fetched {result.records_written} raw records from {result.source}")
+    print(f"Normalized {len(cases)} cases to {output_path}")
+    print(f"Dataset manifest: {output_path.with_name('manifest.json')}")
+    print(f"Scored real cases: {manifest['num_cases_scored']}")
+
+
+def data_normalize_command(input_dir: Path, output_path: Path) -> None:
+    try:
+        cases = normalize_raw_records(input_dir=input_dir, output_path=output_path)
+        build_dataset_manifest(output_path)
+    except RealDataError as exc:
+        raise SystemExit(str(exc)) from exc
+    print(f"Normalized {len(cases)} cases to {output_path}")
+
+
+def data_validate_command(dataset_path: Path, strict: bool, min_cases: int) -> None:
+    try:
+        _, summary = validate_dataset(dataset_path=dataset_path, strict=strict, min_cases=min_cases)
+    except (DatasetValidationError, ValueError, FileNotFoundError) as exc:
+        raise SystemExit(str(exc)) from exc
+    print("Dataset validation passed")
+    for key, value in summary.items():
+        print(f"{key}: {value}")
+
+
+def data_manifest_command(dataset_path: Path) -> None:
+    manifest = build_dataset_manifest(dataset_path)
+    print(f"Dataset manifest written to {dataset_path.with_name('manifest.json')}")
+    print(f"dataset_sha256: {manifest['dataset_sha256']}")
+
+
+def real_run_command(
+    dataset_path: Path,
+    advisor: str,
+    real_only: bool,
+    no_mock: bool,
+    no_fallback: bool,
+) -> None:
+    command = (
+        f"python -m tracegate run --dataset {dataset_path.as_posix()} --advisor {advisor} "
+        f"{'--real-only' if real_only else ''} {'--no-mock' if no_mock else ''} {'--no-fallback' if no_fallback else ''}"
+    ).strip()
+    try:
+        manifest = run_real_advisory(
+            dataset_path=dataset_path,
+            advisor=advisor,
+            run_dir=Path("runs/latest"),
+            real_only=real_only,
+            no_mock=no_mock,
+            no_fallback=no_fallback,
+            command=command,
+        )
+    except RealRunError as exc:
+        raise SystemExit(str(exc)) from exc
+    print(f"Real advisory run complete: {manifest['run_id']}")
+    print("Run directory: runs/latest")
+
+
+def real_report_command(run_dir: Path, formats: str) -> None:
+    requested = {item.strip() for item in formats.split(",") if item.strip()}
+    unknown = requested - {"markdown", "json"}
+    if unknown:
+        raise SystemExit(f"unsupported report format(s): {', '.join(sorted(unknown))}")
+    paths = regenerate_report(run_dir=run_dir, formats=requested)
+    for path in paths:
+        print(f"Report written: {path}")
+
+
+def guardrails_scan_command(strict: bool) -> None:
+    findings, errors = strict_scan()
+    print(f"Guardrail scan findings: {len(findings)}")
+    print("Fallback audit written to docs/FALLBACK_AUDIT.md")
+    if strict and errors:
+        raise SystemExit("\n".join(errors))
+
+
+def guardrails_audit_command(run_dir: Path, strict: bool) -> None:
+    result = audit_run(run_dir=run_dir, strict=strict)
+    print(f"Guardrail audit passed: {result['passed']}")
+    print("Fallback audit written to docs/FALLBACK_AUDIT.md")
+    if strict and not result["passed"]:
+        raise SystemExit("\n".join(result["errors"]))
 
 
 def run_stage2_command(
@@ -301,8 +413,48 @@ def build_parser() -> argparse.ArgumentParser:
     web.add_argument("--port", type=int, default=8000)
     web.add_argument("--reload", action="store_true")
 
+    data = subparsers.add_parser("data", help="Real-data discovery, fetch, normalize, validate, and manifest commands.")
+    data_subparsers = data.add_subparsers(dest="data_command", required=True)
+
+    data_subparsers.add_parser("discover", help="Document candidate real-data sources.")
+
+    data_fetch = data_subparsers.add_parser("fetch", help="Fetch and normalize minimal real GitHub PR data.")
+    data_fetch.add_argument("--source", default="auto")
+    data_fetch.add_argument("--limit", type=int, default=12)
+    data_fetch.add_argument("--real-only", action="store_true")
+    data_fetch.add_argument("--no-fallback", action="store_true")
+
+    data_normalize = data_subparsers.add_parser("normalize", help="Normalize raw real-data artifacts into cases.jsonl.")
+    data_normalize.add_argument("--input", type=Path, required=True)
+    data_normalize.add_argument("--output", type=Path, required=True)
+
+    data_validate = data_subparsers.add_parser("validate", help="Validate normalized real-data cases.")
+    data_validate.add_argument("--dataset", type=Path, required=True)
+    data_validate.add_argument("--strict", action="store_true")
+    data_validate.add_argument("--min-cases", type=int, default=8)
+
+    data_manifest = data_subparsers.add_parser("manifest", help="Write a dataset manifest.")
+    data_manifest.add_argument("--dataset", type=Path, required=True)
+
+    real_run = subparsers.add_parser("run", help="Run deterministic real-data PR advisory baseline.")
+    real_run.add_argument("--dataset", type=Path, required=True)
+    real_run.add_argument("--advisor", default="rule")
+    real_run.add_argument("--real-only", action="store_true")
+    real_run.add_argument("--no-mock", action="store_true")
+    real_run.add_argument("--no-fallback", action="store_true")
+
+    guardrails = subparsers.add_parser("guardrails", help="Reality guardrails for real-data runs.")
+    guardrail_subparsers = guardrails.add_subparsers(dest="guardrails_command", required=True)
+    guardrails_scan = guardrail_subparsers.add_parser("scan", help="Scan code/docs for fallback/mock/synthetic risk.")
+    guardrails_scan.add_argument("--strict", action="store_true")
+    guardrails_audit = guardrail_subparsers.add_parser("audit", help="Audit a real advisory run.")
+    guardrails_audit.add_argument("--run", type=Path, required=True)
+    guardrails_audit.add_argument("--strict", action="store_true")
+
     subparsers.add_parser("collect-results", help="Collect test, diff, and constraint metrics.")
-    subparsers.add_parser("report", help="Generate Markdown, CSV, and HTML reports.")
+    report = subparsers.add_parser("report", help="Generate legacy reports or real-data run reports.")
+    report.add_argument("--run", type=Path, help="Real-data run directory, e.g. runs/latest.")
+    report.add_argument("--format", default="markdown,json", help="Comma-separated real-data report formats.")
     subparsers.add_parser("collect-stage2-results", help="Collect Stage2 execution and semantic metrics.")
     subparsers.add_parser("report-stage2", help="Generate Stage2 Markdown, CSV, and HTML reports.")
     subparsers.add_parser("collect-claim-results", help="Collect ClaimBench execution and semantic metrics.")
@@ -374,7 +526,10 @@ def main(argv: Sequence[str] | None = None) -> None:
             dry_run=args.dry_run,
         )
     elif args.command == "report":
-        report_command()
+        if args.run is not None:
+            real_report_command(run_dir=args.run, formats=args.format)
+        else:
+            report_command()
     elif args.command == "collect-stage2-results":
         collect_stage2_results_command()
     elif args.command == "report-stage2":
@@ -385,5 +540,34 @@ def main(argv: Sequence[str] | None = None) -> None:
         report_claimbench_command()
     elif args.command == "web":
         web_command(host=args.host, port=args.port, reload=args.reload)
+    elif args.command == "data":
+        if args.data_command == "discover":
+            data_discover_command()
+        elif args.data_command == "fetch":
+            data_fetch_command(
+                source=args.source,
+                limit=args.limit,
+                real_only=args.real_only,
+                no_fallback=args.no_fallback,
+            )
+        elif args.data_command == "normalize":
+            data_normalize_command(input_dir=args.input, output_path=args.output)
+        elif args.data_command == "validate":
+            data_validate_command(dataset_path=args.dataset, strict=args.strict, min_cases=args.min_cases)
+        elif args.data_command == "manifest":
+            data_manifest_command(dataset_path=args.dataset)
+    elif args.command == "run":
+        real_run_command(
+            dataset_path=args.dataset,
+            advisor=args.advisor,
+            real_only=args.real_only,
+            no_mock=args.no_mock,
+            no_fallback=args.no_fallback,
+        )
+    elif args.command == "guardrails":
+        if args.guardrails_command == "scan":
+            guardrails_scan_command(strict=args.strict)
+        elif args.guardrails_command == "audit":
+            guardrails_audit_command(run_dir=args.run, strict=args.strict)
     else:  # pragma: no cover - argparse enforces command choices
         parser.print_help()

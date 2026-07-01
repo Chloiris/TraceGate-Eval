@@ -19,7 +19,7 @@ def parse_surefire_reports(repo_dir: Path) -> dict[str, Any]:
         return summary
 
     for report in sorted(report_dir.glob("TEST-*.xml")):
-        summary["report_files"].append(str(report))
+        summary["report_files"].append(report.relative_to(repo_dir).as_posix())
         try:
             root = ET.parse(report).getroot()
         except ET.ParseError:
@@ -37,4 +37,3 @@ def parse_surefire_reports(repo_dir: Path) -> dict[str, Any]:
                     }
                 )
     return summary
-

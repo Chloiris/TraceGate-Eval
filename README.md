@@ -2,26 +2,118 @@
 
 TraceGate Eval is a controlled benchmark for evaluating whether AI coding agents can use historical engineering experience safely, not just produce patches that pass tests.
 
-The current release is **v0.1 Controlled Benchmark**, centered on the Stage3 Controlled Claim Benchmark for historical-claim validity, evidence-aware decisions, and context-safety risk.
+The current repository focus is **v0.1 Controlled Benchmark**, centered on the
+**Stage3 Controlled Claim Benchmark / ClaimBench**. It is not an online SaaS,
+not an industrial agent-safety platform, and not a general model leaderboard.
 
-## Why TraceGate Eval
+## Windows to M5 Mac Continuation Status
 
-AI coding agents often receive historical context: comments, incident notes, rollback records, chat summaries, failed patches, or old compatibility warnings. That context can be valuable, stale, incomplete, or actively misleading.
+This work continues from the Windows to Apple Silicon M5 Mac handoff branch
+`chore/win11-to-m5-handoff` onto
+`feature/tracegate-pr-advisory-real-data-mac`.
 
-TraceGate Eval asks a more production-shaped question than "did the tests pass?":
+- TraceGate's next direction is an AI-generated Pull Request risk advisor plus
+  a TraceGate EvalOps engine.
+- In this repository, PR means Pull Request, not Public Relations.
+- The handoff branch was for cross-platform cleanup, documentation, and local
+  validation only.
+- This feature branch adds the first minimal real-data PR advisory path.
+- The existing controlled benchmark is a ClaimBench run over a
+  synthetic legacy-shop sample project. Demo, mock, synthetic, and fixture data
+  are not real evaluation data.
+- The real-data path is separate from the synthetic ClaimBench artifacts.
+- Continue Mac-side setup from [docs/MACOS_M5_SETUP.md](docs/MACOS_M5_SETUP.md).
+
+## Real-Data PR Advisory MVP
+
+This branch now adds a minimal real-data Pull Request advisory path for the Mac continuation work. In TraceGate, **PR means Pull Request, not Public Relations**.
+
+TraceGate is not a general code review bot and does not try to replace CodeRabbit. The P0 scope is narrower: historical claim validity, evidence routing, context pollution measurement, `active | stale | unknown | conflicting | needs_manual_review` evidence status, verify-first behavior, and repo-level historical constraint risk.
+
+The current real dataset is intentionally small:
+
+- Source: public GitHub REST API Pull Request metadata and changed-file provenance.
+- Dataset: `datasets/real_min/cases.jsonl`.
+- Manifest: `datasets/real_min/manifest.json`.
+- Raw API responses: `datasets/real_min/raw/`, ignored by Git.
+- Current normalized cases: 12.
+- Current scored cases: 12.
+- Current evidence status distribution: `active=12`.
+- Current source repositories: `psf/requests`, `pytest-dev/pytest`, `pydantic/pydantic`.
+
+This is a small real-data smoke benchmark, not a statistically significant benchmark. The deterministic advisor is a baseline, not a final LLM agent, and it does not replace human review.
+
+Real runs must use the guardrail flags:
+
+```bash
+python -m tracegate data discover
+python -m tracegate data fetch --source auto --limit 12 --real-only --no-fallback
+python -m tracegate data validate --dataset datasets/real_min/cases.jsonl --strict --min-cases 8
+python -m tracegate run --dataset datasets/real_min/cases.jsonl --advisor rule --real-only --no-mock --no-fallback
+python -m tracegate report --run runs/latest --format markdown,json
+python -m tracegate guardrails audit --run runs/latest --strict
+```
+
+Reality guardrails:
+
+- Real evaluation: `is_real=true`, `is_synthetic=false`, no mock model, no fallback data, at least 8 scored cases, and provenance-linked evidence.
+- Demo/mock/synthetic data: allowed only for tests or explicitly marked demos, and excluded from real metrics.
+- Data download failure: fails fast; TraceGate does not create sample records to keep the run alive.
+- Guardrail check: `python -m tracegate guardrails scan --strict`.
+
+On the M5 Mac continuation branch, the successful real run recorded:
+
+```text
+used_real_data: true
+used_synthetic_data: false
+used_mock_model: false
+used_fallback_data: false
+real_evaluation_succeeded: true
+```
+
+For reproduction on GitHub:
+
+```bash
+git clone https://github.com/Chloiris/TraceGate-Eval.git
+cd TraceGate-Eval
+git fetch origin
+git checkout feature/tracegate-pr-advisory-real-data-mac
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install -U pip
+python -m pip install -e ".[dev]"
+python -m compileall .
+pytest -q
+python -m tracegate --help
+python -m tracegate guardrails scan --strict
+```
+
+GitHub Action advisory skeleton:
+
+- Workflow: `.github/workflows/tracegate-advisory.yml`
+- Config example: `tracegate.yml`
+- Docs: [docs/GITHUB_ACTION.md](docs/GITHUB_ACTION.md)
+
+## Project Highlights
+
+- Turns historical engineering experience into explicit `claim + evidence` tasks.
+- Tests 8 context groups, including routed evidence, verification-first context, misleading same-scope context, and unfiltered claim archives.
+- Requires model output to include both a code patch and a structured TraceGate decision.
+- Separates normal execution success from evidence-aware safety metrics such as `safe_success`, `pollution`, and `destructive_change`.
+- Includes one complete checked-in `deepseek-v4-pro` Stage3 result summary with CSV, Markdown, HTML, figures, and a local FastAPI dashboard prototype.
+
+## Why This Exists
+
+AI coding agents often receive historical context: comments, incident notes, rollback records, chat summaries, failed patches, old compatibility warnings, or previous PR summaries. That context can be useful, stale, incomplete, or actively misleading.
+
+TraceGate Eval asks a more production-shaped question than “did the tests pass?”:
 
 - Is the historical claim still valid?
-- Did the agent make a decision that matches current evidence?
-- Did extra context pollute the patch or push the agent into unsafe edits?
-- Did the agent preserve compatibility when evidence is active?
-- Did the agent optimize only when evidence shows the old claim is stale?
-- Did the agent stop and propose verification when evidence is unknown or conflicting?
-
-## Scope
-
-This repository is **not** an industrial TraceGate router, a live data platform, or a broad model leaderboard. v0.1 is a reproducible, controlled benchmark that demonstrates the evaluation idea with a generated legacy-shop codebase, deterministic task templates, local oracles, and one complete `deepseek-v4-pro` Stage3 run.
-
-No real external datasets are downloaded or required for the current benchmark.
+- Did the model make a decision that matches current evidence?
+- Did extra context pollute the patch or push the model into unsafe edits?
+- Did the model preserve compatibility when evidence is active?
+- Did the model optimize only when evidence shows the old claim is stale?
+- Did the model stop and propose verification when evidence is unknown or conflicting?
 
 ## Benchmark Evolution
 
@@ -111,7 +203,7 @@ Source files:
 - [reports_claim/claim_stage_results.csv](reports_claim/claim_stage_results.csv)
 - [reports_claim/context_group_summary.csv](reports_claim/context_group_summary.csv)
 - [reports_claim/evidence_status_summary.csv](reports_claim/evidence_status_summary.csv)
-- [TraceGate_Eval_Project_Introduction.docx](TraceGate_Eval_Project_Introduction.docx)
+- [results/summary.md](results/summary.md)
 
 Overall summary:
 
@@ -149,7 +241,7 @@ By evidence status:
 | `unknown` | 20/40 | 38/40 | 0/40 | 4/40 | 2.250 |
 | `conflicting` | 4/40 | 39/40 | 1/40 | 5/40 | 2.350 |
 
-Key reading:
+Reading notes:
 
 - `tracegate_routed` had the best safe-success count: 14/20.
 - `misleading_same_scope` created clear pollution: 15/20.
@@ -164,6 +256,18 @@ Figures generated from the CSV summaries:
 
 ![Pollution and destructive-change risk](results/figures/risk_pollution_destructive.png)
 
+## Result Examples
+
+Two small examples are checked in under [examples/](examples/):
+
+- [Active evidence, preserve decision](examples/active_preserve_tracegate_routed.md)
+- [Unknown evidence, verify-first decision](examples/unknown_verify_first_tracegate_verify_first.md)
+
+Example interpretation:
+
+- In an `active` Auth case, `tracegate_routed` led the model to preserve `legacyToken` and avoid unnecessary code changes.
+- In an `unknown` Auth case, `tracegate_verify_first` led the model to return an empty patch plus a concrete verification plan.
+
 ## How To Run
 
 Requirements:
@@ -175,9 +279,9 @@ Requirements:
 Install on Windows PowerShell:
 
 ```powershell
-py -3 -m venv .venv
+python -m venv .venv
 .\.venv\Scripts\Activate.ps1
-python -m pip install --upgrade pip
+python -m pip install -U pip
 python -m pip install -r requirements.txt
 python -m pip install -e .
 ```
@@ -187,46 +291,42 @@ Install on macOS/Linux:
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
-python -m pip install --upgrade pip
+python -m pip install -U pip
 python -m pip install -r requirements.txt
 python -m pip install -e .
 ```
 
-Equivalent package-extra install:
+Run local handoff checks after installing dependencies:
 
 ```bash
-python -m pip install -e ".[all]"
-```
-
-Run smoke tests:
-
-```bash
-python -m pytest
+python -m compileall .
+pytest -q
+bash scripts/dev_check.sh
 ```
 
 Create the Stage3 controlled benchmark:
 
-```bash
+```powershell
 python -m tracegate create-claimbench
 python -m tracegate create-claim-runs
 ```
 
 Run a dry-run request build without calling the model:
 
-```bash
+```powershell
 python -m tracegate run-claimbench --model deepseek-v4-pro --limit 1 --dry-run
 ```
 
 Run the full Stage3 benchmark with DeepSeek:
 
-```bash
+```powershell
 # Set DEEPSEEK_API_KEY in your shell or secret manager before running.
 python -m tracegate run-claimbench --model deepseek-v4-pro --sample all --workers 4 --skip-existing
 ```
 
 Collect and report:
 
-```bash
+```powershell
 python -m tracegate collect-claim-results
 python -m tracegate report-claimbench
 python scripts/plot_results.py
@@ -236,18 +336,20 @@ The existing checked-in Stage3 summary is under [results/](results/) and is gene
 
 ## Web Dashboard / API Prototype
 
-v0.1 also includes a lightweight FastAPI layer that wraps the benchmark as a local demo platform. It is meant for project walkthroughs, interviews, and API-level inspection of the Stage3 benchmark. It is not a full online evaluation platform and it does not call a real model API.
+v0.1 includes a lightweight FastAPI layer that wraps the checked-in benchmark summaries as a local demo platform. It is meant for project walkthroughs, interviews, and API-level inspection of the Stage3 benchmark.
+
+It does not call a real model API, does not generate patches, and does not run experiments.
 
 Start the service:
 
-```bash
+```powershell
 python -m pip install -r requirements.txt
 uvicorn tracegate.web.app:app --reload
 ```
 
 Optional CLI shortcut:
 
-```bash
+```powershell
 python -m tracegate web --reload
 ```
 
@@ -272,7 +374,7 @@ API endpoints:
 
 Data loading prefers real checked-in summaries: `results/*.csv`, `reports_claim/claim_stage_results.csv`, and `experiments/claim_tasks.yaml`. If structured summary files are missing, the API falls back to aggregate project-summary data and returns `data_source: "project_summary_fallback"`; it never fabricates full run logs.
 
-The dashboard includes the Stage3 scale, current `deepseek-v4-pro` result summary, context/evidence tables, risk counts, and a rule-based demo analyze form. More detail: [docs/api.md](docs/api.md).
+More detail: [docs/api.md](docs/api.md).
 
 ## Project Structure
 
@@ -284,27 +386,41 @@ sample_repos/             Controlled legacy-shop Java sample repos
 runs_claim/               Generated Stage3 run directories and model outputs
 reports_claim/            Stage3 CSV/Markdown/HTML reports from the full run
 results/                  GitHub-facing v0.1 result summaries and figures
-docs/                     Design, metrics, limitations, and roadmap notes
+docs/                     Design, metrics, API notes, and handoff docs
 examples/                 Minimal readable examples extracted from real runs
 scripts/                  Helper entrypoints and plotting script
 ```
 
-## Limitations
+## What Is Implemented
+
+- Stage3 ClaimBench task generation.
+- Context group construction for 8 context variants.
+- DeepSeek-compatible model runner.
+- Patch parsing and application.
+- Maven test execution and JUnit parsing.
+- Claim decision oracle, code oracle, verification-plan oracle.
+- Safety and risk metrics.
+- ClaimBench report generation.
+- GitHub-facing summaries and figures.
+- Local Web/API prototype with basic tests.
+
+## Current Boundaries
 
 - This is a controlled benchmark with manually constructed oracles.
-- The current public summary uses one complete `deepseek-v4-pro` Stage3 run.
+- The generated legacy-shop project is synthetic and intentionally small.
+- The current public Stage3 summary uses one complete `deepseek-v4-pro` run.
 - Real external data adapters exist as scaffolding, but v0.1 does not download or evaluate real external datasets.
-- The oracles are intentionally simple and task-specific.
-- `conflicting` evidence is still underdeveloped: the model often collapses it into ordinary `verify_first`.
-- The local `.git` directory in this workspace is not a valid repository clone, so git status could not be used during this cleanup.
+- The oracles are task-specific and rule-based, not general semantic judges.
+- The dashboard is local and file-based; it is not an online benchmark service.
+- `/api/analyze-demo` is rule-based and does not represent model output.
 
 ## Roadmap
 
 - Add multi-model comparison under the same 160-run Stage3 protocol.
 - Connect real-data adapters for issue/session/failure-patch sources.
 - Strengthen `conflicting` scenarios and distinguish `verify_first` from `conflict_detected` more sharply.
-- Add a lightweight web dashboard for browsing runs, decisions, and risk cases.
-- Package a smaller public artifact layout that keeps generated run logs out of the main repository.
+- Add richer case-level browsing for pollution, destructive changes, and over-conservative decisions.
+- Package a smaller public artifact layout that keeps large raw model outputs out of the main repository.
 
 ## Resume-Ready Project Description
 

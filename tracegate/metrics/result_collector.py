@@ -3,11 +3,18 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from tracegate.config import BASELINE_DIRNAME, RUN_REPO_DIRNAME, RUNS_DIR
+from tracegate.config import BASELINE_DIRNAME, PROJECT_ROOT, RUN_REPO_DIRNAME, RUNS_DIR
 from tracegate.dataio import read_json, write_json
 from tracegate.metrics.constraint_checker import check_constraints
 from tracegate.metrics.git_diff_analyzer import analyze_diff
 from tracegate.runners.command_runner import find_run_dirs
+
+
+def _display_path(path: Path) -> str:
+    try:
+        return path.resolve().relative_to(PROJECT_ROOT).as_posix()
+    except ValueError:
+        return path.as_posix()
 
 
 def _is_outside_task_module(path: str, module: str) -> bool:
@@ -46,7 +53,7 @@ def collect_run_result(run_dir: Path) -> dict[str, Any]:
     )
 
     result = {
-        "run_dir": str(run_dir),
+        "run_dir": _display_path(run_dir),
         "task_id": task.get("id"),
         "task_module": task.get("module"),
         "task_title": task.get("title"),
