@@ -21,6 +21,12 @@ from tracegate.dataset.legacy_shop_generator import generate_legacy_shop
 from tracegate.dataset.legacy_shop_v2_generator import generate_legacy_shop_v2
 from tracegate.dataset.task_generator import write_default_tasks
 from tracegate.data.discover import write_discovery_doc
+from tracegate.data.hard_cases import (
+    mine_hard_candidates,
+    promote_manual_labels,
+    summarize_review_queue,
+    write_data_blocked,
+)
 from tracegate.data.manifest import build_dataset_manifest
 from tracegate.data.normalize import normalize_raw_records
 from tracegate.data.sources.base import RealDataError
@@ -206,6 +212,36 @@ def data_manifest_command(dataset_path: Path) -> None:
     manifest = build_dataset_manifest(dataset_path)
     print(f"Dataset manifest written to {dataset_path.with_name('manifest.json')}")
     print(f"dataset_sha256: {manifest['dataset_sha256']}")
+
+
+def data_mine_hard_command(repos: str, limit: int, real_only: bool, no_fallback: bool) -> None:
+    if not real_only:
+        raise SystemExit("hard case mining requires --real-only")
+    if not no_fallback:
+        raise SystemExit("hard case mining requires --no-fallback")
+    repo_list = [item.strip() for item in repos.split(",") if item.strip()]
+    try:
+        summary = mine_hard_candidates(repos=repo_list, limit=limit)
+    except RealDataError as exc:
+        blocked = write_data_blocked(str(exc))
+        raise SystemExit(f"{exc}\nData blocker written to {blocked}") from exc
+    print("Hard candidate mining complete")
+    for key, value in summary.items():
+        print(f"{key}: {value}")
+
+
+def data_review_queue_command(input_path: Path) -> None:
+    summary = summarize_review_queue(input_path)
+    print("Manual review queue summary")
+    for key, value in summary.items():
+        print(f"{key}: {value}")
+
+
+def data_promote_labels_command(labels_path: Path, output_path: Path) -> None:
+    summary = promote_manual_labels(labels_path=labels_path, output_path=output_path)
+    print("Manual labels promoted")
+    for key, value in summary.items():
+        print(f"{key}: {value}")
 
 
 def real_run_command(
@@ -436,6 +472,19 @@ def build_parser() -> argparse.ArgumentParser:
     data_manifest = data_subparsers.add_parser("manifest", help="Write a dataset manifest.")
     data_manifest.add_argument("--dataset", type=Path, required=True)
 
+    data_mine_hard = data_subparsers.add_parser("mine-hard", help="Mine hard real PR candidates into a manual review queue.")
+    data_mine_hard.add_argument("--repos", required=True, help="Comma-separated owner/name repositories.")
+    data_mine_hard.add_argument("--limit", type=int, default=40)
+    data_mine_hard.add_argument("--real-only", action="store_true")
+    data_mine_hard.add_argument("--no-fallback", action="store_true")
+
+    data_review_queue = data_subparsers.add_parser("review-queue", help="Summarize hard candidate manual review queue.")
+    data_review_queue.add_argument("--input", type=Path, required=True)
+
+    data_promote = data_subparsers.add_parser("promote-labels", help="Promote manually confirmed hard labels into cases.jsonl.")
+    data_promote.add_argument("--labels", type=Path, required=True)
+    data_promote.add_argument("--output", type=Path, required=True)
+
     real_run = subparsers.add_parser("run", help="Run deterministic real-data PR advisory baseline.")
     real_run.add_argument("--dataset", type=Path, required=True)
     real_run.add_argument("--advisor", default="rule")
@@ -556,6 +605,17 @@ def main(argv: Sequence[str] | None = None) -> None:
             data_validate_command(dataset_path=args.dataset, strict=args.strict, min_cases=args.min_cases)
         elif args.data_command == "manifest":
             data_manifest_command(dataset_path=args.dataset)
+        elif args.data_command == "mine-hard":
+            data_mine_hard_command(
+                repos=args.repos,
+                limit=args.limit,
+                real_only=args.real_only,
+                no_fallback=args.no_fallback,
+            )
+        elif args.data_command == "review-queue":
+            data_review_queue_command(input_path=args.input)
+        elif args.data_command == "promote-labels":
+            data_promote_labels_command(labels_path=args.labels, output_path=args.output)
     elif args.command == "run":
         real_run_command(
             dataset_path=args.dataset,

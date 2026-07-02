@@ -2,6 +2,9 @@ from __future__ import annotations
 
 import json
 import os
+import time
+import http.client
+import subprocess
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -21,6 +24,26 @@ DEFAULT_REPOSITORIES = [
     "pydantic/pydantic",
     "tiangolo/fastapi",
 ]
+_GH_AUTH_TOKEN: str | None = None
+
+
+def gh_auth_token() -> str | None:
+    global _GH_AUTH_TOKEN
+    if _GH_AUTH_TOKEN is not None:
+        return _GH_AUTH_TOKEN
+    try:
+        result = subprocess.run(
+            ["gh", "auth", "token"],
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+    except (subprocess.CalledProcessError, FileNotFoundError, subprocess.TimeoutExpired):
+        _GH_AUTH_TOKEN = ""
+        return None
+    _GH_AUTH_TOKEN = result.stdout.strip()
+    return _GH_AUTH_TOKEN or None
 
 
 def github_headers() -> dict[str, str]:
@@ -29,23 +52,31 @@ def github_headers() -> dict[str, str]:
         "User-Agent": "tracegate-real-data-mvp",
         "X-GitHub-Api-Version": "2022-11-28",
     }
-    token = os.environ.get("GITHUB_TOKEN")
+    token = os.environ.get("GITHUB_TOKEN") or gh_auth_token()
     if token:
         headers["Authorization"] = f"Bearer {token}"
     return headers
 
 
-def get_json(url: str) -> Any:
+def get_json(url: str, attempts: int = 3) -> Any:
     request = urllib.request.Request(url, headers=github_headers())
-    try:
-        with urllib.request.urlopen(request, timeout=30) as response:
-            body = response.read().decode("utf-8")
-    except urllib.error.HTTPError as exc:
-        detail = exc.read().decode("utf-8", errors="replace")
-        raise RealDataError(f"GitHub API HTTP {exc.code} for {url}: {detail[:500]}") from exc
-    except urllib.error.URLError as exc:
-        raise RealDataError(f"GitHub API request failed for {url}: {exc.reason}") from exc
-    return json.loads(body)
+    last_error: urllib.error.URLError | None = None
+    for attempt in range(1, attempts + 1):
+        try:
+            with urllib.request.urlopen(request, timeout=30) as response:
+                body = response.read().decode("utf-8")
+            return json.loads(body)
+        except urllib.error.HTTPError as exc:
+            detail = exc.read().decode("utf-8", errors="replace")
+            raise RealDataError(f"GitHub API HTTP {exc.code} for {url}: {detail[:500]}") from exc
+        except (urllib.error.URLError, TimeoutError, OSError, http.client.RemoteDisconnected) as exc:
+            last_error = exc
+            if attempt < attempts:
+                time.sleep(1.0 * attempt)
+                continue
+    assert last_error is not None
+    reason = getattr(last_error, "reason", str(last_error))
+    raise RealDataError(f"GitHub API request failed for {url}: {reason}") from last_error
 
 
 def list_closed_pull_requests(repo: str, per_page: int = 12) -> list[dict[str, Any]]:

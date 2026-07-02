@@ -6,16 +6,32 @@ from typing import Any
 from tracegate.core.models import AdvisoryDecision, EvalCase, EvidenceStatus
 
 
+MIN_HARD_BENCHMARK_DISTRIBUTION = {
+    "active": 8,
+    "unknown": 3,
+    "conflicting": 2,
+    "stale": 1,
+}
+
+
 def distribution(values: list[str]) -> dict[str, int]:
     return dict(sorted(Counter(values).items()))
+
+
+def hard_benchmark_ready(status_distribution: dict[str, int], scored: int) -> bool:
+    if scored < 14:
+        return False
+    return all(status_distribution.get(status, 0) >= minimum for status, minimum in MIN_HARD_BENCHMARK_DISTRIBUTION.items())
 
 
 def compute_metrics(cases: list[EvalCase], advisories: list[AdvisoryDecision]) -> dict[str, Any]:
     scored_cases = [case for case in cases if case.is_scored_real_case]
     excluded_cases = [case for case in cases if not case.is_scored_real_case]
     status_distribution = distribution([case.evidence_status.value for case in cases])
+    scored_status_distribution = distribution([case.evidence_status.value for case in scored_cases])
     decision_distribution = distribution([item.decision for item in advisories])
     risk_level_distribution = distribution([item.risk_level for item in advisories])
+    label_source_distribution = distribution([case.label_source for case in cases])
     pollution_count = sum(1 for item in advisories if item.pollution_flags)
     manual_count = sum(1 for case in cases if case.evidence_status == EvidenceStatus.NEEDS_MANUAL_REVIEW)
     provenance_complete = sum(1 for case in scored_cases if (case.source_url or case.repo_url) and case.evidence_items)
@@ -33,14 +49,24 @@ def compute_metrics(cases: list[EvalCase], advisories: list[AdvisoryDecision]) -
 
     total = len(cases)
     scored = len(scored_cases)
+    active_only = bool(scored_cases) and set(scored_status_distribution) == {"active"}
+    is_hard_ready = hard_benchmark_ready(scored_status_distribution, scored)
     return {
         "benchmark_note": "small real-data smoke benchmark, not a statistically significant benchmark",
         "num_cases_total": total,
         "num_cases_scored": scored,
         "num_cases_excluded": len(excluded_cases),
         "status_distribution": status_distribution,
+        "scored_status_distribution": scored_status_distribution,
         "decision_distribution": decision_distribution,
         "risk_level_distribution": risk_level_distribution,
+        "label_source_distribution": label_source_distribution,
+        "scored_cases": scored,
+        "excluded_cases_count": len(excluded_cases),
+        "manual_review_cases": manual_count,
+        "active_only": active_only,
+        "hard_benchmark_ready": is_hard_ready,
+        "hard_benchmark_minimums": MIN_HARD_BENCHMARK_DISTRIBUTION,
         "pollution_flag_rate": pollution_count / max(len(advisories), 1),
         "needs_manual_review_rate": manual_count / max(total, 1),
         "provenance_completeness_rate": provenance_complete / max(scored, 1),

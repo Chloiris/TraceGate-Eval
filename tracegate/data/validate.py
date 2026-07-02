@@ -10,6 +10,15 @@ class DatasetValidationError(ValueError):
     """Raised when normalized data is not eligible for real metrics."""
 
 
+def is_concrete_github_url(url: str | None) -> bool:
+    if not url:
+        return False
+    if not url.startswith("https://github.com/"):
+        return False
+    concrete_markers = ["/pull/", "/issues/", "/commit/", "#discussion_r", "/files"]
+    return any(marker in url for marker in concrete_markers)
+
+
 def validate_case(case: EvalCase, strict: bool) -> list[str]:
     errors: list[str] = []
     if case.is_synthetic and not case.excluded_from_real_metrics:
@@ -19,8 +28,25 @@ def validate_case(case: EvalCase, strict: bool) -> list[str]:
     if case.is_scored_real_case:
         if not (case.source_url or case.repo_url):
             errors.append("scored case missing source_url or repo_url")
+        concrete_urls = [
+            case.source_url,
+            case.issue_url,
+            case.pr_url,
+            case.claim.claim_source_url,
+            *(item.evidence_url for item in case.evidence_items),
+        ]
+        if not any(is_concrete_github_url(url) for url in concrete_urls):
+            errors.append("scored case missing concrete github.com PR/issue/comment/review/commit URL")
+        if case.source_url and case.source_url.startswith("https://docs.github.com/"):
+            errors.append("scored case source_url cannot be GitHub API documentation")
         if not case.evidence_items:
             errors.append("scored case missing evidence_items")
+        if case.evidence_status in {EvidenceStatus.STALE, EvidenceStatus.CONFLICTING} and len(case.evidence_items) < 2:
+            errors.append("stale/conflicting scored case requires at least 2 evidence_items")
+        if case.evidence_status == EvidenceStatus.UNKNOWN and not case.rationale:
+            errors.append("unknown scored case requires explicit insufficient-evidence rationale")
+        if not case.rationale:
+            errors.append("scored case missing rationale")
         if case.label_source == "unknown":
             errors.append("scored case label_source is unknown")
         if case.evidence_status == EvidenceStatus.NEEDS_MANUAL_REVIEW:

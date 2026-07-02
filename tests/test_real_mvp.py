@@ -32,7 +32,7 @@ def make_case(index: int, *, status: str = "active", synthetic: bool = False, ex
         {
             "case_id": case_id,
             "source_dataset": "github_api" if is_real else "test_fixture",
-            "source_url": "https://api.github.com/repos/example/repo/pulls" if is_real else "",
+            "source_url": f"https://github.com/example/repo/pull/{index}" if is_real else "",
             "repo": "example/repo",
             "repo_url": "https://github.com/example/repo" if is_real else "",
             "issue_url": None,
@@ -68,11 +68,37 @@ def make_case(index: int, *, status: str = "active", synthetic: bool = False, ex
             "expected_decision": "preserve" if status == "active" else "verify_first",
             "label_source": "heuristic_verified" if is_real and not excluded else "unknown",
             "label_confidence": 0.8 if is_real and not excluded else 0.0,
+            "rationale": "Concrete GitHub PR evidence supports this scored test case.",
             "is_real": is_real,
             "is_synthetic": synthetic,
             "excluded_from_real_metrics": excluded,
         }
     )
+
+
+def make_hard_case(index: int, status: str) -> EvalCase:
+    data = make_case(index, status=status).to_dict()
+    if status == "conflicting":
+        data["expected_decision"] = "detect_conflict"
+    elif status == "stale":
+        data["expected_decision"] = "verify_first"
+    if status in {"stale", "conflicting"}:
+        data["evidence_items"].append(
+            {
+                "evidence_id": f"{data['case_id']}:evidence:review",
+                "evidence_type": "review",
+                "evidence_text_excerpt": "Reviewer evidence adds a second concrete GitHub URL for hard-case adjudication.",
+                "evidence_url": f"https://github.com/example/repo/pull/{index}#discussion_r{index}",
+                "file_path": None,
+                "commit_sha": "merge",
+                "timestamp": "2026-01-02T00:00:00Z",
+                "supports_or_contradicts": "contradicts" if status == "conflicting" else "unclear",
+                "provenance_hash": stable_hash_text(f"{data['case_id']}:review"),
+            }
+        )
+    if status == "unknown":
+        data["rationale"] = "Insufficient evidence: the PR touches a risky path but lacks enough current support."
+    return EvalCase.from_dict(data)
 
 
 def test_eval_case_enum_validation_rejects_unknown_status() -> None:
@@ -119,6 +145,40 @@ def test_missing_provenance_fails_for_scored_case(tmp_path: Path) -> None:
         validate_dataset(dataset, strict=True, min_cases=1)
 
 
+def test_no_concrete_pr_url_fails_strict_validation(tmp_path: Path) -> None:
+    case = make_case(1)
+    data = case.to_dict()
+    data["source_url"] = "https://docs.github.com/en/rest/pulls/pulls"
+    data["pr_url"] = None
+    data["issue_url"] = None
+    data["claim"]["claim_source_url"] = "https://docs.github.com/en/rest/pulls/pulls"
+    data["evidence_items"][0]["evidence_url"] = "https://api.github.com/repos/example/repo/pulls/1"
+    dataset = tmp_path / "cases.jsonl"
+    write_cases(dataset, [EvalCase.from_dict(data)])
+    with pytest.raises(DatasetValidationError, match="concrete github.com"):
+        validate_dataset(dataset, strict=True, min_cases=1)
+
+
+def test_conflicting_requires_multiple_evidence_items(tmp_path: Path) -> None:
+    case = make_case(1, status="conflicting")
+    dataset = tmp_path / "cases.jsonl"
+    write_cases(dataset, [case])
+    with pytest.raises(DatasetValidationError, match="requires at least 2 evidence_items"):
+        validate_dataset(dataset, strict=True, min_cases=1)
+
+
+def test_low_confidence_and_manual_review_excluded_from_scored_metrics(tmp_path: Path) -> None:
+    low_confidence = make_case(1)
+    low_data = low_confidence.to_dict()
+    low_data["label_confidence"] = 0.4
+    low_data["excluded_from_real_metrics"] = True
+    manual_review = make_case(2, status="needs_manual_review", excluded=True)
+    dataset = tmp_path / "cases.jsonl"
+    write_cases(dataset, [EvalCase.from_dict(low_data), manual_review])
+    _, summary = validate_dataset(dataset, strict=True, min_cases=0)
+    assert summary["num_cases_scored"] == 0
+
+
 def test_real_run_writes_manifest_and_reports(tmp_path: Path) -> None:
     dataset = tmp_path / "cases.jsonl"
     write_cases(dataset, [make_case(index) for index in range(1, 9)])
@@ -136,7 +196,39 @@ def test_real_run_writes_manifest_and_reports(tmp_path: Path) -> None:
     assert manifest["used_synthetic_data"] is False
     assert manifest["used_mock_model"] is False
     assert manifest["used_fallback_data"] is False
+    assert manifest["active_only"] is True
+    assert manifest["hard_benchmark_ready"] is False
     assert report["metrics"]["num_cases_scored"] == 8
+    assert report["metrics"]["active_only"] is True
+    assert report["metrics"]["hard_benchmark_ready"] is False
+
+
+def test_hard_benchmark_report_generation_marks_ready(tmp_path: Path) -> None:
+    cases = [make_case(index) for index in range(1, 9)]
+    cases.extend(make_hard_case(index, "unknown") for index in range(9, 12))
+    cases.extend(make_hard_case(index, "conflicting") for index in range(12, 14))
+    cases.append(make_hard_case(14, "stale"))
+    dataset = tmp_path / "cases.jsonl"
+    write_cases(dataset, cases)
+    manifest = run_real_advisory(
+        dataset_path=dataset,
+        advisor="rule",
+        run_dir=tmp_path / "run",
+        real_only=True,
+        no_mock=True,
+        no_fallback=True,
+        command="test hard run",
+        min_cases=14,
+    )
+    report = read_json(tmp_path / "run" / "report.json")
+    assert manifest["active_only"] is False
+    assert manifest["hard_benchmark_ready"] is True
+    assert report["metrics"]["scored_status_distribution"] == {
+        "active": 8,
+        "conflicting": 2,
+        "stale": 1,
+        "unknown": 3,
+    }
 
 
 def test_mock_advisor_is_forbidden_in_real_only_mode(tmp_path: Path) -> None:
@@ -187,6 +279,17 @@ def test_cli_help_exposes_real_data_commands() -> None:
     )
     assert "data" in result.stdout
     assert "guardrails" in result.stdout
+
+
+def test_cli_mine_hard_help_works() -> None:
+    result = subprocess.run(
+        [sys.executable, "-m", "tracegate", "data", "mine-hard", "--help"],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    assert "--repos" in result.stdout
+    assert "--no-fallback" in result.stdout
 
 
 def test_github_action_summary_matches_claim_files() -> None:

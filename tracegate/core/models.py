@@ -107,6 +107,7 @@ class EvalCase:
     expected_decision: ExpectedDecision
     label_source: str
     label_confidence: float
+    rationale: str
     is_real: bool
     is_synthetic: bool
     excluded_from_real_metrics: bool
@@ -156,6 +157,7 @@ class EvalCase:
             expected_decision=ExpectedDecision(str(data["expected_decision"])),
             label_source=str(data["label_source"]),
             label_confidence=float(data["label_confidence"]),
+            rationale=str(data.get("rationale") or ""),
             is_real=bool(data["is_real"]),
             is_synthetic=bool(data["is_synthetic"]),
             excluded_from_real_metrics=bool(data["excluded_from_real_metrics"]),
