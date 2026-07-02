@@ -10,6 +10,10 @@ class DatasetValidationError(ValueError):
     """Raised when normalized data is not eligible for real metrics."""
 
 
+CODEX_AUDIT_SOURCES = {"codex_evidence_audit", "codex_evidence_audit_semantic_v2"}
+ACCEPTED_HARD_LABEL_SOURCES = {"human_accepted_codex_audit", "manual_verified"}
+
+
 def is_concrete_github_url(url: str | None) -> bool:
     if not url:
         return False
@@ -57,6 +61,11 @@ def validate_case(case: EvalCase, strict: bool) -> list[str]:
             errors.append("scored case must be real")
         if case.is_synthetic:
             errors.append("scored case must not be synthetic")
+        if case.label_source in CODEX_AUDIT_SOURCES:
+            errors.append("raw Codex audit label_source cannot enter scored metrics")
+        if case.evidence_status in {EvidenceStatus.UNKNOWN, EvidenceStatus.CONFLICTING, EvidenceStatus.STALE}:
+            if case.label_source not in ACCEPTED_HARD_LABEL_SOURCES:
+                errors.append("hard scored case requires human_accepted_codex_audit or manual_verified label_source")
     if strict and case.is_real and not case.excluded_from_real_metrics and not case.is_scored_real_case:
         errors.append("real included case failed scored-case eligibility")
     return errors

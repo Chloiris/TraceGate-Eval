@@ -416,7 +416,7 @@ Evidence URLs:
 
 Key discussion summary:
 - pr: Fix setuptools deprecation warnings Update keys used in `setup.cfg` in order to fix the following setuptools deprecation warnings: > The license_file parameter is deprecated, use license_files instead. > Usage of dash-separated 'provides...
-- comment: Thanks for the efforts, but I have updated as you instructed but still getting this error: C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.10_3.10.2544.0_x64__qbz5n2kfra8p0\lib\site-packages\setuptools\dist.py:771: UserWar...
+- comment: Thanks for the efforts, but I have updated as you instructed but still getting this error: <redacted-local-path>
 - comment: Looks like this has been obsoleted by #7012.
 - comment: Resolving since the setup.cfg is no longer relevant.
 - commit: Fix setuptools deprecation warnings Update keys used in `setup.cfg` in order to fix the following setuptools deprecation warnings: > The license_file parameter is deprecated, use license_files instead. > Usage of dash-separated 'provides...
@@ -1012,7 +1012,7 @@ Key discussion summary:
 - pr: fix(config): remove `as Name` re-export pattern to support PYTHON_LAZY_IMPORTS=all (Python 3.15) ## Problem `pytest` crashes when run with Python 3.15's `PYTHON_LAZY_IMPORTS=all` environment variable: ``` $ PYTHON_LAZY_IMPORTS=all pytest...
 - commit: fix(config): remove `as Name` re-export pattern to support PYTHON_LAZ… …Y_IMPORTS=all
 - linked_ref:
-- related_ref: `pytest` does not work with `PYTHON_LAZY_IMPORTS=all` Python version: 3.15.0b2+dev Pytest version: 9.1.1 `PYTHON_LAZY_IMPORTS=all pytest --help` produces: ```python Traceback (most recent call last): File "/Users/sobolev/Desktop/msgspec/...
+- related_ref: `pytest` does not work with `PYTHON_LAZY_IMPORTS=all` Python version: 3.15.0b2+dev Pytest version: 9.1.1 `PYTHON_LAZY_IMPORTS=all pytest --help` produces: ```python Traceback (most recent call last): File "<redacted-local-path>
 - related_ref_comment: Assertion rewrite doesn't expect it's import hook to Recurse that way We may need a hardheaded skip list for that import mode
 
 Changed files:

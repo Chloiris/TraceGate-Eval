@@ -23,7 +23,12 @@ SECRET_RE = re.compile(
     r"BEGIN (RSA|OPENSSH|EC|DSA|PRIVATE) KEY|"
     r"Authorization:[ \t]*Bearer[ \t]+[A-Za-z0-9._-]{20,}"
 )
+LOCAL_PATH_RE = re.compile(
+    r"(?:/[Uu]sers|/private/var/folders|/var/folders)/[^\s`'\"<>)]*|"
+    r"[A-Za-z]:\\[^\r\n`'\"<>)]*"
+)
 BIDI_CONTROL_CODEPOINTS = set(range(0x202A, 0x202F)) | set(range(0x2066, 0x206A))
+INVISIBLE_TEXT_CODEPOINTS = BIDI_CONTROL_CODEPOINTS | {0x200B, 0x200C, 0x200D, 0xFEFF}
 
 HIGH_RISK_KEYWORDS = [
     "auth",
@@ -124,13 +129,14 @@ def parse_candidate_id(candidate_id: str) -> CandidateRef:
 
 
 def _escape_bidi(text: str) -> str:
-    return "".join(f"\\u{ord(ch):04X}" if ord(ch) in BIDI_CONTROL_CODEPOINTS else ch for ch in text)
+    return "".join(f"\\u{ord(ch):04X}" if ord(ch) in INVISIBLE_TEXT_CODEPOINTS else ch for ch in text)
 
 
 def sanitize_text(text: Any) -> str:
     escaped = _escape_bidi(str(text or ""))
     redacted = EMAIL_RE.sub("<redacted-email>", escaped)
     redacted = SECRET_RE.sub("<redacted-secret-pattern>", redacted)
+    redacted = LOCAL_PATH_RE.sub("<redacted-local-path>", redacted)
     return " ".join(redacted.split())
 
 

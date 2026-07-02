@@ -115,6 +115,52 @@ Use this checklist after reading `docs/SEMANTIC_LABEL_SANITY_AUDIT.md`.
 - key URL: https://github.com/psf/requests/commit/5bce0b088393108e3a0c54a844446f91fbc54869
 - human decision: `[ ] manual_verified` `[ ] reject` `[ ] needs_more_evidence`
 
+## Additional Sampled Queue Checks
+
+## `hard_candidate:psf__requests:pull:7546`
+
+- suggested action: `reject`
+- suggested evidence_status: `none`
+- expected_decision: `none`
+- confidence: `0.91`
+- key URL: https://github.com/psf/requests/pull/7546
+- key URL: https://github.com/psf/requests/issues/4965
+- key URL: https://github.com/psf/requests/commit/a8e6a7cec6215eca83586a70180474a0c96a4efe
+- human decision: `[ ] manual_verified` `[ ] reject` `[ ] needs_more_evidence`
+
+## `hard_candidate:psf__requests:pull:7491`
+
+- suggested action: `reject`
+- suggested evidence_status: `none`
+- expected_decision: `none`
+- confidence: `0.92`
+- key URL: https://github.com/psf/requests/pull/7491
+- key URL: https://github.com/psf/requests/commit/0a04af26d265a19d3c64de455b5a5bf64140a390
+- key URL: https://github.com/psf/requests/pull/7491#issuecomment-4606223587
+- human decision: `[ ] manual_verified` `[ ] reject` `[ ] needs_more_evidence`
+
+## `hard_candidate:psf__requests:pull:7549`
+
+- suggested action: `needs_more_evidence`
+- suggested evidence_status: `none`
+- expected_decision: `none`
+- confidence: `0.35`
+- key URL: https://github.com/psf/requests/pull/7549
+- key URL: https://github.com/psf/requests/commit/1e884f825cf895889ba1199d750b41bf480da0ed
+- key URL: https://github.com/psf/requests/issues/2716
+- human decision: `[ ] manual_verified` `[ ] reject` `[ ] needs_more_evidence`
+
+## `hard_candidate:psf__requests:pull:7441`
+
+- suggested action: `needs_more_evidence`
+- suggested evidence_status: `none`
+- expected_decision: `none`
+- confidence: `0.35`
+- key URL: https://github.com/psf/requests/pull/7441
+- key URL: https://github.com/psf/requests/pull/7441#pullrequestreview-4289038802
+- key URL: https://github.com/psf/requests/commit/412f581d7e7c27bfee4f042fcac89bae9a804afe
+- human decision: `[ ] manual_verified` `[ ] reject` `[ ] needs_more_evidence`
+
 ## Rejected False Positives
 
 - `hard_candidate:pytest-dev__pytest:pull:14662`: rejected. The regression/concern wording is a mitigated context because tests verify no typing regressions; there is no reviewer contradiction.

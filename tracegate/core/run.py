@@ -165,6 +165,7 @@ def render_markdown_report(manifest: dict[str, Any], metrics: dict[str, Any], ad
     lines = [
         "# TraceGate Real-Data PR Advisory Report",
         "",
+        f"- benchmark: `{metrics.get('benchmark_name', 'TraceGate real-data benchmark')}`",
         f"- run_id: `{manifest['run_id']}`",
         f"- real_evaluation_succeeded: `{manifest.get('real_evaluation_succeeded', False)}`",
         f"- used_real_data: `{manifest.get('used_real_data')}`",
@@ -177,8 +178,12 @@ def render_markdown_report(manifest: dict[str, Any], metrics: dict[str, Any], ad
         (
             "This run is an active-only real-data smoke run, not a hard real-data mini benchmark."
             if metrics.get("active_only")
-            else "This run includes hard real-data cases, but remains a small non-statistical mini benchmark."
+            else "This is a v0.2-alpha hard real-data mini benchmark. It remains a small non-statistical benchmark."
         ),
+        "",
+        "- Hard labels come from Codex evidence audit plus human final acceptance.",
+        "- This benchmark does not replace human code review.",
+        "- GitHub Action advisory remains warning-only.",
         "",
         "## Metrics",
         "",
@@ -187,6 +192,11 @@ def render_markdown_report(manifest: dict[str, Any], metrics: dict[str, Any], ad
         "num_cases_total",
         "num_cases_scored",
         "num_cases_excluded",
+        "active_count",
+        "stale_count",
+        "unknown_count",
+        "conflicting_count",
+        "promoted_cases",
         "pollution_flag_rate",
         "needs_manual_review_rate",
         "provenance_completeness_rate",
@@ -200,6 +210,9 @@ def render_markdown_report(manifest: dict[str, Any], metrics: dict[str, Any], ad
         "hard_benchmark_ready",
     ]:
         lines.append(f"- {key}: `{metrics.get(key)}`")
+    lines.extend(["", "## Limitations", ""])
+    for item in metrics.get("limitations", []):
+        lines.append(f"- {item}")
     lines.extend(["", "## Distributions", ""])
     for key in [
         "status_distribution",
@@ -215,7 +228,7 @@ def render_markdown_report(manifest: dict[str, Any], metrics: dict[str, Any], ad
             "## Run Type",
             "",
             "- real-data smoke run: `true`" if metrics.get("active_only") else "- real-data smoke run: `false`",
-            f"- hard real-data mini benchmark: `{metrics.get('hard_benchmark_ready')}`",
+            "- hard real-data mini benchmark: `false`" if metrics.get("active_only") else "- hard real-data mini benchmark: `true`",
             f"- manual review queue cases: `{metrics.get('manual_review_queue_cases')}`",
             f"- excluded candidates: `{metrics.get('num_cases_excluded')}`",
             "",
@@ -247,7 +260,7 @@ def write_report_files(
     advisories: list[AdvisoryDecision],
 ) -> None:
     markdown = render_markdown_report(manifest, metrics, advisories)
-    (run_dir / "report.md").write_text(markdown + "\n", encoding="utf-8")
+    (run_dir / "report.md").write_text(markdown.rstrip() + "\n", encoding="utf-8")
     write_json(
         run_dir / "report.json",
         {

@@ -14,7 +14,7 @@ from tracegate.core.guardrails import scan_guardrails
 from tracegate.core.run import RealRunError, run_real_advisory
 from tracegate.core.serialization import read_json, read_jsonl, stable_hash_text, write_cases
 from tracegate.data.full_label_audit import run_full_label_audit
-from tracegate.data.hard_cases import promote_manual_labels
+from tracegate.data.hard_cases import promote_manual_labels, write_accepted_labels
 from tracegate.data.sources.base import RealDataError
 from tracegate.data.validate import DatasetValidationError, validate_dataset
 
@@ -82,6 +82,7 @@ def make_case(index: int, *, status: str = "active", synthetic: bool = False, ex
 
 def make_hard_case(index: int, status: str) -> EvalCase:
     data = make_case(index, status=status).to_dict()
+    data["label_source"] = "human_accepted_codex_audit"
     if status == "conflicting":
         data["expected_decision"] = "detect_conflict"
     elif status == "stale":
@@ -158,6 +159,47 @@ def make_audit_snapshot(
 
 def write_queue(path: Path, rows: list[dict[str, object]]) -> None:
     path.write_text("".join(json.dumps(row) + "\n" for row in rows), encoding="utf-8")
+
+
+def make_semantic_label_row(
+    index: int,
+    *,
+    action: str = "promote",
+    status: str = "unknown",
+    decision: str = "verify_first",
+    source: str = "codex_evidence_audit_semantic_v2",
+    confidence: float = 0.8,
+    rationale: str = "High-risk auth change lacks validation evidence.",
+) -> dict[str, object]:
+    repo = "example/repo"
+    return {
+        "candidate_id": f"hard_candidate:example__repo:pull:{index}",
+        "action": action,
+        "evidence_status": status if action == "promote" else "none",
+        "expected_decision": decision if action == "promote" else "none",
+        "label_source": source,
+        "label_confidence": confidence,
+        "rationale": rationale,
+        "evidence_urls": [
+            f"https://github.com/{repo}/pull/{index}",
+            f"https://github.com/{repo}/pull/{index}#issuecomment-{index}",
+        ],
+        "evidence_summary": ["pr: summary", "comment: evidence"],
+        "missing_evidence": [],
+        "reviewed_by": "codex",
+        "reviewed_at": "2026-01-03T00:00:00Z",
+        "human_review_required": True,
+        "ready_for_human_final_check": True,
+    }
+
+
+def make_accepted_label_row(index: int, **overrides: object) -> dict[str, object]:
+    row = make_semantic_label_row(index, source="human_accepted_codex_audit", **overrides)
+    row["human_final_check"] = True
+    row["accepted_by"] = "Chloiris"
+    row["accepted_at"] = "2026-01-04T00:00:00Z"
+    row["audit_source"] = "codex_evidence_audit_semantic_v2"
+    return row
 
 
 def test_eval_case_enum_validation_rejects_unknown_status() -> None:
@@ -384,6 +426,23 @@ def test_full_label_audit_covers_all_candidates_and_does_not_modify_cases(tmp_pa
     assert summary["labels_written"] == 2
     assert {row["candidate_id"] for row in output} == {row["candidate_id"] for row in rows}
     assert cases.read_text(encoding="utf-8") == "sentinel\n"
+
+
+def test_full_label_audit_redacts_local_paths_from_generated_outputs(tmp_path: Path) -> None:
+    queue = tmp_path / "manual_review_queue.jsonl"
+    labels = tmp_path / "manual_labels.jsonl"
+    report = tmp_path / "report.md"
+    checklist = tmp_path / "checklist.md"
+    write_queue(queue, [make_audit_queue_row(1, "unknown")])
+    local_path = "C:" + "\\Program Files\\Example\\secret.py"
+
+    def fetcher(repo: str, number: int) -> dict[str, object]:
+        return make_audit_snapshot(number, body=f"Changes auth parsing. Traceback at {local_path}", files=["src/auth/config.py"])
+
+    run_full_label_audit(queue, labels, report, checklist, fetcher=fetcher)
+    generated = labels.read_text(encoding="utf-8") + report.read_text(encoding="utf-8")
+    assert local_path not in generated
+    assert "<redacted-local-path>" in generated
 
 
 def test_codex_evidence_audit_cannot_be_promoted_as_manual_verified(tmp_path: Path) -> None:
@@ -627,6 +686,163 @@ def test_full_label_audit_reject_and_needs_more_evidence_are_not_scored(tmp_path
     assert row["evidence_status"] == "none"
     with pytest.raises(RealDataError, match="manual_verified"):
         promote_manual_labels(labels, tmp_path / "cases.jsonl")
+
+
+def test_write_accepted_labels_only_contains_promotes(tmp_path: Path) -> None:
+    labels = tmp_path / "manual_labels.jsonl"
+    accepted = tmp_path / "manual_labels.accepted.jsonl"
+    write_queue(
+        labels,
+        [
+            make_semantic_label_row(1, action="promote"),
+            make_semantic_label_row(2, action="reject"),
+            make_semantic_label_row(3, action="needs_more_evidence"),
+        ],
+    )
+    summary = write_accepted_labels(labels, accepted)
+    rows = read_jsonl(accepted)
+    assert summary["accepted_labels_count"] == 1
+    assert [row["candidate_id"] for row in rows] == ["hard_candidate:example__repo:pull:1"]
+    assert rows[0]["label_source"] == "human_accepted_codex_audit"
+    assert rows[0]["audit_source"] == "codex_evidence_audit_semantic_v2"
+    assert rows[0]["human_final_check"] is True
+
+
+def test_accepted_labels_redact_local_paths_from_public_text(tmp_path: Path) -> None:
+    labels = tmp_path / "manual_labels.jsonl"
+    accepted = tmp_path / "manual_labels.accepted.jsonl"
+    dataset = tmp_path / "cases.jsonl"
+    row = make_semantic_label_row(1)
+    local_path = "C:" + "\\Users\\local\\project\\secret.py"
+    row["evidence_summary"] = [f"comment: failure at {local_path}", "pr: safe summary"]
+    write_queue(labels, [row])
+    write_accepted_labels(labels, accepted)
+    accepted_rows = read_jsonl(accepted)
+    assert local_path not in accepted_rows[0]["evidence_summary"][0]
+    assert "<redacted-local-path>" in accepted_rows[0]["evidence_summary"][0]
+
+    promote_manual_labels(
+        labels_path=accepted,
+        dataset_path=dataset,
+        output_path=dataset,
+        accepted_sources={"human_accepted_codex_audit"},
+    )
+    case = read_jsonl(dataset)[0]
+    assert local_path not in case["evidence_items"][0]["evidence_text_excerpt"]
+    assert "<redacted-local-path>" in case["evidence_items"][0]["evidence_text_excerpt"]
+
+
+def test_human_accepted_codex_audit_can_promote(tmp_path: Path) -> None:
+    labels = tmp_path / "manual_labels.accepted.jsonl"
+    dataset = tmp_path / "cases.jsonl"
+    write_queue(labels, [make_accepted_label_row(1)])
+    summary = promote_manual_labels(
+        labels_path=labels,
+        dataset_path=dataset,
+        output_path=dataset,
+        accepted_sources={"human_accepted_codex_audit"},
+    )
+    cases, validation = validate_dataset(dataset, strict=True, min_cases=1)
+    assert summary["promoted_cases"] == 1
+    assert validation["num_cases_scored"] == 1
+    assert cases[0].label_source == "human_accepted_codex_audit"
+    assert cases[0].is_real is True
+    assert cases[0].is_synthetic is False
+    assert cases[0].excluded_from_real_metrics is False
+
+
+def test_accepted_unknown_requires_verify_first(tmp_path: Path) -> None:
+    labels = tmp_path / "manual_labels.accepted.jsonl"
+    dataset = tmp_path / "cases.jsonl"
+    write_queue(labels, [make_accepted_label_row(1, status="unknown", decision="preserve")])
+    with pytest.raises(RealDataError, match="unknown"):
+        promote_manual_labels(labels, dataset, dataset, accepted_sources={"human_accepted_codex_audit"})
+
+
+def test_accepted_conflicting_requires_two_distinct_urls(tmp_path: Path) -> None:
+    labels = tmp_path / "manual_labels.accepted.jsonl"
+    dataset = tmp_path / "cases.jsonl"
+    row = make_accepted_label_row(1, status="conflicting", decision="detect_conflict")
+    row["evidence_urls"] = ["https://github.com/example/repo/pull/1", "https://github.com/example/repo/pull/1"]
+    write_queue(labels, [row])
+    with pytest.raises(RealDataError, match="conflicting"):
+        promote_manual_labels(labels, dataset, dataset, accepted_sources={"human_accepted_codex_audit"})
+
+
+def test_accepted_stale_requires_ordered_rationale(tmp_path: Path) -> None:
+    labels = tmp_path / "manual_labels.accepted.jsonl"
+    dataset = tmp_path / "cases.jsonl"
+    row = make_accepted_label_row(1, status="stale", decision="verify_first", rationale="Deprecated setting is obsolete.")
+    write_queue(labels, [row])
+    with pytest.raises(RealDataError, match="stale rationale"):
+        promote_manual_labels(labels, dataset, dataset, accepted_sources={"human_accepted_codex_audit"})
+
+
+def test_accepted_reject_and_needs_more_evidence_do_not_promote(tmp_path: Path) -> None:
+    labels = tmp_path / "manual_labels.accepted.jsonl"
+    dataset = tmp_path / "cases.jsonl"
+    write_queue(
+        labels,
+        [
+            make_accepted_label_row(1, action="reject"),
+            make_accepted_label_row(2, action="needs_more_evidence"),
+        ],
+    )
+    with pytest.raises(RealDataError, match="only action=promote"):
+        promote_manual_labels(labels, dataset, dataset, accepted_sources={"human_accepted_codex_audit"})
+
+
+def test_promote_hard_benchmark_ready_calculates_false_until_minimum_mix(tmp_path: Path) -> None:
+    labels = tmp_path / "manual_labels.accepted.jsonl"
+    dataset = tmp_path / "cases.jsonl"
+    rows = [
+        make_accepted_label_row(1, status="conflicting", decision="detect_conflict"),
+        make_accepted_label_row(
+            2,
+            status="stale",
+            decision="verify_first",
+            rationale="older claim is superseded by newer evidence with time ordering.",
+        ),
+        make_accepted_label_row(3, status="unknown", decision="verify_first"),
+    ]
+    write_queue(labels, rows)
+    promote_manual_labels(labels, dataset, dataset, accepted_sources={"human_accepted_codex_audit"})
+    manifest = run_real_advisory(
+        dataset_path=dataset,
+        advisor="rule",
+        run_dir=tmp_path / "run",
+        real_only=True,
+        no_mock=True,
+        no_fallback=True,
+        command="test hard mix",
+        min_cases=3,
+    )
+    assert manifest["used_synthetic_data"] is False
+    assert manifest["used_mock_model"] is False
+    assert manifest["used_fallback_data"] is False
+    assert manifest["hard_benchmark_ready"] is False
+
+
+def test_scored_dataset_rejects_raw_codex_audit_source(tmp_path: Path) -> None:
+    case = make_hard_case(1, "unknown")
+    data = case.to_dict()
+    data["label_source"] = "codex_evidence_audit_semantic_v2"
+    dataset = tmp_path / "cases.jsonl"
+    write_cases(dataset, [EvalCase.from_dict(data)])
+    with pytest.raises(DatasetValidationError, match="raw Codex audit"):
+        validate_dataset(dataset, strict=True, min_cases=1)
+
+
+def test_cases_jsonl_contains_no_mock_synthetic_fallback_after_promote(tmp_path: Path) -> None:
+    labels = tmp_path / "manual_labels.accepted.jsonl"
+    dataset = tmp_path / "cases.jsonl"
+    write_queue(labels, [make_accepted_label_row(1)])
+    promote_manual_labels(labels, dataset, dataset, accepted_sources={"human_accepted_codex_audit"})
+    rows = read_jsonl(dataset)
+    assert all(row["is_real"] is True for row in rows)
+    assert all(row["is_synthetic"] is False for row in rows)
+    assert all("mock" not in row["source_dataset"] for row in rows)
+    assert all("fallback" not in row["source_dataset"] for row in rows)
 
 
 def test_github_action_summary_matches_claim_files() -> None:

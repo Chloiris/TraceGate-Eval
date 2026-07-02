@@ -26,6 +26,7 @@ from tracegate.data.hard_cases import (
     mine_hard_candidates,
     promote_manual_labels,
     summarize_review_queue,
+    write_accepted_labels,
     write_data_blocked,
 )
 from tracegate.data.manifest import build_dataset_manifest
@@ -238,9 +239,25 @@ def data_review_queue_command(input_path: Path) -> None:
         print(f"{key}: {value}")
 
 
-def data_promote_labels_command(labels_path: Path, output_path: Path) -> None:
+def data_accept_labels_command(labels_path: Path, output_path: Path, accepted_by: str) -> None:
     try:
-        summary = promote_manual_labels(labels_path=labels_path, output_path=output_path)
+        summary = write_accepted_labels(labels_path=labels_path, output_path=output_path, accepted_by=accepted_by)
+    except RealDataError as exc:
+        raise SystemExit(str(exc)) from exc
+    print("Accepted labels written")
+    for key, value in summary.items():
+        print(f"{key}: {value}")
+
+
+def data_promote_labels_command(labels_path: Path, dataset_path: Path | None, output_path: Path, accepted_sources: str) -> None:
+    sources = {item.strip() for item in accepted_sources.split(",") if item.strip()}
+    try:
+        summary = promote_manual_labels(
+            labels_path=labels_path,
+            dataset_path=dataset_path,
+            output_path=output_path,
+            accepted_sources=sources,
+        )
     except RealDataError as exc:
         raise SystemExit(str(exc)) from exc
     print("Manual labels promoted")
@@ -500,6 +517,11 @@ def build_parser() -> argparse.ArgumentParser:
     data_review_queue = data_subparsers.add_parser("review-queue", help="Summarize hard candidate manual review queue.")
     data_review_queue.add_argument("--input", type=Path, required=True)
 
+    data_accept = data_subparsers.add_parser("accept-labels", help="Write human-accepted labels from Codex semantic audit promotes.")
+    data_accept.add_argument("--labels", type=Path, required=True)
+    data_accept.add_argument("--output", type=Path, required=True)
+    data_accept.add_argument("--accepted-by", default="Chloiris")
+
     data_full_audit = data_subparsers.add_parser("full-label-audit", help="Audit all manual review candidates into Codex review labels.")
     data_full_audit.add_argument("--input", type=Path, default=Path("datasets/real_min/labels/manual_review_queue.jsonl"))
     data_full_audit.add_argument("--labels", type=Path, default=Path("datasets/real_min/labels/manual_labels.jsonl"))
@@ -508,7 +530,9 @@ def build_parser() -> argparse.ArgumentParser:
 
     data_promote = data_subparsers.add_parser("promote-labels", help="Promote manually confirmed hard labels into cases.jsonl.")
     data_promote.add_argument("--labels", type=Path, required=True)
+    data_promote.add_argument("--dataset", type=Path)
     data_promote.add_argument("--output", type=Path, required=True)
+    data_promote.add_argument("--accepted-sources", default="manual_verified")
 
     real_run = subparsers.add_parser("run", help="Run deterministic real-data PR advisory baseline.")
     real_run.add_argument("--dataset", type=Path, required=True)
@@ -646,8 +670,15 @@ def main(argv: Sequence[str] | None = None) -> None:
                 report_path=args.report,
                 checklist_path=args.checklist,
             )
+        elif args.data_command == "accept-labels":
+            data_accept_labels_command(labels_path=args.labels, output_path=args.output, accepted_by=args.accepted_by)
         elif args.data_command == "promote-labels":
-            data_promote_labels_command(labels_path=args.labels, output_path=args.output)
+            data_promote_labels_command(
+                labels_path=args.labels,
+                dataset_path=args.dataset,
+                output_path=args.output,
+                accepted_sources=args.accepted_sources,
+            )
     elif args.command == "run":
         real_run_command(
             dataset_path=args.dataset,
