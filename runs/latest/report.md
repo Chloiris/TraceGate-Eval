@@ -1,7 +1,7 @@
 # TraceGate Real-Data PR Advisory Report
 
 - benchmark: `TraceGate v0.2-alpha hard real-data mini benchmark`
-- run_id: `tracegate-real-20260702T145237Z`
+- run_id: `tracegate-real-20260702T152335Z`
 - real_evaluation_succeeded: `True`
 - used_real_data: `True`
 - used_synthetic_data: `False`

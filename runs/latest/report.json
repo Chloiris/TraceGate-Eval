@@ -428,7 +428,7 @@
     "branch": "feature/promote-semantic-audit-labels-v0.2-alpha",
     "cache_mode": "downloaded",
     "command": "python -m tracegate run --dataset datasets/real_min/cases.jsonl --advisor rule --real-only --no-mock --no-fallback",
-    "created_at": "2026-07-02T14:52:37.017539+00:00",
+    "created_at": "2026-07-02T15:23:35.997274+00:00",
     "dataset_manifest_path": "datasets/real_min/manifest.json",
     "dataset_path": "datasets/real_min/cases.jsonl",
     "dataset_sha256": "097957c8aaabda56cc9fc29c4de433c7261ec2aea1adb7953df9d7abecbfb5d4",
@@ -438,7 +438,7 @@
       "verify_first": 3
     },
     "dependencies_snapshot": "PyYAML==6.0.3\nfastapi==0.138.2\nhttpx==0.28.1\npydantic==2.13.4\npytest==9.1.1\ntracegate-eval==0.1.0\nuvicorn==0.49.0",
-    "git_commit": "9293ba60a623b88e3a6ba5703ed718b776d56ff4",
+    "git_commit": "5b1f9a981903f6c1b86901e260fd031d505f5a7e",
     "hard_benchmark_ready": false,
     "local_arch": "arm64",
     "manual_review_queue_cases": 40,
@@ -454,7 +454,7 @@
       "low": 8,
       "medium": 7
     },
-    "run_id": "tracegate-real-20260702T145237Z",
+    "run_id": "tracegate-real-20260702T152335Z",
     "source_datasets": [
       "github_api",
       "github_api_hard_semantic_v2"

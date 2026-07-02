@@ -18,8 +18,8 @@ The current `main` branch includes two evaluation tracks.
 | Track | Status | Notes |
 | --- | --- | --- |
 | Controlled ClaimBench | implemented | 160 Stage3 runs across 5 modules, 4 evidence statuses, and 8 context groups. |
-| Real-data PR advisory smoke path | implemented | 12 public GitHub Pull Request cases, all currently `active`. |
-| Hard real-data mini benchmark | in progress | 40 mined candidates are in a manual review queue, not scored. |
+| Real-data PR advisory path | implemented | 17 scored public GitHub Pull Request cases: 12 active smoke cases plus 5 human-accepted hard labels. |
+| Hard real-data mini benchmark | partial v0.2-alpha | `hard_benchmark_ready=false` because the accepted hard-label mix still has only 1 unknown case; ready requires `unknown>=3`. |
 
 Current real-data flags:
 
@@ -31,7 +31,7 @@ used_fallback_data: false
 hard_benchmark_ready: false
 ```
 
-The real-data smoke dataset is intentionally small. It is useful for validating ingestion, provenance, and guardrails, but it is not statistically significant.
+The real-data dataset is intentionally small. It is useful for validating ingestion, provenance, hard-label promotion, and guardrails, but it is not statistically significant and is not a complete ready benchmark.
 
 ## Why This Exists
 
@@ -99,25 +99,34 @@ Tracked files:
 - Provenance notes: `docs/DATA_PROVENANCE.md`
 - Hard-case review queue: `datasets/real_min/labels/manual_review_queue.jsonl`
 - Manual labels file: `datasets/real_min/labels/manual_labels.jsonl`
+- Accepted labels file: `datasets/real_min/labels/manual_labels.accepted.jsonl`
+- Hard benchmark status: `docs/HARD_BENCHMARK_STATUS.md`
 
 Current scored real-data distribution:
 
 ```text
+scored_cases: 17
 active: 12
-stale: 0
-unknown: 0
-conflicting: 0
+stale: 2
+unknown: 1
+conflicting: 2
+hard_benchmark_ready: false
 ```
 
-Hard-case mining has produced 40 candidate cases:
+`hard_benchmark_ready` is false because the current v0.2-alpha distribution is still short on unknown hard cases:
 
 ```text
-stale: 13
-unknown: 11
-conflicting: 16
+required unknown: 3
+current unknown: 1
+required conflicting: 2
+current conflicting: 2
+required stale: 1
+current stale: 2
+required scored_cases: 14
+current scored_cases: 17
 ```
 
-Those candidates are excluded from scored metrics until they are manually confirmed in `manual_labels.jsonl` with sufficient confidence and concrete GitHub evidence.
+The semantic audit reviewed 40 candidates in `manual_labels.jsonl`. Only 5 `action=promote` rows were converted into `human_accepted_codex_audit` labels and promoted into scored metrics. `reject` and `needs_more_evidence` rows remain excluded.
 
 ## Output Protocol
 
