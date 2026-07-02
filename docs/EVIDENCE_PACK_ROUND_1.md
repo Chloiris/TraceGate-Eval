@@ -1,5 +1,7 @@
 # Evidence Pack Round 1
 
+中文伴读版：[`docs/EVIDENCE_PACK_ROUND_1.zh-CN.md`](EVIDENCE_PACK_ROUND_1.zh-CN.md)
+
 AI-assisted draft suggestions for the manual review queue. These are not human-verified labels and are excluded from scored metrics.
 
 ## Summary
