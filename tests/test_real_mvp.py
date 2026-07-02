@@ -227,6 +227,7 @@ def test_unconfirmed_review_queue_candidate_cannot_be_scored(tmp_path: Path) -> 
 def test_cli_review_queue_writes_markdown(tmp_path: Path) -> None:
     queue = tmp_path / "manual_review_queue.jsonl"
     output = tmp_path / "round_1.md"
+    bidi_override = chr(0x202E)
     write_jsonl(
         queue,
         [
@@ -239,13 +240,13 @@ def test_cli_review_queue_writes_markdown(tmp_path: Path) -> None:
                 "review_url": None,
                 "commit_url": None,
                 "suspected_status": "unknown",
-                "why_suspected": "High-risk topic keywords found in PR title/body: auth",
-                "questions_for_reviewer": ["Is there enough evidence to preserve safely?"],
+                "why_suspected": f"High-risk topic keywords found in PR title/body: auth {bidi_override}",
+                "questions_for_reviewer": [f"Is there enough evidence to preserve safely? {bidi_override}"],
                 "evidence_items": [
                     {
                         "evidence_id": "hard_candidate:example__repo:pull:1:evidence:pr",
                         "evidence_type": "pr",
-                        "evidence_text_excerpt": "Auth behavior changed.",
+                        "evidence_text_excerpt": f"Auth behavior changed. {bidi_override}",
                         "evidence_url": "https://github.com/example/repo/pull/1",
                         "supports_or_contradicts": "unclear",
                     }
@@ -274,6 +275,8 @@ def test_cli_review_queue_writes_markdown(tmp_path: Path) -> None:
     assert "## Unknown Candidates" in text
     assert "hard_candidate:example__repo:pull:1" in text
     assert "promote recommendation" in text
+    assert bidi_override not in text
+    assert "\\u202E" in text
     assert "output_path" in result.stdout
 
 

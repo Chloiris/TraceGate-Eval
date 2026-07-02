@@ -4,7 +4,7 @@ Date: 2026-07-01
 Branch: `chore/win11-to-m5-handoff`
 
 Scope: checked-in repository files, excluding ignored local run artifacts,
-virtual environments, archives, and the untracked `docs/我看/` prep folder.
+virtual environments, archives, and private untracked prep folders.
 
 ## Summary
 

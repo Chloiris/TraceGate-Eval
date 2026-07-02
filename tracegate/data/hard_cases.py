@@ -61,6 +61,7 @@ CONFLICTING_KEYWORDS = [
 REVIEW_GROUP_ORDER = ["stale", "unknown", "conflicting"]
 PRIORITY_REVIEW_ORDER = {"conflicting": 0, "stale": 1, "unknown": 2}
 EMAIL_PATTERN = re.compile(r"\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b", re.IGNORECASE)
+BIDI_CONTROL_CODEPOINTS = set(range(0x202A, 0x202F)) | set(range(0x2066, 0x206A))
 
 
 def _contains_any(text: str, keywords: list[str]) -> list[str]:
@@ -69,10 +70,14 @@ def _contains_any(text: str, keywords: list[str]) -> list[str]:
 
 
 def _excerpt(text: str | None, max_chars: int = 420) -> str:
-    cleaned = EMAIL_PATTERN.sub("[redacted-email]", " ".join((text or "").split()))
+    cleaned = EMAIL_PATTERN.sub("[redacted-email]", _escape_bidi_controls(" ".join((text or "").split())))
     if len(cleaned) <= max_chars:
         return cleaned
     return cleaned[: max_chars - 3] + "..."
+
+
+def _escape_bidi_controls(text: str) -> str:
+    return "".join(f"\\u{ord(ch):04X}" if ord(ch) in BIDI_CONTROL_CODEPOINTS else ch for ch in text)
 
 
 def _search_prs(repo: str, keyword: str, per_page: int) -> list[dict[str, Any]]:
@@ -620,7 +625,7 @@ def render_manual_review_markdown(input_path: Path, rows: list[dict[str, Any]]) 
             else:
                 lines.append("  - Does this candidate have enough concrete evidence to label?")
             lines.append("")
-    return "\n".join(lines).rstrip() + "\n"
+    return _escape_bidi_controls("\n".join(lines).rstrip() + "\n")
 
 
 def write_manual_review_markdown(input_path: Path, output_path: Path) -> dict[str, Any]:

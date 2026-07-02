@@ -2,7 +2,7 @@
 
 日期：2026-06-28
 
-这次体检的目标是让 TraceGate Eval 更适合 GitHub 展示和技术实习面试：面试官 clone 后能安装、能跑 smoke test、能看到最小 demo，并且能快速理解这个仓库还缺什么。所有修改都保持小修补，不改 benchmark 的研究设定。
+这次体检的目标是让 TraceGate Eval 更适合公开 GitHub 阅读和技术审查：新读者 clone 后能安装、能跑 smoke test、能看到最小 demo，并且能快速理解这个仓库还缺什么。所有修改都保持小修补，不改 benchmark 的研究设定。
 
 ## 发现的问题
 
@@ -42,12 +42,12 @@
 - 未重构 Java sample repositories。
 - 未把真实 DeepSeek API 调用变成默认测试；真实模型调用仍需要 `DEEPSEEK_API_KEY`。
 - 未把 Maven 测试纳入 Python smoke test，避免 clone 后的最小测试依赖 Java/Maven 环境。
-- 未处理仓库中原本未跟踪的 `docs/TraceGate_Eval_Interview_Guide.*` 文件。
+- 未处理仓库中原本未跟踪的私有本地说明文件。
 
 ## 后续可增强
 
 - 增加 GitHub Actions，在 Windows 和 Linux 上执行 `python -m pytest`。
 - 在有 Java/Maven 的 CI 环境中增加一个可选 Maven smoke test。
-- 为 Web dashboard 增加截图或短 demo GIF，降低面试讲解成本。
+- 为 Web dashboard 增加截图或短 demo GIF，降低项目说明成本。
 - 如果准备公开发布，可拆分重量级历史 run artifacts 与最小可运行 package。
 - 为 `conflicting` evidence 增加更强的案例，继续区分 `verify_first` 与 `conflict_detected`。
