@@ -52,10 +52,16 @@ def compute_metrics(cases: list[EvalCase], advisories: list[AdvisoryDecision]) -
     active_only = bool(scored_cases) and set(scored_status_distribution) == {"active"}
     is_hard_ready = hard_benchmark_ready(scored_status_distribution, scored)
     return {
+        "benchmark_name": "TraceGate v0.2-alpha hard real-data mini benchmark",
         "benchmark_note": "small real-data smoke benchmark, not a statistically significant benchmark",
         "num_cases_total": total,
         "num_cases_scored": scored,
         "num_cases_excluded": len(excluded_cases),
+        "active_count": scored_status_distribution.get("active", 0),
+        "stale_count": scored_status_distribution.get("stale", 0),
+        "unknown_count": scored_status_distribution.get("unknown", 0),
+        "conflicting_count": scored_status_distribution.get("conflicting", 0),
+        "promoted_cases": label_source_distribution.get("human_accepted_codex_audit", 0),
         "status_distribution": status_distribution,
         "scored_status_distribution": scored_status_distribution,
         "decision_distribution": decision_distribution,
@@ -67,6 +73,14 @@ def compute_metrics(cases: list[EvalCase], advisories: list[AdvisoryDecision]) -
         "active_only": active_only,
         "hard_benchmark_ready": is_hard_ready,
         "hard_benchmark_minimums": MIN_HARD_BENCHMARK_DISTRIBUTION,
+        "hard_labels_source": "Codex evidence audit plus human final acceptance",
+        "github_action_mode": "warning-only",
+        "limitations": [
+            "v0.2-alpha is a small hard real-data mini benchmark and is not statistically significant.",
+            "Hard labels come from Codex evidence audit plus human final acceptance, and do not replace human code review.",
+            "GitHub Action advisory remains warning-only and should not be treated as a merge blocker.",
+            "hard_benchmark_ready remains false until the minimum distribution is met: unknown>=3, conflicting>=2, stale>=1, scored_cases>=14.",
+        ],
         "pollution_flag_rate": pollution_count / max(len(advisories), 1),
         "needs_manual_review_rate": manual_count / max(total, 1),
         "provenance_completeness_rate": provenance_complete / max(scored, 1),
