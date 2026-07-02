@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import subprocess
 import sys
 import importlib.util
@@ -11,7 +12,10 @@ from tracegate.core.models import EvalCase
 from tracegate.core.policy import advise_case
 from tracegate.core.guardrails import scan_guardrails
 from tracegate.core.run import RealRunError, run_real_advisory
-from tracegate.core.serialization import read_json, stable_hash_text, write_cases
+from tracegate.core.serialization import read_json, read_jsonl, stable_hash_text, write_cases
+from tracegate.data.full_label_audit import run_full_label_audit
+from tracegate.data.hard_cases import promote_manual_labels
+from tracegate.data.sources.base import RealDataError
 from tracegate.data.validate import DatasetValidationError, validate_dataset
 
 
@@ -99,6 +103,61 @@ def make_hard_case(index: int, status: str) -> EvalCase:
     if status == "unknown":
         data["rationale"] = "Insufficient evidence: the PR touches a risky path but lacks enough current support."
     return EvalCase.from_dict(data)
+
+
+def make_audit_queue_row(index: int, status: str = "unknown") -> dict[str, object]:
+    return {
+        "candidate_id": f"hard_candidate:example__repo:pull:{index}",
+        "repo": "example/repo",
+        "pr_url": f"https://github.com/example/repo/pull/{index}",
+        "suspected_status": status,
+        "why_suspected": f"{status} audit candidate",
+        "title": f"Audit candidate {index}",
+    }
+
+
+def make_audit_snapshot(
+    index: int,
+    *,
+    title: str = "Change auth token handling",
+    body: str = "",
+    files: list[str] | None = None,
+    comments: list[dict[str, object]] | None = None,
+    review_comments: list[dict[str, object]] | None = None,
+) -> dict[str, object]:
+    paths = files or ["src/auth/token.py"]
+    return {
+        "view": {
+            "title": title,
+            "body": body,
+            "url": f"https://github.com/example/repo/pull/{index}",
+            "state": "MERGED",
+            "createdAt": "2026-01-01T00:00:00Z",
+            "mergedAt": "2026-01-03T00:00:00Z",
+            "labels": [],
+            "comments": [],
+            "reviews": [],
+            "files": [{"path": path} for path in paths],
+            "commits": [
+                {
+                    "url": f"https://github.com/example/repo/commit/{index}",
+                    "messageHeadline": "Implement audited change",
+                    "authoredDate": "2026-01-02T00:00:00Z",
+                }
+            ],
+            "closingIssuesReferences": [],
+        },
+        "issue_comments": comments or [],
+        "review_comments": review_comments or [],
+        "reviews_api": [],
+        "diff_file_names": paths,
+        "related_refs": [],
+        "fetched_at": "2026-01-03T00:00:00Z",
+    }
+
+
+def write_queue(path: Path, rows: list[dict[str, object]]) -> None:
+    path.write_text("".join(json.dumps(row) + "\n" for row in rows), encoding="utf-8")
 
 
 def test_eval_case_enum_validation_rejects_unknown_status() -> None:
@@ -290,6 +349,187 @@ def test_cli_mine_hard_help_works() -> None:
     )
     assert "--repos" in result.stdout
     assert "--no-fallback" in result.stdout
+
+
+def test_cli_full_label_audit_help_works() -> None:
+    result = subprocess.run(
+        [sys.executable, "-m", "tracegate", "data", "full-label-audit", "--help"],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    assert "--labels" in result.stdout
+    assert "--checklist" in result.stdout
+
+
+def test_full_label_audit_covers_all_candidates_and_does_not_modify_cases(tmp_path: Path) -> None:
+    queue = tmp_path / "manual_review_queue.jsonl"
+    labels = tmp_path / "manual_labels.jsonl"
+    cases = tmp_path / "cases.jsonl"
+    cases.write_text("sentinel\n", encoding="utf-8")
+    rows = [make_audit_queue_row(1, "unknown"), make_audit_queue_row(2, "conflicting")]
+    write_queue(queue, rows)
+
+    def fetcher(repo: str, number: int) -> dict[str, object]:
+        return make_audit_snapshot(number, body="Changes auth token behavior without verification evidence.")
+
+    summary = run_full_label_audit(
+        queue_path=queue,
+        labels_path=labels,
+        report_path=tmp_path / "report.md",
+        checklist_path=tmp_path / "checklist.md",
+        fetcher=fetcher,
+    )
+    output = read_jsonl(labels)
+    assert summary["labels_written"] == 2
+    assert {row["candidate_id"] for row in output} == {row["candidate_id"] for row in rows}
+    assert cases.read_text(encoding="utf-8") == "sentinel\n"
+
+
+def test_codex_evidence_audit_cannot_be_promoted_as_manual_verified(tmp_path: Path) -> None:
+    labels = tmp_path / "manual_labels.jsonl"
+    labels.write_text(
+        json.dumps(
+            {
+                "candidate_id": "hard_candidate:example__repo:pull:1",
+                "action": "promote",
+                "evidence_status": "unknown",
+                "expected_decision": "verify_first",
+                "label_source": "codex_evidence_audit",
+                "label_confidence": 0.8,
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(RealDataError, match="manual_verified"):
+        promote_manual_labels(labels, tmp_path / "cases.jsonl")
+
+
+def test_full_label_audit_conflicting_promote_requires_two_evidence_urls(tmp_path: Path) -> None:
+    queue = tmp_path / "manual_review_queue.jsonl"
+    labels = tmp_path / "manual_labels.jsonl"
+    write_queue(queue, [make_audit_queue_row(1, "conflicting")])
+
+    def fetcher(repo: str, number: int) -> dict[str, object]:
+        return make_audit_snapshot(
+            number,
+            body="This is backward compatible and does not break existing clients.",
+            files=["src/requests/models.py"],
+            review_comments=[
+                {
+                    "body": "Concern: this breaks legacy clients and creates a regression.",
+                    "html_url": "https://github.com/example/repo/pull/1#discussion_r1",
+                    "created_at": "2026-01-02T00:00:00Z",
+                }
+            ],
+        )
+
+    run_full_label_audit(queue, labels, tmp_path / "report.md", tmp_path / "checklist.md", fetcher=fetcher)
+    row = read_jsonl(labels)[0]
+    assert row["action"] == "promote"
+    assert row["evidence_status"] == "conflicting"
+    assert row["expected_decision"] == "detect_conflict"
+    assert len(row["evidence_urls"]) >= 2
+
+
+def test_full_label_audit_conflicting_does_not_count_same_pr_root_as_two_urls(tmp_path: Path) -> None:
+    queue = tmp_path / "manual_review_queue.jsonl"
+    labels = tmp_path / "manual_labels.jsonl"
+    write_queue(queue, [make_audit_queue_row(1, "conflicting")])
+
+    def fetcher(repo: str, number: int) -> dict[str, object]:
+        return make_audit_snapshot(
+            number,
+            body="This auth change is backward compatible.",
+            files=["src/auth/token.py"],
+            comments=[
+                {
+                    "body": "Concern: this breaks clients and creates a regression.",
+                    "html_url": "https://github.com/example/repo/issues/1",
+                    "created_at": "2026-01-02T00:00:00Z",
+                }
+            ],
+        )
+
+    run_full_label_audit(queue, labels, tmp_path / "report.md", tmp_path / "checklist.md", fetcher=fetcher)
+    row = read_jsonl(labels)[0]
+    assert row["action"] == "needs_more_evidence"
+    assert row["evidence_status"] == "none"
+
+
+def test_full_label_audit_stale_promote_requires_ordered_older_newer_evidence(tmp_path: Path) -> None:
+    queue = tmp_path / "manual_review_queue.jsonl"
+    labels = tmp_path / "manual_labels.jsonl"
+    write_queue(queue, [make_audit_queue_row(1, "stale")])
+
+    def fetcher(repo: str, number: int) -> dict[str, object]:
+        return make_audit_snapshot(
+            number,
+            body="The legacy setting is deprecated.",
+            files=["setup.cfg"],
+            comments=[
+                {
+                    "body": "This old claim is now superseded by the new behavior and no longer relevant.",
+                    "html_url": "https://github.com/example/repo/pull/1#issuecomment-2",
+                    "created_at": "2026-02-01T00:00:00Z",
+                }
+            ],
+        )
+
+    run_full_label_audit(queue, labels, tmp_path / "report.md", tmp_path / "checklist.md", fetcher=fetcher)
+    row = read_jsonl(labels)[0]
+    assert row["action"] == "promote"
+    assert row["evidence_status"] == "stale"
+    assert len(row["evidence_urls"]) >= 2
+    assert "older" in row["rationale"]
+    assert "newer" in row["rationale"]
+    assert "time ordering" in row["rationale"]
+
+
+def test_full_label_audit_stale_without_ordered_pair_needs_more_evidence(tmp_path: Path) -> None:
+    queue = tmp_path / "manual_review_queue.jsonl"
+    labels = tmp_path / "manual_labels.jsonl"
+    write_queue(queue, [make_audit_queue_row(1, "stale")])
+
+    def fetcher(repo: str, number: int) -> dict[str, object]:
+        return make_audit_snapshot(number, body="This setting is deprecated but no newer evidence is linked.", files=["setup.cfg"])
+
+    run_full_label_audit(queue, labels, tmp_path / "report.md", tmp_path / "checklist.md", fetcher=fetcher)
+    row = read_jsonl(labels)[0]
+    assert row["action"] == "needs_more_evidence"
+    assert row["evidence_status"] == "none"
+
+
+def test_full_label_audit_unknown_promote_uses_verify_first(tmp_path: Path) -> None:
+    queue = tmp_path / "manual_review_queue.jsonl"
+    labels = tmp_path / "manual_labels.jsonl"
+    write_queue(queue, [make_audit_queue_row(1, "unknown")])
+
+    def fetcher(repo: str, number: int) -> dict[str, object]:
+        return make_audit_snapshot(number, body="Changes auth config parsing.", files=["src/auth/config.py"])
+
+    run_full_label_audit(queue, labels, tmp_path / "report.md", tmp_path / "checklist.md", fetcher=fetcher)
+    row = read_jsonl(labels)[0]
+    assert row["action"] == "promote"
+    assert row["evidence_status"] == "unknown"
+    assert row["expected_decision"] == "verify_first"
+
+
+def test_full_label_audit_reject_and_needs_more_evidence_are_not_scored(tmp_path: Path) -> None:
+    queue = tmp_path / "manual_review_queue.jsonl"
+    labels = tmp_path / "manual_labels.jsonl"
+    write_queue(queue, [make_audit_queue_row(1, "conflicting")])
+
+    def fetcher(repo: str, number: int) -> dict[str, object]:
+        return make_audit_snapshot(number, body="Docs cleanup.", files=["docs/readme.md"])
+
+    run_full_label_audit(queue, labels, tmp_path / "report.md", tmp_path / "checklist.md", fetcher=fetcher)
+    row = read_jsonl(labels)[0]
+    assert row["action"] in {"reject", "needs_more_evidence"}
+    assert row["evidence_status"] == "none"
+    with pytest.raises(RealDataError, match="manual_verified"):
+        promote_manual_labels(labels, tmp_path / "cases.jsonl")
 
 
 def test_github_action_summary_matches_claim_files() -> None:
