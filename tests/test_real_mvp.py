@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import subprocess
 import sys
 import importlib.util
@@ -11,7 +12,9 @@ from tracegate.core.models import EvalCase
 from tracegate.core.policy import advise_case
 from tracegate.core.guardrails import scan_guardrails
 from tracegate.core.run import RealRunError, run_real_advisory
-from tracegate.core.serialization import read_json, stable_hash_text, write_cases
+from tracegate.core.serialization import read_json, read_jsonl, stable_hash_text, write_cases
+from tracegate.data.evidence_pack import generate_evidence_pack
+from tracegate.data.sources.base import RealDataError
 from tracegate.data.validate import DatasetValidationError, validate_dataset
 
 
@@ -99,6 +102,63 @@ def make_hard_case(index: int, status: str) -> EvalCase:
     if status == "unknown":
         data["rationale"] = "Insufficient evidence: the PR touches a risky path but lacks enough current support."
     return EvalCase.from_dict(data)
+
+
+def make_queue_row(status: str = "unknown") -> dict[str, object]:
+    return {
+        "candidate_id": "hard_candidate:example__repo:pull:1",
+        "repo": "example/repo",
+        "pr_url": "https://github.com/example/repo/pull/1",
+        "suspected_status": status,
+        "why_suspected": f"{status} queue suspicion",
+        "questions_for_reviewer": ["Should a human promote, reject, or ask for more evidence?"],
+    }
+
+
+def make_evidence_snapshot(
+    *,
+    title: str = "Change auth token behavior",
+    body: str = "",
+    files: list[str] | None = None,
+    issue_comments: list[dict[str, object]] | None = None,
+    review_comments: list[dict[str, object]] | None = None,
+    reviews: list[dict[str, object]] | None = None,
+) -> dict[str, object]:
+    file_names = files or ["src/auth/token.py"]
+    return {
+        "view": {
+            "title": title,
+            "body": body,
+            "url": "https://github.com/example/repo/pull/1",
+            "state": "MERGED",
+            "createdAt": "2026-01-01T00:00:00Z",
+            "mergedAt": "2026-01-02T00:00:00Z",
+            "labels": [],
+            "comments": [],
+            "reviews": [],
+            "files": [{"path": path} for path in file_names],
+            "commits": [],
+            "closingIssuesReferences": [],
+        },
+        "issue_comments": issue_comments or [],
+        "review_comments": review_comments or [],
+        "reviews_api": reviews or [],
+        "diff_file_names": file_names,
+        "fetched_at": "2026-01-02T00:00:00Z",
+    }
+
+
+def run_evidence_pack(tmp_path: Path, row: dict[str, object], snapshot: dict[str, object]) -> list[dict[str, object]]:
+    queue = tmp_path / "manual_review_queue.jsonl"
+    queue.write_text(json.dumps(row) + "\n", encoding="utf-8")
+    generate_evidence_pack(
+        input_path=queue,
+        limit=1,
+        output_path=tmp_path / "EVIDENCE_PACK.md",
+        draft_labels_path=tmp_path / "manual_labels.draft.jsonl",
+        fetcher=lambda repo, number: snapshot,
+    )
+    return read_jsonl(tmp_path / "manual_labels.draft.jsonl")
 
 
 def test_eval_case_enum_validation_rejects_unknown_status() -> None:
@@ -290,6 +350,93 @@ def test_cli_mine_hard_help_works() -> None:
     )
     assert "--repos" in result.stdout
     assert "--no-fallback" in result.stdout
+
+
+def test_cli_evidence_pack_help_works() -> None:
+    result = subprocess.run(
+        [sys.executable, "-m", "tracegate", "data", "evidence-pack", "--help"],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    assert "--draft-labels" in result.stdout
+    assert "--limit" in result.stdout
+
+
+def test_evidence_pack_draft_labels_are_ai_suggested_not_manual_verified(tmp_path: Path) -> None:
+    drafts = run_evidence_pack(
+        tmp_path,
+        make_queue_row("unknown"),
+        make_evidence_snapshot(body="Touches auth token parsing without compatibility evidence."),
+    )
+    assert drafts[0]["label_source"] == "ai_suggested"
+    assert drafts[0]["must_not_count_as_manual_verified"] is True
+    assert drafts[0]["label_source"] != "manual_verified"
+
+
+def test_evidence_pack_does_not_modify_cases_or_manual_labels(tmp_path: Path) -> None:
+    cases = tmp_path / "cases.jsonl"
+    labels = tmp_path / "manual_labels.jsonl"
+    cases.write_text("sentinel-case\n", encoding="utf-8")
+    labels.write_text("sentinel-label\n", encoding="utf-8")
+    run_evidence_pack(
+        tmp_path,
+        make_queue_row("unknown"),
+        make_evidence_snapshot(body="Auth config changed with no review evidence."),
+    )
+    assert cases.read_text(encoding="utf-8") == "sentinel-case\n"
+    assert labels.read_text(encoding="utf-8") == "sentinel-label\n"
+
+
+def test_evidence_pack_api_failure_does_not_write_replacement_data(tmp_path: Path) -> None:
+    queue = tmp_path / "manual_review_queue.jsonl"
+    queue.write_text(json.dumps(make_queue_row("unknown")) + "\n", encoding="utf-8")
+    output = tmp_path / "EVIDENCE_PACK.md"
+    draft = tmp_path / "manual_labels.draft.jsonl"
+
+    def failing_fetcher(repo: str, number: int) -> dict[str, object]:
+        raise RealDataError("rate limit")
+
+    with pytest.raises(RealDataError, match="rate limit"):
+        generate_evidence_pack(
+            input_path=queue,
+            limit=1,
+            output_path=output,
+            draft_labels_path=draft,
+            fetcher=failing_fetcher,
+        )
+    assert not output.exists()
+    assert not draft.exists()
+
+
+def test_stale_without_ordered_two_url_evidence_needs_more_evidence(tmp_path: Path) -> None:
+    drafts = run_evidence_pack(
+        tmp_path,
+        make_queue_row("stale"),
+        make_evidence_snapshot(body="This legacy behavior is deprecated but has no superseding linked evidence."),
+    )
+    assert drafts[0]["action_suggestion"] == "needs_more_evidence"
+    assert drafts[0]["suggested_evidence_status"] == "none"
+
+
+def test_conflicting_without_two_evidence_urls_cannot_promote(tmp_path: Path) -> None:
+    drafts = run_evidence_pack(
+        tmp_path,
+        make_queue_row("conflicting"),
+        make_evidence_snapshot(body="Regression concern mentioned in the PR body only."),
+    )
+    assert drafts[0]["action_suggestion"] != "promote"
+    assert drafts[0]["suggested_evidence_status"] == "none"
+
+
+def test_unknown_suggestion_requires_verify_first(tmp_path: Path) -> None:
+    drafts = run_evidence_pack(
+        tmp_path,
+        make_queue_row("unknown"),
+        make_evidence_snapshot(body="Changes auth token config without review evidence.", files=["src/auth/token.py"]),
+    )
+    assert drafts[0]["suggested_evidence_status"] == "unknown"
+    assert drafts[0]["suggested_expected_decision"] == "verify_first"
 
 
 def test_github_action_summary_matches_claim_files() -> None:

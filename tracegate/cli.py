@@ -21,6 +21,7 @@ from tracegate.dataset.legacy_shop_generator import generate_legacy_shop
 from tracegate.dataset.legacy_shop_v2_generator import generate_legacy_shop_v2
 from tracegate.dataset.task_generator import write_default_tasks
 from tracegate.data.discover import write_discovery_doc
+from tracegate.data.evidence_pack import generate_evidence_pack
 from tracegate.data.hard_cases import (
     mine_hard_candidates,
     promote_manual_labels,
@@ -240,6 +241,21 @@ def data_review_queue_command(input_path: Path) -> None:
 def data_promote_labels_command(labels_path: Path, output_path: Path) -> None:
     summary = promote_manual_labels(labels_path=labels_path, output_path=output_path)
     print("Manual labels promoted")
+    for key, value in summary.items():
+        print(f"{key}: {value}")
+
+
+def data_evidence_pack_command(input_path: Path, limit: int, output_path: Path, draft_labels_path: Path) -> None:
+    try:
+        summary = generate_evidence_pack(
+            input_path=input_path,
+            limit=limit,
+            output_path=output_path,
+            draft_labels_path=draft_labels_path,
+        )
+    except (RealDataError, FileNotFoundError, ValueError) as exc:
+        raise SystemExit(str(exc)) from exc
+    print("Evidence pack generated")
     for key, value in summary.items():
         print(f"{key}: {value}")
 
@@ -481,6 +497,12 @@ def build_parser() -> argparse.ArgumentParser:
     data_review_queue = data_subparsers.add_parser("review-queue", help="Summarize hard candidate manual review queue.")
     data_review_queue.add_argument("--input", type=Path, required=True)
 
+    data_evidence_pack = data_subparsers.add_parser("evidence-pack", help="Build AI-assisted draft evidence packs for manual label review.")
+    data_evidence_pack.add_argument("--input", type=Path, required=True)
+    data_evidence_pack.add_argument("--limit", type=int, default=10)
+    data_evidence_pack.add_argument("--output", type=Path, required=True)
+    data_evidence_pack.add_argument("--draft-labels", type=Path, required=True)
+
     data_promote = data_subparsers.add_parser("promote-labels", help="Promote manually confirmed hard labels into cases.jsonl.")
     data_promote.add_argument("--labels", type=Path, required=True)
     data_promote.add_argument("--output", type=Path, required=True)
@@ -614,6 +636,13 @@ def main(argv: Sequence[str] | None = None) -> None:
             )
         elif args.data_command == "review-queue":
             data_review_queue_command(input_path=args.input)
+        elif args.data_command == "evidence-pack":
+            data_evidence_pack_command(
+                input_path=args.input,
+                limit=args.limit,
+                output_path=args.output,
+                draft_labels_path=args.draft_labels,
+            )
         elif args.data_command == "promote-labels":
             data_promote_labels_command(labels_path=args.labels, output_path=args.output)
     elif args.command == "run":
