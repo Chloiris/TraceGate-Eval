@@ -6,12 +6,12 @@ These questions were not resolved during the Windows handoff pass.
 
 ## Publish Boundary
 
-- Should the untracked `docs/我看/` interview/prep documents remain local only,
-  or should a sanitized subset be published later?
+- Should private untracked local notes remain local only, or should a sanitized
+  subset be published later?
 
-Current handoff decision: do not stage this folder automatically. It includes
-interview-oriented markdown/docx files and placeholder key examples such as
-`DEEPSEEK_API_KEY="your-key"`, but no real token-shaped secret was detected.
+Current handoff decision: do not stage private local notes automatically. They
+may include non-public planning material or placeholder credential examples, so
+any future publication requires explicit review.
 
 ## Historical Report Normalization
 

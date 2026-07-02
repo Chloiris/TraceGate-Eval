@@ -11,7 +11,7 @@ This precheck records the Windows 11 repository state before starting the
 git status --short --branch
 ## main...origin/main
  M README.md
-?? "docs/\346\210\221\347\234\213/"
+?? <private local documentation directory>
 
 git branch --show-current
 main
@@ -41,21 +41,10 @@ c4deb1b Add web API prototype
 ## Current Uncommitted Changes
 
 - Modified tracked file: `README.md`
-- Untracked directory: `docs/我看/`
+- Untracked private local documentation was observed but was not staged.
 
-Observed untracked files:
-
-```text
-docs/我看/INTERVIEW_GUIDE.md
-docs/我看/PROJECT_OVERVIEW.md
-docs/我看/TECHNICAL_DETAILS.md
-docs/我看/TraceGate_Eval_Interview_Guide.docx
-docs/我看/TraceGate_Eval_Interview_Guide.md
-```
-
-The untracked `docs/我看/` material appears to be interview or private prep
-documentation. It should not be staged automatically as part of the handoff
-unless it is explicitly reviewed and judged safe for GitHub.
+Private local documentation should not be staged automatically as part of the
+handoff unless it is explicitly reviewed and judged safe for GitHub.
 
 ## Suspect Local Artifacts To Avoid Publishing
 

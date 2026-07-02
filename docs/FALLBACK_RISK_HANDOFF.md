@@ -42,7 +42,7 @@ The scan excluded ignored/generated run artifacts and local environments.
 | `.env.example:13` | `placeholder` | allowed_documentation | Empty placeholder env variables only. | no |
 | `sample_repos/*/PaymentCallbackService.java:10` | `SECRET` | allowed_test_fixture | Hardcoded `legacy-secret` exists inside controlled Java sample repos. It is fixture code, not a real credential. | no |
 | `experiments/claim_tasks.yaml:316`, `experiments/claim_tasks.yaml:345`, `experiments/claim_tasks.yaml:369`, `experiments/claim_tasks.yaml:371`, `experiments/claim_tasks.yaml:392` | `sample` | allowed_test_fixture | Payment evidence text references provider/callback samples as controlled task content. | no |
-| `docs/我看/*` | `demo`, `fallback`, `DEEPSEEK_API_KEY="your-key"` | allowed_documentation | Local untracked interview/prep docs contain placeholder key examples and explanations. They were not staged for this handoff. | no |
+| private local notes | `demo`, `fallback`, placeholder API-key text | allowed_documentation | Private untracked notes were excluded from the repository and not staged for this handoff. | no |
 
 ## Mac-Side Must-Review Items
 
