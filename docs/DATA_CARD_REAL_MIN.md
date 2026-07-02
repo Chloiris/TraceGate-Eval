@@ -7,8 +7,8 @@ Generated on: 2026-07-01
 - Path: `datasets/real_min/cases.jsonl`
 - Manifest: `datasets/real_min/manifest.json`
 - Source dataset: `github_api`
-- Source URL: `https://docs.github.com/en/rest/pulls/pulls`
-- Dataset sha256: `08cf975fc5daffb19c0e0791bc60244f5e6f2b9a2394661147b7f36032a7f4e2`
+- Source URL: public GitHub REST API Pull Request endpoints, with each scored case linked to a concrete `https://github.com/.../pull/...` URL.
+- Dataset sha256: `84e9c0eff698689a807f675d9199953578d5f9c98c802cec13ccee7d8efecf18`
 
 ## Counts
 

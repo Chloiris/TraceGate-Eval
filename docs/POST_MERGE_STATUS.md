@@ -10,6 +10,7 @@ Generated on: 2026-07-02
 - A deterministic rule-based PR advisory baseline.
 - Reality guardrails that distinguish real, demo, mock, synthetic, and fixture data.
 - GitHub Actions for Python CI and a warning-only TraceGate advisory skeleton.
+- The `feature/hard-real-cases-mini-benchmark` branch adds hard-case mining commands and a manual review queue, without promoting unreviewed hard candidates into scored metrics.
 
 ## Real-Data Smoke Run
 
@@ -22,7 +23,7 @@ Generated on: 2026-07-02
 - Scored real cases: 12
 - Excluded cases: 0
 - Evidence status distribution: `active=12`
-- Dataset sha256: `08cf975fc5daffb19c0e0791bc60244f5e6f2b9a2394661147b7f36032a7f4e2`
+- Dataset sha256: `84e9c0eff698689a807f675d9199953578d5f9c98c802cec13ccee7d8efecf18`
 
 The smoke run uses real public GitHub PR data and does not use mock, synthetic, or fallback data. It is still a small smoke benchmark, not a statistically significant benchmark.
 
@@ -36,6 +37,8 @@ The smoke run uses real public GitHub PR data and does not use mock, synthetic, 
 - A production-ready LLM advisor.
 - Merge-blocking policy calibration.
 
+Hard candidates discovered by v0.2-alpha mining belong in `datasets/real_min/labels/manual_review_queue.jsonl` until they have concrete GitHub evidence, reviewer answers, and `label_confidence >= 0.7`.
+
 ## Next Hard Real Cases Plan
 
 1. Curate PRs where a previous compatibility claim was later superseded by a newer PR, release note, or test change. Label these as candidate `stale` cases only when the newer evidence is provenance-linked.
@@ -43,3 +46,9 @@ The smoke run uses real public GitHub PR data and does not use mock, synthetic, 
 3. Curate PRs with supporting and contradicting evidence across issues, reviews, commits, or docs. Label these as candidate `conflicting` only when both sides have stable URLs.
 4. Add manual review notes for every hard case before it enters scored metrics.
 5. Keep the minimum real scored threshold and fail-fast behavior; do not fill missing hard cases with synthetic examples.
+
+## v0.2-alpha Acceptance Gate
+
+- Ideal target: `active>=8`, `unknown>=4`, `conflicting>=3`, `stale>=2`, and `scored_cases>=17`.
+- Minimum target: `active>=8`, `unknown>=3`, `conflicting>=2`, `stale>=1`, and `scored_cases>=14`.
+- If the minimum target is not met, TraceGate keeps the active-only smoke dataset, writes `docs/DATA_INSUFFICIENT.md`, and reports `hard_benchmark_ready=false`.

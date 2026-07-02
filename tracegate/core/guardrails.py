@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any
 
 from tracegate.core.serialization import load_cases, read_json, sha256_file
+from tracegate.data.validate import is_concrete_github_url
 
 
 KEYWORDS = [
@@ -235,8 +236,21 @@ def audit_run(run_dir: Path, strict: bool) -> dict[str, Any]:
             errors.append(f"{case.case_id}: excluded_from_real_metrics must be false")
         if not (case.source_url or case.repo_url):
             errors.append(f"{case.case_id}: missing source_url or repo_url")
+        concrete_urls = [
+            case.source_url,
+            case.issue_url,
+            case.pr_url,
+            case.claim.claim_source_url,
+            *(item.evidence_url for item in case.evidence_items),
+        ]
+        if not any(is_concrete_github_url(url) for url in concrete_urls):
+            errors.append(f"{case.case_id}: missing concrete github.com evidence URL")
         if not case.evidence_items:
             errors.append(f"{case.case_id}: missing evidence_items")
+        if case.evidence_status.value in {"stale", "conflicting"} and len(case.evidence_items) < 2:
+            errors.append(f"{case.case_id}: stale/conflicting scored case requires at least 2 evidence_items")
+        if not case.rationale:
+            errors.append(f"{case.case_id}: missing rationale")
         if case.label_source == "unknown":
             errors.append(f"{case.case_id}: label_source is unknown")
         if case.evidence_status.value == "needs_manual_review":
@@ -253,6 +267,10 @@ def audit_run(run_dir: Path, strict: bool) -> dict[str, Any]:
         errors.append("run_manifest.used_fallback_data must be false")
     if manifest.get("num_cases_scored", 0) < 8:
         errors.append("run_manifest.num_cases_scored must be >= 8")
+    status_distribution = manifest.get("status_distribution", {})
+    active_only = bool(status_distribution) and set(status_distribution) == {"active"}
+    if active_only and manifest.get("hard_benchmark_ready") is True:
+        errors.append("active-only run cannot be marked hard_benchmark_ready")
     if sha256_file(dataset_path) != manifest.get("dataset_sha256"):
         errors.append("dataset sha256 does not match run_manifest")
     if dataset_manifest.get("dataset_sha256") != manifest.get("dataset_sha256"):
@@ -260,6 +278,8 @@ def audit_run(run_dir: Path, strict: bool) -> dict[str, Any]:
     report_text = (run_dir / "report.md").read_text(encoding="utf-8") if (run_dir / "report.md").exists() else ""
     if "demo-only result" in report_text.lower():
         errors.append("report contains demo-only result language")
+    if active_only and "hard real-data mini benchmark: `true`" in report_text.lower():
+        errors.append("active-only report cannot call itself a hard real-data mini benchmark")
 
     findings = scan_guardrails()
     dangerous = [item for item in findings if item.classification == "dangerous_runtime_path"]
@@ -274,6 +294,9 @@ def audit_run(run_dir: Path, strict: bool) -> dict[str, Any]:
         "used_synthetic_data": manifest.get("used_synthetic_data"),
         "used_mock_model": manifest.get("used_mock_model"),
         "used_fallback_data": manifest.get("used_fallback_data"),
+        "active_only": active_only,
+        "hard_benchmark_ready": manifest.get("hard_benchmark_ready"),
+        "manual_review_queue_cases": manifest.get("manual_review_queue_cases"),
         "dangerous_runtime_findings": len(dangerous),
         "passed": not errors,
         "errors": errors,

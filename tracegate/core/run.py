@@ -47,6 +47,12 @@ def ensure_real_run_flags(real_only: bool, no_mock: bool, no_fallback: bool) -> 
         raise RealRunError("real run requires --no-fallback")
 
 
+def manual_review_queue_count(path: Path = Path("datasets/real_min/labels/manual_review_queue.jsonl")) -> int:
+    if not path.exists():
+        return 0
+    return sum(1 for line in path.read_text(encoding="utf-8").splitlines() if line.strip())
+
+
 def run_real_advisory(
     dataset_path: Path,
     advisor: str,
@@ -67,6 +73,7 @@ def run_real_advisory(
     scored_cases = [case for case in cases if case.is_scored_real_case]
     advisories = run_rule_advisor(cases)
     metrics = compute_metrics(cases, advisories)
+    metrics["manual_review_queue_cases"] = manual_review_queue_count()
     if metrics["num_cases_scored"] < min_cases:
         raise RealRunError(f"real run requires at least {min_cases} scored cases")
 
@@ -97,6 +104,9 @@ def run_real_advisory(
         "status_distribution": metrics["status_distribution"],
         "decision_distribution": metrics["decision_distribution"],
         "risk_level_distribution": metrics["risk_level_distribution"],
+        "active_only": metrics["active_only"],
+        "hard_benchmark_ready": metrics["hard_benchmark_ready"],
+        "manual_review_queue_cases": metrics["manual_review_queue_cases"],
         "used_real_data": True,
         "used_synthetic_data": False,
         "used_mock_model": False,
@@ -164,7 +174,11 @@ def render_markdown_report(manifest: dict[str, Any], metrics: dict[str, Any], ad
         f"- dataset: `{manifest.get('dataset_path')}`",
         f"- dataset_sha256: `{manifest.get('dataset_sha256')}`",
         "",
-        "This is a small real-data smoke benchmark, not a statistically significant benchmark.",
+        (
+            "This run is an active-only real-data smoke run, not a hard real-data mini benchmark."
+            if metrics.get("active_only")
+            else "This run includes hard real-data cases, but remains a small non-statistical mini benchmark."
+        ),
         "",
         "## Metrics",
         "",
@@ -178,11 +192,35 @@ def render_markdown_report(manifest: dict[str, Any], metrics: dict[str, Any], ad
         "provenance_completeness_rate",
         "unsafe_allow_rate",
         "verify_first_rate_on_unknown_or_conflicting",
+        "scored_cases",
+        "excluded_cases_count",
+        "manual_review_cases",
+        "manual_review_queue_cases",
+        "active_only",
+        "hard_benchmark_ready",
     ]:
         lines.append(f"- {key}: `{metrics.get(key)}`")
     lines.extend(["", "## Distributions", ""])
-    for key in ["status_distribution", "decision_distribution", "risk_level_distribution"]:
+    for key in [
+        "status_distribution",
+        "scored_status_distribution",
+        "decision_distribution",
+        "risk_level_distribution",
+        "label_source_distribution",
+    ]:
         lines.append(f"- {key}: `{metrics.get(key)}`")
+    lines.extend(
+        [
+            "",
+            "## Run Type",
+            "",
+            "- real-data smoke run: `true`" if metrics.get("active_only") else "- real-data smoke run: `false`",
+            f"- hard real-data mini benchmark: `{metrics.get('hard_benchmark_ready')}`",
+            f"- manual review queue cases: `{metrics.get('manual_review_queue_cases')}`",
+            f"- excluded candidates: `{metrics.get('num_cases_excluded')}`",
+            "",
+        ]
+    )
     lines.extend(["", "## Advisories", ""])
     for item in advisories:
         lines.extend(

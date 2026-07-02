@@ -39,6 +39,11 @@ def normalize_record(record: dict[str, Any]) -> EvalCase:
         f"Merged Pull Request #{number} in {repo} captured a historical repository change: {title}. "
         "Future changes touching the same files should preserve or explicitly re-verify that behavior."
     )
+    rationale = (
+        "This active smoke case is scored because the merged public GitHub Pull Request has concrete PR URL "
+        "provenance, changed-file provenance, and a merge commit. It is active smoke data, not a hard stale, "
+        "unknown, or conflicting case."
+    )
     case_id = f"github_api:{repo.replace('/', '__')}:pull:{number}"
     evidence_status = EvidenceStatus.ACTIVE
     exclusion_reason = None
@@ -53,10 +58,10 @@ def normalize_record(record: dict[str, Any]) -> EvalCase:
     return EvalCase(
         case_id=case_id,
         source_dataset="github_api",
-        source_url=str(record.get("api_urls", {}).get("pulls") or "https://docs.github.com/en/rest/pulls/pulls"),
+        source_url=html_url,
         repo=repo,
         repo_url=repo_url,
-        issue_url=pr.get("issue_url"),
+        issue_url=html_url.replace("/pull/", "/issues/"),
         pr_url=html_url,
         base_commit=base_commit,
         head_commit=head_commit,
@@ -89,6 +94,7 @@ def normalize_record(record: dict[str, Any]) -> EvalCase:
         expected_decision=ExpectedDecision.PRESERVE if not excluded else ExpectedDecision.NEEDS_MANUAL_REVIEW,
         label_source="heuristic_verified" if not excluded else "unknown",
         label_confidence=confidence,
+        rationale=rationale if not excluded else "Excluded because required merge/file/URL provenance is incomplete.",
         is_real=True,
         is_synthetic=False,
         excluded_from_real_metrics=excluded,

@@ -18,7 +18,7 @@ Generated on: 2026-07-01
 | git_version | `git version 2.50.1 (Apple Git-155)` |
 | gh_available | false (`gh` not found) |
 | docker_available | false (`docker` not found) |
-| current_working_directory | `/Users/chologonia/projects/TraceGate Eval/TraceGate-Eval` |
+| current_working_directory | `<local TraceGate-Eval checkout>` |
 | current_branch | `feature/tracegate-pr-advisory-real-data-mac` |
 | remote_url | `https://github.com/Chloiris/TraceGate-Eval.git` |
 | started_on_handoff_branch | yes, cloned and verified `chore/win11-to-m5-handoff` |
@@ -26,7 +26,7 @@ Generated on: 2026-07-01
 
 ## Raw Command Notes
 
-Initial workspace directory `/Users/chologonia/projects/TraceGate Eval` was not a Git repository. The handoff branch was cloned from `https://github.com/Chloiris/TraceGate-Eval.git` into `TraceGate-Eval/`.
+Initial workspace directory was not a Git repository. The handoff branch was cloned from `https://github.com/Chloiris/TraceGate-Eval.git` into `TraceGate-Eval/`.
 
 The cloned repository was initially on:
 

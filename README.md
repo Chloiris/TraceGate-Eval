@@ -18,6 +18,8 @@ The current repository focus is **v0.1 Controlled Benchmark + Real-Data PR Advis
   synthetic legacy-shop sample project. Demo, mock, synthetic, and fixture data
   are not real evaluation data.
 - The real-data path is separate from the synthetic ClaimBench artifacts.
+- The v0.2-alpha target is a hard real-data mini benchmark with real `stale`,
+  `unknown`, and `conflicting` cases after manual review.
 - Continue Mac-side setup from [docs/MACOS_M5_SETUP.md](docs/MACOS_M5_SETUP.md).
 
 ## Real-Data PR Advisory MVP
@@ -39,10 +41,14 @@ The current real dataset is intentionally small:
 
 This is a small real-data smoke benchmark, not a statistically significant benchmark. The deterministic advisor is a baseline, not a final LLM agent, and it does not replace human review.
 
+The v0.2-alpha hard-case work mines public GitHub Pull Request, issue, review, and commit evidence into `datasets/real_min/labels/manual_review_queue.jsonl`. Automatically discovered hard candidates are excluded from scored metrics until they are manually confirmed in `datasets/real_min/labels/manual_labels.jsonl`.
+
 Real runs must use the guardrail flags:
 
 ```bash
 python -m tracegate data discover
+python -m tracegate data mine-hard --repos psf/requests,pytest-dev/pytest,pydantic/pydantic --limit 40 --real-only --no-fallback
+python -m tracegate data review-queue --input datasets/real_min/labels/manual_review_queue.jsonl
 python -m tracegate data fetch --source auto --limit 12 --real-only --no-fallback
 python -m tracegate data validate --dataset datasets/real_min/cases.jsonl --strict --min-cases 8
 python -m tracegate run --dataset datasets/real_min/cases.jsonl --advisor rule --real-only --no-mock --no-fallback
@@ -407,6 +413,7 @@ scripts/                  Helper entrypoints and plotting script
 - The current real-data dataset has 12 normalized/scored cases and all current real-data cases are `active`.
 - The real-data smoke path is not a statistically significant benchmark.
 - Hard real cases for `stale`, `unknown`, and `conflicting` evidence are not covered yet.
+- v0.2-alpha mining keeps unconfirmed hard candidates in a manual review queue and does not promote them into scored metrics without concrete evidence and `label_confidence >= 0.7`.
 - The oracles are task-specific and rule-based, not general semantic judges.
 - The dashboard is local and file-based; it is not an online benchmark service.
 - `/api/analyze-demo` is rule-based and does not represent model output.
