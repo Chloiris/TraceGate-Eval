@@ -14,7 +14,7 @@ This real-data path is a smoke benchmark only. It is not statistically significa
 
 ## What Was Completed
 
-- Rewrote the root `README.md` for GitHub readers and interview review.
+- Rewrote the root `README.md` for public project readers and technical review.
 - Added focused documentation under `docs/`.
 - Added two minimal examples extracted from real `deepseek-v4-pro` Stage3 runs.
 - Created GitHub-facing result summaries under `results/`.
@@ -26,7 +26,7 @@ This real-data path is a smoke benchmark only. It is not statistically significa
 
 `README.md`
 
-- Project positioning, Stage3 design, result summary, run commands, limitations, roadmap, and resume-ready description.
+- Project positioning, Stage3 design, result summary, run commands, limitations, and roadmap.
 
 `docs/`
 
@@ -102,7 +102,7 @@ python scripts/plot_results.py
 - Add case browsers for pollution, destructive changes, and over-conservative decisions.
 - Publish a lean GitHub artifact that keeps raw model run outputs out of the default repository history.
 
-## Resume Bullets
+## Technical Summary
 
 - Built TraceGate Eval, a controlled benchmark for AI coding-agent context safety and historical-claim validity.
 - Designed a 160-run Stage3 benchmark across 5 modules, 4 evidence statuses, and 8 context groups.

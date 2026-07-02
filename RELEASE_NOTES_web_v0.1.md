@@ -83,4 +83,4 @@ The tests cover health, overview, context groups, evidence status summaries, and
 - Add a compact run-detail page for selected Stage3 records.
 - Add simple filtering controls to the dashboard tables.
 - Add charts for evidence-status accuracy and risk summaries.
-- Add optional export endpoints for resume/interview artifacts.
+- Add optional export endpoints for reproducible project reports.

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import json
+import re
 import urllib.parse
 from collections import Counter
 from datetime import datetime, timezone
@@ -58,6 +58,8 @@ CONFLICTING_KEYWORDS = [
     "concern",
 ]
 
+EMAIL_PATTERN = re.compile(r"\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b", re.IGNORECASE)
+
 
 def _contains_any(text: str, keywords: list[str]) -> list[str]:
     lowered = text.lower()
@@ -65,7 +67,7 @@ def _contains_any(text: str, keywords: list[str]) -> list[str]:
 
 
 def _excerpt(text: str | None, max_chars: int = 420) -> str:
-    cleaned = " ".join((text or "").split())
+    cleaned = EMAIL_PATTERN.sub("[redacted-email]", " ".join((text or "").split()))
     if len(cleaned) <= max_chars:
         return cleaned
     return cleaned[: max_chars - 3] + "..."

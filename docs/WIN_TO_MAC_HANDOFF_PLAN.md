@@ -109,8 +109,8 @@ Do not commit or migrate:
 - `.env.*` except `.env.example`
 - raw datasets, local caches, large zip/parquet/jsonl files, or real tokens
 
-The untracked `docs/我看/` interview/prep documents were inspected as local
-working-tree material and should not be staged automatically.
+Private untracked local notes were inspected as working-tree material and should
+not be staged automatically.
 
 ## Mac Development Work Left
 
