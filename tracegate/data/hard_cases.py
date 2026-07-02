@@ -500,7 +500,15 @@ def promote_manual_labels(labels_path: Path, output_path: Path) -> dict[str, Any
     by_id = {case.case_id: case for case in existing}
     promoted = 0
     for row in labels:
+        raw_source = row.get("label_source")
+        if raw_source is not None and raw_source != "manual_verified":
+            raise RealDataError(
+                f"{row.get('candidate_id', row.get('case_id', 'unknown'))}: "
+                "promote-labels only accepts label_source=manual_verified"
+            )
         case = _case_from_manual_label(row)
+        if case.label_source != "manual_verified":
+            raise RealDataError(f"{case.case_id}: promote-labels only accepts manual_verified cases")
         by_id[case.case_id] = case
         promoted += 1
     cases = list(by_id.values())
