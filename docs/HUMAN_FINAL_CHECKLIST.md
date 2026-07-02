@@ -58,6 +58,63 @@ Use this checklist after reading `docs/SEMANTIC_LABEL_SANITY_AUDIT.md`.
 - key URL: https://github.com/psf/requests/commit/57acb7c26d809cf864ec439b8bcd6364702022d5
 - human decision: `[ ] manual_verified` `[ ] reject` `[ ] needs_more_evidence`
 
+## Sampled Semantic-V2 Spot Checks
+
+## `hard_candidate:pytest-dev__pytest:pull:14662`
+
+- suggested action: `reject`
+- suggested evidence_status: `none`
+- expected_decision: `none`
+- confidence: `0.95`
+- key URL: https://github.com/pytest-dev/pytest/pull/14662
+- key URL: https://github.com/pytest-dev/pytest/pull/14662#issuecomment-4835239496
+- key URL: https://github.com/pytest-dev/pytest/issues/14186
+- human decision: `[ ] manual_verified` `[ ] reject` `[ ] needs_more_evidence`
+
+## `hard_candidate:psf__requests:pull:7513`
+
+- suggested action: `reject`
+- suggested evidence_status: `none`
+- expected_decision: `none`
+- confidence: `0.93`
+- key URL: https://github.com/psf/requests/pull/7513
+- key URL: https://github.com/psf/requests/pull/7513#pullrequestreview-4502775948
+- key URL: https://github.com/psf/requests/pull/7513#issuecomment-4715750402
+- human decision: `[ ] manual_verified` `[ ] reject` `[ ] needs_more_evidence`
+
+## `hard_candidate:pytest-dev__pytest:pull:14639`
+
+- suggested action: `reject`
+- suggested evidence_status: `none`
+- expected_decision: `none`
+- confidence: `0.94`
+- key URL: https://github.com/pytest-dev/pytest/pull/14639
+- key URL: https://github.com/pytest-dev/pytest/issues/14637
+- key URL: https://github.com/pytest-dev/pytest/pull/14639#pullrequestreview-4576584925
+- human decision: `[ ] manual_verified` `[ ] reject` `[ ] needs_more_evidence`
+
+## `hard_candidate:psf__requests:pull:7355`
+
+- suggested action: `needs_more_evidence`
+- suggested evidence_status: `none`
+- expected_decision: `none`
+- confidence: `0.35`
+- key URL: https://github.com/psf/requests/pull/7355
+- key URL: https://github.com/psf/requests/pull/7355#issuecomment-4230257215
+- key URL: https://github.com/psf/requests/pull/7355#issuecomment-4233514897
+- human decision: `[ ] manual_verified` `[ ] reject` `[ ] needs_more_evidence`
+
+## `hard_candidate:psf__requests:pull:7555`
+
+- suggested action: `needs_more_evidence`
+- suggested evidence_status: `none`
+- expected_decision: `none`
+- confidence: `0.35`
+- key URL: https://github.com/psf/requests/pull/7555
+- key URL: https://github.com/psf/requests/commit/717e54e78a70afb8ce70133742cad63034a236c3
+- key URL: https://github.com/psf/requests/commit/5bce0b088393108e3a0c54a844446f91fbc54869
+- human decision: `[ ] manual_verified` `[ ] reject` `[ ] needs_more_evidence`
+
 ## Rejected False Positives
 
 - `hard_candidate:pytest-dev__pytest:pull:14662`: rejected. The regression/concern wording is a mitigated context because tests verify no typing regressions; there is no reviewer contradiction.
