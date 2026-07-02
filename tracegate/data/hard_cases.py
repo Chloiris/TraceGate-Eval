@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import json
+import re
 import urllib.parse
 from collections import Counter
 from datetime import datetime, timezone
@@ -58,6 +58,10 @@ CONFLICTING_KEYWORDS = [
     "concern",
 ]
 
+REVIEW_GROUP_ORDER = ["stale", "unknown", "conflicting"]
+PRIORITY_REVIEW_ORDER = {"conflicting": 0, "stale": 1, "unknown": 2}
+EMAIL_PATTERN = re.compile(r"\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b", re.IGNORECASE)
+
 
 def _contains_any(text: str, keywords: list[str]) -> list[str]:
     lowered = text.lower()
@@ -65,7 +69,7 @@ def _contains_any(text: str, keywords: list[str]) -> list[str]:
 
 
 def _excerpt(text: str | None, max_chars: int = 420) -> str:
-    cleaned = " ".join((text or "").split())
+    cleaned = EMAIL_PATTERN.sub("[redacted-email]", " ".join((text or "").split()))
     if len(cleaned) <= max_chars:
         return cleaned
     return cleaned[: max_chars - 3] + "..."
@@ -478,12 +482,158 @@ def mine_hard_candidates(
 
 def summarize_review_queue(input_path: Path) -> dict[str, Any]:
     rows = read_jsonl(input_path)
+    priority_candidates = recommended_review_candidates(rows, limit=10)
     return {
         "queue_path": input_path.as_posix(),
         "num_candidates": len(rows),
         "suspected_status_distribution": dict(sorted(Counter(row.get("suspected_status", "unknown") for row in rows).items())),
         "candidate_ids": [row.get("candidate_id") for row in rows[:10]],
+        "priority_candidate_ids": [row.get("candidate_id") for row in priority_candidates],
     }
+
+
+def _candidate_reference_urls(row: dict[str, Any]) -> list[tuple[str, str]]:
+    urls: list[tuple[str, str]] = []
+    seen: set[str] = set()
+    for key in ["issue_url", "comment_url", "review_url", "commit_url"]:
+        value = row.get(key)
+        if isinstance(value, str) and value and value not in seen:
+            urls.append((key, value))
+            seen.add(value)
+    for item in row.get("evidence_items", []):
+        if not isinstance(item, dict):
+            continue
+        url = item.get("evidence_url")
+        if isinstance(url, str) and url and url not in seen:
+            urls.append((str(item.get("evidence_type") or "evidence"), url))
+            seen.add(url)
+    return urls
+
+
+def promote_recommendation(row: dict[str, Any]) -> str:
+    pr_url = row.get("pr_url")
+    evidence_items = [item for item in row.get("evidence_items", []) if isinstance(item, dict) and item.get("evidence_url")]
+    if not isinstance(pr_url, str) or not pr_url.startswith("https://github.com/"):
+        return "reject"
+    if not evidence_items:
+        return "reject"
+    suspected_status = row.get("suspected_status")
+    if suspected_status in {"stale", "conflicting"} and len(evidence_items) < 2:
+        return "needs_more_evidence"
+    if suspected_status == "unknown":
+        return "promote"
+    return "promote"
+
+
+def recommended_review_candidates(rows: list[dict[str, Any]], limit: int = 10) -> list[dict[str, Any]]:
+    return sorted(
+        rows,
+        key=lambda row: (
+            PRIORITY_REVIEW_ORDER.get(str(row.get("suspected_status")), 99),
+            promote_recommendation(row) == "reject",
+            -len(row.get("evidence_items", [])),
+            str(row.get("candidate_id") or ""),
+        ),
+    )[:limit]
+
+
+def render_manual_review_markdown(input_path: Path, rows: list[dict[str, Any]]) -> str:
+    counts = Counter(row.get("suspected_status", "unknown") for row in rows)
+    priority_candidates = recommended_review_candidates(rows, limit=10)
+    lines = [
+        "# Manual Label Review Round 1",
+        "",
+        f"Generated from `{input_path.as_posix()}`.",
+        "",
+        "This document is a reviewer aid only. It does not promote candidates into scored cases and does not write `manual_verified` labels.",
+        "",
+        "## Summary",
+        "",
+        f"- total candidates: `{len(rows)}`",
+        f"- stale: `{counts.get('stale', 0)}`",
+        f"- unknown: `{counts.get('unknown', 0)}`",
+        f"- conflicting: `{counts.get('conflicting', 0)}`",
+        "- promoted cases: `0`",
+        "- used_mock_model: `false`",
+        "- used_synthetic_data: `false`",
+        "- used_fallback_data: `false`",
+        "",
+        "## Recommended Review Order",
+        "",
+    ]
+    for row in priority_candidates:
+        candidate_id = row.get("candidate_id", "unknown")
+        status = row.get("suspected_status", "unknown")
+        recommendation = promote_recommendation(row)
+        lines.append(f"- `{candidate_id}` - `{status}` - `{recommendation}`")
+    if not priority_candidates:
+        lines.append("- No candidates found.")
+    lines.append("")
+
+    rows_by_status: dict[str, list[dict[str, Any]]] = {}
+    for row in rows:
+        rows_by_status.setdefault(str(row.get("suspected_status", "unknown")), []).append(row)
+
+    for status in REVIEW_GROUP_ORDER:
+        lines.extend([f"## {status.title()} Candidates", ""])
+        group = rows_by_status.get(status, [])
+        if not group:
+            lines.extend(["No candidates.", ""])
+            continue
+        for row in group:
+            candidate_id = str(row.get("candidate_id") or "unknown")
+            lines.extend(
+                [
+                    f"### `{candidate_id}`",
+                    "",
+                    f"- candidate_id: `{candidate_id}`",
+                    f"- repo: `{row.get('repo', 'unknown')}`",
+                    f"- pr_url: {row.get('pr_url') or '`missing`'}",
+                    f"- suspected_status: `{row.get('suspected_status', 'unknown')}`",
+                    f"- why_suspected: {row.get('why_suspected') or 'missing'}",
+                    f"- promote recommendation: `{promote_recommendation(row)}`",
+                    "- issue/comment/review/commit evidence URLs:",
+                ]
+            )
+            reference_urls = _candidate_reference_urls(row)
+            if reference_urls:
+                for label, url in reference_urls:
+                    lines.append(f"  - {label}: {url}")
+            else:
+                lines.append("  - none found")
+            lines.extend(["- evidence_items summary:"])
+            evidence_items = [item for item in row.get("evidence_items", []) if isinstance(item, dict)]
+            if evidence_items:
+                for index, item in enumerate(evidence_items, start=1):
+                    excerpt = _excerpt(str(item.get("evidence_text_excerpt") or ""), max_chars=240)
+                    evidence_type = item.get("evidence_type", "evidence")
+                    relation = item.get("supports_or_contradicts", "unclear")
+                    url = item.get("evidence_url", "missing")
+                    lines.append(f"  - {index}. `{evidence_type}` `{relation}` {url} - {excerpt}")
+            else:
+                lines.append("  - none found")
+            lines.extend(["- manual confirmation questions:"])
+            questions = [str(item) for item in row.get("questions_for_reviewer", []) if item]
+            if questions:
+                for question in questions:
+                    lines.append(f"  - {question}")
+            else:
+                lines.append("  - Does this candidate have enough concrete evidence to label?")
+            lines.append("")
+    return "\n".join(lines).rstrip() + "\n"
+
+
+def write_manual_review_markdown(input_path: Path, output_path: Path) -> dict[str, Any]:
+    rows = read_jsonl(input_path)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_path.write_text(render_manual_review_markdown(input_path=input_path, rows=rows), encoding="utf-8")
+    summary = summarize_review_queue(input_path)
+    summary["output_path"] = output_path.as_posix()
+    summary["promoted_cases"] = 0
+    summary["used_mock_model"] = False
+    summary["used_synthetic_data"] = False
+    summary["used_fallback_data"] = False
+    return summary
 
 
 def _case_from_manual_label(row: dict[str, Any]) -> EvalCase:
@@ -497,8 +647,16 @@ def promote_manual_labels(labels_path: Path, output_path: Path) -> dict[str, Any
     existing = load_cases(output_path) if output_path.exists() else []
     by_id = {case.case_id: case for case in existing}
     promoted = 0
+    skipped = 0
     for row in labels:
+        if row.get("example_only") is True or row.get("review_decision") != "promote":
+            skipped += 1
+            continue
+        if row.get("label_source") != "manual_verified":
+            raise RealDataError("manual label promotion requires label_source=manual_verified")
         case = _case_from_manual_label(row)
+        if case.label_source != "manual_verified":
+            raise RealDataError(f"{case.case_id}: promoted case must use label_source=manual_verified")
         by_id[case.case_id] = case
         promoted += 1
     cases = list(by_id.values())
@@ -507,6 +665,7 @@ def promote_manual_labels(labels_path: Path, output_path: Path) -> dict[str, Any
     return {
         "labels_read": len(labels),
         "promoted_cases": promoted,
+        "skipped_labels": skipped,
         "output_path": output_path.as_posix(),
         "num_cases_scored": manifest["num_cases_scored"],
         "status_distribution": manifest["status_distribution"],

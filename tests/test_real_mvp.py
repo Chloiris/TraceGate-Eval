@@ -11,7 +11,7 @@ from tracegate.core.models import EvalCase
 from tracegate.core.policy import advise_case
 from tracegate.core.guardrails import scan_guardrails
 from tracegate.core.run import RealRunError, run_real_advisory
-from tracegate.core.serialization import read_json, stable_hash_text, write_cases
+from tracegate.core.serialization import read_json, stable_hash_text, write_cases, write_jsonl
 from tracegate.data.validate import DatasetValidationError, validate_dataset
 
 
@@ -177,6 +177,104 @@ def test_low_confidence_and_manual_review_excluded_from_scored_metrics(tmp_path:
     write_cases(dataset, [EvalCase.from_dict(low_data), manual_review])
     _, summary = validate_dataset(dataset, strict=True, min_cases=0)
     assert summary["num_cases_scored"] == 0
+
+
+def test_manual_verified_requires_manual_labels_confirmation(tmp_path: Path) -> None:
+    data = make_case(1).to_dict()
+    data["label_source"] = "manual_verified"
+    dataset = tmp_path / "cases.jsonl"
+    write_cases(dataset, [EvalCase.from_dict(data)])
+    with pytest.raises(DatasetValidationError, match="manual_labels.jsonl confirmation"):
+        validate_dataset(dataset, strict=True, min_cases=1)
+
+    labels_path = tmp_path / "labels" / "manual_labels.jsonl"
+    write_jsonl(
+        labels_path,
+        [
+            {
+                "candidate_id": data["case_id"],
+                "review_decision": "promote",
+                "label_source": "manual_verified",
+                "label_confidence": 0.85,
+                "reviewer": "human",
+            }
+        ],
+    )
+    _, summary = validate_dataset(dataset, strict=True, min_cases=1)
+    assert summary["confirmed_manual_labels"] == 1
+
+
+def test_unconfirmed_review_queue_candidate_cannot_be_scored(tmp_path: Path) -> None:
+    data = make_case(1).to_dict()
+    data["case_id"] = "hard_candidate:example__repo:pull:1"
+    dataset = tmp_path / "cases.jsonl"
+    write_cases(dataset, [EvalCase.from_dict(data)])
+    write_jsonl(
+        tmp_path / "labels" / "manual_review_queue.jsonl",
+        [
+            {
+                "candidate_id": data["case_id"],
+                "repo": "example/repo",
+                "pr_url": "https://github.com/example/repo/pull/1",
+                "suspected_status": "unknown",
+            }
+        ],
+    )
+    with pytest.raises(DatasetValidationError, match="cannot be scored before manual"):
+        validate_dataset(dataset, strict=True, min_cases=1)
+
+
+def test_cli_review_queue_writes_markdown(tmp_path: Path) -> None:
+    queue = tmp_path / "manual_review_queue.jsonl"
+    output = tmp_path / "round_1.md"
+    write_jsonl(
+        queue,
+        [
+            {
+                "candidate_id": "hard_candidate:example__repo:pull:1",
+                "repo": "example/repo",
+                "pr_url": "https://github.com/example/repo/pull/1",
+                "issue_url": "https://github.com/example/repo/issues/1",
+                "comment_url": None,
+                "review_url": None,
+                "commit_url": None,
+                "suspected_status": "unknown",
+                "why_suspected": "High-risk topic keywords found in PR title/body: auth",
+                "questions_for_reviewer": ["Is there enough evidence to preserve safely?"],
+                "evidence_items": [
+                    {
+                        "evidence_id": "hard_candidate:example__repo:pull:1:evidence:pr",
+                        "evidence_type": "pr",
+                        "evidence_text_excerpt": "Auth behavior changed.",
+                        "evidence_url": "https://github.com/example/repo/pull/1",
+                        "supports_or_contradicts": "unclear",
+                    }
+                ],
+            }
+        ],
+    )
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "tracegate",
+            "data",
+            "review-queue",
+            "--input",
+            queue.as_posix(),
+            "--output",
+            output.as_posix(),
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    text = output.read_text(encoding="utf-8")
+    assert "Manual Label Review Round 1" in text
+    assert "## Unknown Candidates" in text
+    assert "hard_candidate:example__repo:pull:1" in text
+    assert "promote recommendation" in text
+    assert "output_path" in result.stdout
 
 
 def test_real_run_writes_manifest_and_reports(tmp_path: Path) -> None:
