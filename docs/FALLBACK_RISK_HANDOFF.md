@@ -37,7 +37,7 @@ The scan excluded ignored/generated run artifacts and local environments.
 | `tracegate/runners/deepseek_runner.py:68` | `except Exception` | allowed_documentation | Windows registry env-var lookup is best-effort and returns `None` when unavailable. Missing API keys still raise before real calls. | no |
 | `tracegate/runners/deepseek_runner.py:451`, `tracegate/runners/claim_runner.py:455` | `except Exception` | suspicious_runtime_path | Worker-level exceptions are caught and written as `status: "error"` result records. This is not success, but Mac-side guardrail work should preserve the explicit error status. | no |
 | `scripts/build_tracegate_project_intro_docx.py:167` | `return []` | allowed_documentation | Document-generation helper returns an empty list for table rows in a formatting helper. Not a benchmark/runtime success path. | no |
-| `README.md:20`, `README.md:338`, `docs/limitations_and_roadmap.md:9` | `synthetic` | allowed_documentation | Docs explicitly say the legacy-shop benchmark is synthetic. | no |
+| `README.md:20`, `README.md:338` | `synthetic` | allowed_documentation | Docs explicitly say the legacy-shop benchmark is synthetic. | no |
 | `docs/api.md:46`, `docs/api.md:186`, `README.md:303`, `RELEASE_NOTES_web_v0.1.md:64` | `fallback` | allowed_documentation | Docs state fallback summaries are aggregate and not fabricated full logs. | no |
 | `.env.example:13` | `placeholder` | allowed_documentation | Empty placeholder env variables only. | no |
 | `sample_repos/*/PaymentCallbackService.java:10` | `SECRET` | allowed_test_fixture | Hardcoded `legacy-secret` exists inside controlled Java sample repos. It is fixture code, not a real credential. | no |
