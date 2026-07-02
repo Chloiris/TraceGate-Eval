@@ -406,6 +406,26 @@ def test_codex_evidence_audit_cannot_be_promoted_as_manual_verified(tmp_path: Pa
         promote_manual_labels(labels, tmp_path / "cases.jsonl")
 
 
+def test_codex_semantic_v2_audit_cannot_be_promoted_as_manual_verified(tmp_path: Path) -> None:
+    labels = tmp_path / "manual_labels.jsonl"
+    labels.write_text(
+        json.dumps(
+            {
+                "candidate_id": "hard_candidate:example__repo:pull:1",
+                "action": "promote",
+                "evidence_status": "unknown",
+                "expected_decision": "verify_first",
+                "label_source": "codex_evidence_audit_semantic_v2",
+                "label_confidence": 0.8,
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(RealDataError, match="manual_verified"):
+        promote_manual_labels(labels, tmp_path / "cases.jsonl")
+
+
 def test_full_label_audit_conflicting_promote_requires_two_evidence_urls(tmp_path: Path) -> None:
     queue = tmp_path / "manual_review_queue.jsonl"
     labels = tmp_path / "manual_labels.jsonl"
@@ -455,6 +475,83 @@ def test_full_label_audit_conflicting_does_not_count_same_pr_root_as_two_urls(tm
     run_full_label_audit(queue, labels, tmp_path / "report.md", tmp_path / "checklist.md", fetcher=fetcher)
     row = read_jsonl(labels)[0]
     assert row["action"] == "needs_more_evidence"
+    assert row["evidence_status"] == "none"
+
+
+def test_full_label_audit_mitigated_typing_regression_concern_is_not_conflicting(tmp_path: Path) -> None:
+    queue = tmp_path / "manual_review_queue.jsonl"
+    labels = tmp_path / "manual_labels.jsonl"
+    write_queue(queue, [make_audit_queue_row(1, "conflicting")])
+
+    def fetcher(repo: str, number: int) -> dict[str, object]:
+        return make_audit_snapshot(
+            number,
+            title="Expose CaptureManager as public API",
+            body="Tests verify no typing regressions as well since that was a concern.",
+            files=["src/pytest/__init__.py", "testing/typing_checks.py"],
+        )
+
+    run_full_label_audit(queue, labels, tmp_path / "report.md", tmp_path / "checklist.md", fetcher=fetcher)
+    row = read_jsonl(labels)[0]
+    assert row["action"] != "promote"
+    assert row["evidence_status"] == "none"
+
+
+def test_full_label_audit_resolved_concern_is_not_conflicting(tmp_path: Path) -> None:
+    queue = tmp_path / "manual_review_queue.jsonl"
+    labels = tmp_path / "manual_labels.jsonl"
+    write_queue(queue, [make_audit_queue_row(1, "conflicting")])
+
+    def fetcher(repo: str, number: int) -> dict[str, object]:
+        return make_audit_snapshot(
+            number,
+            body="This is backward compatible and does not break existing clients.",
+            files=["src/requests/cookies.py"],
+            comments=[
+                {
+                    "body": "Good catch, fixed. Added regression coverage and verified the duplicate-cookie case.",
+                    "html_url": "https://github.com/example/repo/pull/1#issuecomment-2",
+                    "created_at": "2026-01-03T00:00:00Z",
+                }
+            ],
+            review_comments=[
+                {
+                    "body": "Concern: this breaks duplicate cookies and creates a regression.",
+                    "html_url": "https://github.com/example/repo/pull/1#discussion_r1",
+                    "created_at": "2026-01-02T00:00:00Z",
+                }
+            ],
+        )
+
+    run_full_label_audit(queue, labels, tmp_path / "report.md", tmp_path / "checklist.md", fetcher=fetcher)
+    row = read_jsonl(labels)[0]
+    assert row["action"] != "promote"
+    assert row["evidence_status"] == "none"
+
+
+def test_full_label_audit_waiting_for_review_is_not_conflicting(tmp_path: Path) -> None:
+    queue = tmp_path / "manual_review_queue.jsonl"
+    labels = tmp_path / "manual_labels.jsonl"
+    write_queue(queue, [make_audit_queue_row(1, "conflicting")])
+
+    def fetcher(repo: str, number: int) -> dict[str, object]:
+        return make_audit_snapshot(
+            number,
+            title="Expose public API",
+            body="Expose a public API with typing tests.",
+            files=["src/pytest/__init__.py"],
+            comments=[
+                {
+                    "body": "Tests verify no typing regressions as well since that was a concern. Mind taking a review whenever you have time?",
+                    "html_url": "https://github.com/example/repo/pull/1#issuecomment-1",
+                    "created_at": "2026-01-02T00:00:00Z",
+                }
+            ],
+        )
+
+    run_full_label_audit(queue, labels, tmp_path / "report.md", tmp_path / "checklist.md", fetcher=fetcher)
+    row = read_jsonl(labels)[0]
+    assert row["action"] != "promote"
     assert row["evidence_status"] == "none"
 
 

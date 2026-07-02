@@ -88,6 +88,26 @@ SUPERSEDING_KEYWORDS = [
 ]
 LOW_RISK_PATH_PREFIXES = ("docs/", "tests/", "test/", ".github/")
 LOW_RISK_TEXT_KEYWORDS = ["typo", "documentation", "docs", "refactor", "format", "cleanup", "dependabot"]
+AUDIT_LABEL_SOURCE = "codex_evidence_audit_semantic_v2"
+RESOLUTION_PHRASES = [
+    "addressed",
+    "covered",
+    "fixed",
+    "good catch, fixed",
+    "resolved",
+    "verified",
+    "tests verify",
+    "added a regression test",
+    "added regression coverage",
+    "should be good to merge",
+    "lgtm",
+]
+REVIEW_WAITING_PHRASES = [
+    "mind taking a review",
+    "could i please get a review",
+    "please get a review",
+    "waiting for review",
+]
 
 
 @dataclass(frozen=True)
@@ -267,6 +287,9 @@ def evidence_items(repo: str, candidate: dict[str, Any], snapshot: dict[str, Any
             "url": str(view.get("url") or candidate.get("pr_url") or ""),
             "timestamp": str(view.get("createdAt") or ""),
             "text": f"{view.get('title') or candidate.get('title') or ''}\n\n{view.get('body') or ''}",
+            "author": str(((view.get("author") or {}) if isinstance(view.get("author"), dict) else {}).get("login") or ""),
+            "association": "AUTHOR",
+            "review_state": None,
         }
     ]
     for kind, records in [
@@ -280,7 +303,18 @@ def evidence_items(repo: str, candidate: dict[str, Any], snapshot: dict[str, Any
             body = record.get("body") or record.get("bodyText") or ""
             url = _html_url(record)
             if body or url:
-                items.append({"kind": kind, "url": url, "timestamp": _timestamp(record), "text": str(body)})
+                user = record.get("user") if isinstance(record.get("user"), dict) else record.get("author")
+                items.append(
+                    {
+                        "kind": kind,
+                        "url": url,
+                        "timestamp": _timestamp(record),
+                        "text": str(body),
+                        "author": str((user or {}).get("login") or ""),
+                        "association": str(record.get("author_association") or record.get("authorAssociation") or ""),
+                        "review_state": str(record.get("state") or "") if kind == "review" else None,
+                    }
+                )
     for commit in (view.get("commits") or [])[:12]:
         if not isinstance(commit, dict):
             continue
@@ -290,7 +324,7 @@ def evidence_items(repo: str, candidate: dict[str, Any], snapshot: dict[str, Any
             parts.append(str(nested["message"]))
         url = _url_from_commit(repo, commit)
         if parts or url:
-            items.append({"kind": "commit", "url": url, "timestamp": _timestamp_from_commit(commit), "text": "\n".join(parts)})
+            items.append({"kind": "commit", "url": url, "timestamp": _timestamp_from_commit(commit), "text": "\n".join(parts), "author": "", "association": "", "review_state": None})
     for issue in (view.get("closingIssuesReferences") or [])[:12]:
         if isinstance(issue, dict):
             items.append(
@@ -299,11 +333,14 @@ def evidence_items(repo: str, candidate: dict[str, Any], snapshot: dict[str, Any
                     "url": str(issue.get("url") or ""),
                     "timestamp": _timestamp(issue),
                     "text": f"{issue.get('title') or ''} {issue.get('state') or ''}",
+                    "author": "",
+                    "association": "",
+                    "review_state": None,
                 }
             )
     for related in snapshot.get("related_refs", [])[:3]:
         if related.get("error"):
-            items.append({"kind": "related_ref_error", "url": "", "timestamp": None, "text": related["error"]})
+            items.append({"kind": "related_ref_error", "url": "", "timestamp": None, "text": related["error"], "author": "", "association": "", "review_state": None})
             continue
         issue = related.get("issue") if isinstance(related.get("issue"), dict) else {}
         if issue:
@@ -313,11 +350,24 @@ def evidence_items(repo: str, candidate: dict[str, Any], snapshot: dict[str, Any
                     "url": _html_url(issue),
                     "timestamp": _timestamp(issue),
                     "text": f"{issue.get('title') or ''}\n\n{issue.get('body') or ''}",
+                    "author": str(((issue.get("user") or {}) if isinstance(issue.get("user"), dict) else {}).get("login") or ""),
+                    "association": str(issue.get("author_association") or ""),
+                    "review_state": None,
                 }
             )
         for comment in (related.get("comments") or [])[:4]:
             if isinstance(comment, dict):
-                items.append({"kind": "related_ref_comment", "url": _html_url(comment), "timestamp": _timestamp(comment), "text": str(comment.get("body") or "")})
+                items.append(
+                    {
+                        "kind": "related_ref_comment",
+                        "url": _html_url(comment),
+                        "timestamp": _timestamp(comment),
+                        "text": str(comment.get("body") or ""),
+                        "author": str(((comment.get("user") or {}) if isinstance(comment.get("user"), dict) else {}).get("login") or ""),
+                        "association": str(comment.get("author_association") or ""),
+                        "review_state": None,
+                    }
+                )
     return items
 
 
@@ -354,9 +404,58 @@ def _evidence_for(items: list[dict[str, str | None]], keywords: list[str]) -> li
     ]
 
 
+def _is_mitigated_or_resolved_context(text: str) -> bool:
+    lowered = text.lower()
+    if any(phrase in lowered for phrase in REVIEW_WAITING_PHRASES):
+        return True
+    has_resolution = any(phrase in lowered for phrase in RESOLUTION_PHRASES)
+    if "concern" in lowered and has_resolution:
+        return True
+    if "regression" in lowered and ("tests verify no" in lowered or "regression test" in lowered or "regression coverage" in lowered):
+        return True
+    if "break" in lowered and ("does not break" in lowered or "not breaking" in lowered):
+        return True
+    return False
+
+
+def _is_structural_concern_source(item: dict[str, str | None]) -> bool:
+    kind = str(item.get("kind") or "")
+    if kind in {"comment", "review_comment", "review"}:
+        return str(item.get("review_state") or "").upper() not in {"APPROVED"}
+    if kind in {"related_ref", "related_ref_comment"}:
+        return True
+    return False
+
+
+def _has_later_resolution(items: list[dict[str, str | None]], concern: dict[str, str | None]) -> bool:
+    concern_time = _parse_time(concern.get("timestamp"))
+    for item in items:
+        if item is concern:
+            continue
+        item_time = _parse_time(item.get("timestamp"))
+        if concern_time is not None and item_time is not None and item_time <= concern_time:
+            continue
+        if _is_mitigated_or_resolved_context(str(item.get("text") or "")):
+            return True
+        if str(item.get("review_state") or "").upper() == "APPROVED" and item_time is not None:
+            return True
+    return False
+
+
+def _is_unresolved_concern_item(items: list[dict[str, str | None]], item: dict[str, str | None]) -> bool:
+    text = str(item.get("text") or "")
+    if not _is_structural_concern_source(item):
+        return False
+    if _is_mitigated_or_resolved_context(text):
+        return False
+    if not _contains_any(text, CONCERN_KEYWORDS):
+        return False
+    return not _has_later_resolution(items, item)
+
+
 def _conflict_pair(items: list[dict[str, str | None]]) -> tuple[dict[str, str | None], dict[str, str | None]] | None:
     support_items = _evidence_for(items, SAFETY_KEYWORDS)
-    concern_items = _evidence_for(items, CONCERN_KEYWORDS)
+    concern_items = [item for item in items if item.get("url") and _is_unresolved_concern_item(items, item)]
     for support in support_items:
         for concern in concern_items:
             support_url = str(support.get("url") or "")
@@ -504,7 +603,7 @@ def decide_label(candidate: dict[str, Any], snapshot: dict[str, Any]) -> tuple[d
         "action": action,
         "evidence_status": evidence_status,
         "expected_decision": expected_decision,
-        "label_source": "codex_evidence_audit",
+        "label_source": AUDIT_LABEL_SOURCE,
         "label_confidence": round(confidence, 2),
         "rationale": sanitize_text(rationale),
         "evidence_urls": unique_urls[:12],
@@ -552,7 +651,7 @@ def _error_label(candidate: dict[str, Any], reason: str) -> tuple[dict[str, Any]
         "action": "needs_more_evidence",
         "evidence_status": "none",
         "expected_decision": "none",
-        "label_source": "codex_evidence_audit",
+        "label_source": AUDIT_LABEL_SOURCE,
         "label_confidence": 0.0,
         "rationale": sanitize_text(f"GitHub evidence fetch failed; no fallback data was used. reason={reason}"),
         "evidence_urls": [pr_url],
@@ -601,8 +700,8 @@ def validate_codex_audit_labels(queue_rows: list[dict[str, Any]], labels: list[d
         errors.append(f"extra candidate labels: {extra}")
     for row in labels:
         cid = row.get("candidate_id")
-        if row.get("label_source") != "codex_evidence_audit":
-            errors.append(f"{cid}: label_source must be codex_evidence_audit")
+        if row.get("label_source") != AUDIT_LABEL_SOURCE:
+            errors.append(f"{cid}: label_source must be {AUDIT_LABEL_SOURCE}")
         if row.get("human_review_required") is not True:
             errors.append(f"{cid}: human_review_required must be true")
         if row.get("ready_for_human_final_check") is not True:
@@ -754,7 +853,7 @@ def _render_report(queue_rows: list[dict[str, Any]], labels: list[dict[str, Any]
             "",
             "- This audit did not modify `datasets/real_min/cases.jsonl`.",
             "- This audit did not run `promote-labels`.",
-            "- `datasets/real_min/labels/manual_labels.jsonl` uses `label_source=codex_evidence_audit`, not `manual_verified`.",
+            f"- `datasets/real_min/labels/manual_labels.jsonl` uses `label_source={AUDIT_LABEL_SOURCE}`, not `manual_verified`.",
             "- Human final review is required before any label can be promoted into scored metrics.",
             "",
         ]
