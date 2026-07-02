@@ -1,5 +1,7 @@
 # Codex Full Label Audit Report
 
+> Semantic v2 note: the promote list in this v1 report has been superseded by `docs/SEMANTIC_LABEL_SANITY_AUDIT.md`. Final semantic-v2 counts are `promote=5`, `reject=8`, `needs_more_evidence=27`; `hard_candidate:pytest-dev__pytest:pull:14662` is now rejected as a false positive.
+
 This report is a Codex evidence audit for the full manual review queue. It does not promote labels into the scored dataset.
 
 ## Overview
