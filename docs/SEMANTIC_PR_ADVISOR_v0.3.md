@@ -5,7 +5,8 @@ It upgrades the v0.2 warning-only rule skeleton with evidence retrieval,
 EvidencePacket construction, DeepSeek JSON judging, and verifier guardrails.
 
 The advisor remains warning-only. It is designed to surface evidence-aware
-review guidance, not to replace human review or block merges by default.
+review guidance for real Pull Requests, not to replace human review or block
+merges by default.
 
 ## v0.2 Rule Skeleton vs v0.3 Semantic Advisor
 
