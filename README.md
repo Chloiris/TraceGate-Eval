@@ -8,6 +8,28 @@ compatibility notes, incident records, or prior Pull Request summaries are
 provided, does the agent preserve valid constraints, reject stale ones, ask for
 verification when evidence is weak, and avoid context-driven unsafe edits?
 
+## How to Read This Repository
+
+TraceGate is currently a v0.3-alpha prototype with two evaluation tracks and
+two advisory modes.
+
+Evaluation tracks:
+
+- Controlled ClaimBench: an offline 160-run research benchmark for testing how
+  historical context affects AI coding-agent behavior.
+- Real-data hard benchmark: an offline set of 19 scored public GitHub Pull
+  Request cases with `hard_benchmark_ready=true`.
+
+Advisory modes:
+
+- Rule advisory: a no-LLM changed-file and `tracegate.yml` baseline for live
+  Pull Requests.
+- DeepSeek semantic advisory: a live PR workflow that builds an EvidencePacket
+  and calls the real DeepSeek API in warning-only mode.
+
+For a map of how these pieces fit together, see
+[docs/PROJECT_MAP.md](docs/PROJECT_MAP.md).
+
 This repository contains:
 
 - Stage3 Controlled Claim Benchmark / ClaimBench.
