@@ -4,7 +4,7 @@ TraceGate v0.2-alpha introduces a hard real-data mini benchmark layer on top of 
 
 ## What Changed
 
-- Added `datasets/real_min/labels/manual_labels.accepted.jsonl` with `5` human-accepted Codex semantic audit labels.
+- Added `datasets/real_min/labels/manual_labels.accepted.jsonl` with `7` human-accepted Codex semantic audit labels.
 - Promoted accepted hard labels into `datasets/real_min/cases.jsonl`.
 - Added strict promotion rules so raw `codex_evidence_audit_semantic_v2` labels cannot enter scored metrics directly.
 - Added report fields for `active_count`, `stale_count`, `unknown_count`, `conflicting_count`, `promoted_cases`, `scored_cases`, `label_source_distribution`, `hard_benchmark_ready`, and limitations.
@@ -14,12 +14,12 @@ TraceGate v0.2-alpha introduces a hard real-data mini benchmark layer on top of 
 
 - active_count: `12`
 - stale_count: `2`
-- unknown_count: `1`
+- unknown_count: `3`
 - conflicting_count: `2`
-- promoted_cases: `5`
-- scored_cases: `17`
-- label_source_distribution: `{'heuristic_verified': 12, 'human_accepted_codex_audit': 5}`
-- hard_benchmark_ready: `false`
+- promoted_cases: `7`
+- scored_cases: `19`
+- label_source_distribution: `{'heuristic_verified': 12, 'human_accepted_codex_audit': 7}`
+- hard_benchmark_ready: `true`
 
 ## Guardrails
 
@@ -32,8 +32,8 @@ TraceGate v0.2-alpha introduces a hard real-data mini benchmark layer on top of 
 
 ## Limitations
 
-- v0.2-alpha is still a small hard real-data mini benchmark and is not statistically significant.
+- v0.2-alpha is a small hard real-data mini benchmark and is not statistically significant.
 - Hard labels come from Codex evidence audit plus human final acceptance.
 - The benchmark does not replace human code review.
 - GitHub Action advisory remains warning-only.
-- `hard_benchmark_ready=false` until the accepted hard-label mix reaches at least `unknown>=3`, `conflicting>=2`, `stale>=1`, and `scored_cases>=14`.
+- `hard_benchmark_ready=true` means only that the accepted hard-label mix reaches at least `unknown>=3`, `conflicting>=2`, `stale>=1`, and `scored_cases>=14`.

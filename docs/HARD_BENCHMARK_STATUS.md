@@ -7,12 +7,12 @@ TraceGate v0.2-alpha now includes a hard real-data mini benchmark layer built fr
 - benchmark: `TraceGate v0.2-alpha hard real-data mini benchmark`
 - active_count: `12`
 - stale_count: `2`
-- unknown_count: `1`
+- unknown_count: `3`
 - conflicting_count: `2`
-- promoted_cases: `5`
-- scored_cases: `17`
-- label_source_distribution: `{'heuristic_verified': 12, 'human_accepted_codex_audit': 5}`
-- hard_benchmark_ready: `false`
+- promoted_cases: `7`
+- scored_cases: `19`
+- label_source_distribution: `{'heuristic_verified': 12, 'human_accepted_codex_audit': 7}`
+- hard_benchmark_ready: `true`
 - used_real_data: `true`
 - used_synthetic_data: `false`
 - used_mock_model: `false`
@@ -28,16 +28,16 @@ TraceGate v0.2-alpha now includes a hard real-data mini benchmark layer built fr
 
 ## Readiness
 
-`hard_benchmark_ready` is `false` because the current v0.2-alpha distribution does not meet the minimum hard benchmark mix:
+`hard_benchmark_ready` is `true` because the current v0.2-alpha distribution meets the minimum hard benchmark mix:
 
-- required unknown: `3`; current unknown: `1`
+- required unknown: `3`; current unknown: `3`
 - required conflicting: `2`; current conflicting: `2`
 - required stale: `1`; current stale: `2`
-- required scored_cases: `14`; current scored_cases: `17`
+- required scored_cases: `14`; current scored_cases: `19`
 
 ## Limitations
 
 - This is a small v0.2-alpha hard real-data mini benchmark, not a statistically significant benchmark.
 - It does not replace human code review.
 - GitHub Action advisory remains warning-only.
-- More accepted `unknown` cases are needed before `hard_benchmark_ready` can become true.
+- More accepted hard cases are still needed before using the benchmark for broad model comparison.

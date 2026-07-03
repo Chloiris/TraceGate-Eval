@@ -1,14 +1,14 @@
 # TraceGate Real-Data PR Advisory Report
 
 - benchmark: `TraceGate v0.2-alpha hard real-data mini benchmark`
-- run_id: `tracegate-real-20260702T152335Z`
+- run_id: `tracegate-real-20260703T030812Z`
 - real_evaluation_succeeded: `True`
 - used_real_data: `True`
 - used_synthetic_data: `False`
 - used_mock_model: `False`
 - used_fallback_data: `False`
 - dataset: `datasets/real_min/cases.jsonl`
-- dataset_sha256: `097957c8aaabda56cc9fc29c4de433c7261ec2aea1adb7953df9d7abecbfb5d4`
+- dataset_sha256: `bab6d5096b04ec0020c9bc1103d169c0fa712f78b62bb4138509c8aab462f57c`
 
 This is a v0.2-alpha hard real-data mini benchmark. It remains a small non-statistical benchmark.
 
@@ -18,40 +18,42 @@ This is a v0.2-alpha hard real-data mini benchmark. It remains a small non-stati
 
 ## Metrics
 
-- num_cases_total: `17`
-- num_cases_scored: `17`
+- num_cases_total: `19`
+- num_cases_scored: `19`
 - num_cases_excluded: `0`
 - active_count: `12`
 - stale_count: `2`
-- unknown_count: `1`
+- unknown_count: `3`
 - conflicting_count: `2`
-- promoted_cases: `5`
-- pollution_flag_rate: `0.17647058823529413`
+- promoted_cases: `7`
+- pollution_flag_rate: `0.15789473684210525`
 - needs_manual_review_rate: `0.0`
 - provenance_completeness_rate: `1.0`
 - unsafe_allow_rate: `0.0`
 - verify_first_rate_on_unknown_or_conflicting: `1.0`
-- scored_cases: `17`
+- scored_cases: `19`
 - excluded_cases_count: `0`
 - manual_review_cases: `0`
 - manual_review_queue_cases: `40`
 - active_only: `False`
-- hard_benchmark_ready: `False`
+- hard_benchmark_ready: `True`
 
 ## Limitations
 
 - v0.2-alpha is a small hard real-data mini benchmark and is not statistically significant.
 - Hard labels come from Codex evidence audit plus human final acceptance, and do not replace human code review.
+- The real-data advisor is a deterministic baseline, not a final LLM agent.
+- TraceGate is not a general code review bot.
 - GitHub Action advisory remains warning-only and should not be treated as a merge blocker.
-- hard_benchmark_ready remains false until the minimum distribution is met: unknown>=3, conflicting>=2, stale>=1, scored_cases>=14.
+- hard_benchmark_ready is true because the minimum distribution is met: unknown>=3, conflicting>=2, stale>=1, scored_cases>=14.
 
 ## Distributions
 
-- status_distribution: `{'active': 12, 'conflicting': 2, 'stale': 2, 'unknown': 1}`
-- scored_status_distribution: `{'active': 12, 'conflicting': 2, 'stale': 2, 'unknown': 1}`
-- decision_distribution: `{'detect_conflict': 2, 'preserve': 12, 'verify_first': 3}`
-- risk_level_distribution: `{'high': 2, 'low': 8, 'medium': 7}`
-- label_source_distribution: `{'heuristic_verified': 12, 'human_accepted_codex_audit': 5}`
+- status_distribution: `{'active': 12, 'conflicting': 2, 'stale': 2, 'unknown': 3}`
+- scored_status_distribution: `{'active': 12, 'conflicting': 2, 'stale': 2, 'unknown': 3}`
+- decision_distribution: `{'detect_conflict': 2, 'preserve': 12, 'verify_first': 5}`
+- risk_level_distribution: `{'high': 4, 'low': 8, 'medium': 7}`
+- label_source_distribution: `{'heuristic_verified': 12, 'human_accepted_codex_audit': 7}`
 
 ## Run Type
 
@@ -231,4 +233,24 @@ This is a v0.2-alpha hard real-data mini benchmark. It remains a small non-stati
 - risk_score: `50`
 - requires_human_review: `True`
 - summary: verify_first for pytest-dev/pytest; touched files: no files listed
+- pollution_flags: `[]`
+
+### hard_candidate:psf__requests:pull:7555
+
+- evidence_status: `unknown`
+- decision: `verify_first`
+- risk_level: `high`
+- risk_score: `65`
+- requires_human_review: `True`
+- summary: verify_first for psf/requests; touched files: src/requests/auth.py, src/requests/structures.py, tests/test_lowlevel.py
+- pollution_flags: `[]`
+
+### hard_candidate:psf__requests:pull:7545
+
+- evidence_status: `unknown`
+- decision: `verify_first`
+- risk_level: `high`
+- risk_score: `65`
+- requires_human_review: `True`
+- summary: verify_first for psf/requests; touched files: src/requests/auth.py
 - pollution_flags: `[]`
