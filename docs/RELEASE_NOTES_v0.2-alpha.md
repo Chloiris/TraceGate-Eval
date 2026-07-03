@@ -1,13 +1,18 @@
 # TraceGate v0.2-alpha Release Notes
 
-TraceGate v0.2-alpha introduces a hard real-data mini benchmark layer on top of the existing active real-data smoke cases.
+TraceGate v0.2-alpha introduces a hard real-data mini benchmark layer on top of
+the existing active real-data smoke cases.
 
 ## What Changed
 
-- Added `datasets/real_min/labels/manual_labels.accepted.jsonl` with `7` human-accepted Codex semantic audit labels.
+- Added `datasets/real_min/labels/manual_labels.accepted.jsonl` with `7`
+  human-accepted Codex semantic audit labels.
 - Promoted accepted hard labels into `datasets/real_min/cases.jsonl`.
-- Added strict promotion rules so raw `codex_evidence_audit_semantic_v2` labels cannot enter scored metrics directly.
-- Added report fields for `active_count`, `stale_count`, `unknown_count`, `conflicting_count`, `promoted_cases`, `scored_cases`, `label_source_distribution`, `hard_benchmark_ready`, and limitations.
+- Added strict promotion rules so raw `codex_evidence_audit_semantic_v2`
+  labels cannot enter scored metrics directly.
+- Added report fields for `active_count`, `stale_count`, `unknown_count`,
+  `conflicting_count`, `promoted_cases`, `scored_cases`,
+  `label_source_distribution`, `hard_benchmark_ready`, and limitations.
 - Generated updated `runs/latest/report.md` and `runs/latest/report.json`.
 
 ## Current Dataset
@@ -35,14 +40,18 @@ TraceGate v0.2-alpha introduces a hard real-data mini benchmark layer on top of 
 - No fallback data.
 - `reject` and `needs_more_evidence` labels are excluded from scored metrics.
 - `codex_evidence_audit_semantic_v2` cannot be promoted directly.
-- Only `human_accepted_codex_audit` or `manual_verified` hard labels can enter scored metrics.
+- Only `human_accepted_codex_audit` or `manual_verified` hard labels can enter
+  scored metrics.
 
 ## Limitations
 
-- v0.2-alpha is a small hard real-data mini benchmark and is not statistically significant.
+- v0.2-alpha is a small hard real-data mini benchmark and is not statistically
+  significant.
 - Hard labels come from Codex evidence audit plus human final acceptance.
 - The real-data advisor is a deterministic baseline, not a final LLM agent.
 - TraceGate is not a general code review bot.
 - The benchmark does not replace human code review.
 - GitHub Action advisory remains warning-only.
-- `hard_benchmark_ready=true` means only that the accepted hard-label mix reaches at least `unknown>=3`, `conflicting>=2`, `stale>=1`, and `scored_cases>=14`.
+- `hard_benchmark_ready=true` means only that the accepted hard-label mix
+  reaches at least `unknown>=3`, `conflicting>=2`, `stale>=1`, and
+  `scored_cases>=14`.
