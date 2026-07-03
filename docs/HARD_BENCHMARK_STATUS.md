@@ -1,6 +1,7 @@
 # Hard Benchmark Status
 
-TraceGate v0.2-alpha now includes a hard real-data mini benchmark layer built from Codex evidence audit labels that received human final acceptance.
+TraceGate v0.2-alpha now includes a hard real-data mini benchmark layer built
+from Codex evidence audit labels that received human final acceptance.
 
 ## Summary
 
@@ -28,7 +29,8 @@ TraceGate v0.2-alpha now includes a hard real-data mini benchmark layer built fr
 
 ## Readiness
 
-`hard_benchmark_ready` is `true` because the current v0.2-alpha distribution meets the minimum hard benchmark mix:
+`hard_benchmark_ready` is `true` because the current v0.2-alpha distribution
+meets the minimum hard benchmark mix:
 
 - required unknown: `3`; current unknown: `3`
 - required conflicting: `2`; current conflicting: `2`
@@ -37,7 +39,9 @@ TraceGate v0.2-alpha now includes a hard real-data mini benchmark layer built fr
 
 ## Limitations
 
-- This is a small v0.2-alpha hard real-data mini benchmark, not a statistically significant benchmark.
+- This is a small v0.2-alpha hard real-data mini benchmark, not a
+  statistically significant benchmark.
 - It does not replace human code review.
 - GitHub Action advisory remains warning-only.
-- More accepted hard cases are still needed before using the benchmark for broad model comparison.
+- More accepted hard cases are still needed before using the benchmark for
+  broad model comparison.

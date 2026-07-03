@@ -7,7 +7,8 @@ Generated on: 2026-07-01
 - Path: `datasets/real_min/cases.jsonl`
 - Manifest: `datasets/real_min/manifest.json`
 - Source dataset: `github_api`, `github_api_hard_semantic_v2`
-- Source URL: public GitHub REST API Pull Request endpoints, with each scored case linked to a concrete `https://github.com/.../pull/...` URL.
+- Source URL: public GitHub REST API Pull Request endpoints, with each scored
+  case linked to a concrete `https://github.com/.../pull/...` URL.
 - Dataset sha256: `bab6d5096b04ec0020c9bc1103d169c0fa712f78b62bb4138509c8aab462f57c`
 
 ## Counts
@@ -17,7 +18,8 @@ Generated on: 2026-07-01
 - Scored real cases: 19
 - Excluded cases: 0
 - Evidence status distribution: `active=12`, `stale=2`, `unknown=3`, `conflicting=2`
-- Expected decision distribution in baseline run: `preserve=12`, `verify_first=5`, `detect_conflict=2`
+- Expected decision distribution in baseline run: `preserve=12`,
+  `verify_first=5`, `detect_conflict=2`
 - Label source distribution: `heuristic_verified=12`, `human_accepted_codex_audit=7`
 
 ## Repositories
@@ -50,8 +52,12 @@ Generated on: 2026-07-01
 
 ## Labeling
 
-The 12 active smoke labels are `heuristic_verified`, not manually adjudicated ground truth. The 7 hard labels are `human_accepted_codex_audit` records promoted only after focused review of public GitHub evidence.
+The 12 active smoke labels are `heuristic_verified`, not manually adjudicated
+ground truth. The 7 hard labels are `human_accepted_codex_audit` records
+promoted only after focused review of public GitHub evidence.
 
 ## Limitations
 
-This is a minimal v0.2-alpha real-data dataset. It now meets the hard mini benchmark readiness floor, but it remains small, does not provide statistical significance, and does not prove advisor accuracy.
+This is a minimal v0.2-alpha real-data dataset. It now meets the hard mini
+benchmark readiness floor, but it remains small, does not provide statistical
+significance, and does not prove advisor accuracy.
