@@ -21,6 +21,13 @@ TraceGate v0.2-alpha introduces a hard real-data mini benchmark layer on top of 
 - label_source_distribution: `{'heuristic_verified': 12, 'human_accepted_codex_audit': 7}`
 - hard_benchmark_ready: `true`
 
+## Real-Data Flags
+
+- used_real_data: `true`
+- used_synthetic_data: `false`
+- used_mock_model: `false`
+- used_fallback_data: `false`
+
 ## Guardrails
 
 - No mock data.
@@ -34,6 +41,8 @@ TraceGate v0.2-alpha introduces a hard real-data mini benchmark layer on top of 
 
 - v0.2-alpha is a small hard real-data mini benchmark and is not statistically significant.
 - Hard labels come from Codex evidence audit plus human final acceptance.
+- The real-data advisor is a deterministic baseline, not a final LLM agent.
+- TraceGate is not a general code review bot.
 - The benchmark does not replace human code review.
 - GitHub Action advisory remains warning-only.
 - `hard_benchmark_ready=true` means only that the accepted hard-label mix reaches at least `unknown>=3`, `conflicting>=2`, `stale>=1`, and `scored_cases>=14`.
