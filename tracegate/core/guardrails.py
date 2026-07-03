@@ -119,7 +119,37 @@ def classify(path: Path, keyword: str, line_text: str) -> str:
         ]
     ):
         return "allowed_documentation"
+    if posix.startswith("tracegate/pr_advisor/") and any(
+        marker in lowered
+        for marker in [
+            "no_mock",
+            "--no-mock",
+            "no mock",
+            "used_mock",
+            "no_fallback",
+            "--no-fallback",
+            "no fallback",
+            "used_fallback",
+            "semantic mode",
+            "live-smoke",
+            "guardrail",
+            "fail fast",
+            "real-only",
+        ]
+    ):
+        return "allowed_documentation"
     if posix.startswith("scripts/"):
+        return "allowed_documentation"
+    if posix == ".github/workflows/tracegate-semantic-advisory.yml" and any(
+        marker in lowered
+        for marker in [
+            "--no-mock",
+            "--no-fallback",
+            "used_mock",
+            "used_fallback",
+            "semantic advisor",
+        ]
+    ):
         return "allowed_documentation"
     if posix in {"tracegate/runners/deepseek_runner.py", "tracegate/runners/claim_runner.py"}:
         if keyword == "except Exception":

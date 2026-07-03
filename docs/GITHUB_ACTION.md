@@ -1,6 +1,8 @@
 # GitHub Action
 
 TraceGate includes a minimal warning-only Pull Request advisory workflow at `.github/workflows/tracegate-advisory.yml`.
+TraceGate also includes a semantic warning-only workflow at
+`.github/workflows/tracegate-semantic-advisory.yml`.
 
 ## Behavior
 
@@ -10,6 +12,18 @@ TraceGate includes a minimal warning-only Pull Request advisory workflow at `.gi
 - Writes a Markdown advisory to the GitHub job summary.
 - Does not use mock datasets.
 - Does not block merges by default.
+
+## Semantic Advisory
+
+- Runs only against real GitHub PR evidence.
+- Same-repository PRs call DeepSeek only when the `DEEPSEEK_API_KEY` repository
+  secret is configured.
+- Fork PRs do not receive LLM secrets and write an explicit skipped message.
+- The workflow checks out trusted base code and does not execute untrusted PR
+  code.
+- Output is warning-only and includes evidence status, expected decision, risk
+  level, evidence used, missing evidence, verification plan, verifier notes,
+  provider/model, limitations, and real/mock/fallback flags.
 
 ## Local Dry Run
 

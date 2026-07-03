@@ -22,7 +22,7 @@ git diff --cached --stat
 ## Do Not Push
 
 - API keys, GitHub tokens, cloud credentials, SSH/private keys, or `.env` secrets.
-- Local absolute paths such as `/Users/...`, Windows user folders, or machine-specific temp paths.
+- Local absolute paths such as macOS home-directory paths, Windows user folders, or machine-specific temp paths.
 - `.venv`, `node_modules`, raw caches, `runs/latest`, large generated artifacts, or private logs.
 - Unreviewed raw API responses containing rate-limit bodies, tokens, or private metadata.
 

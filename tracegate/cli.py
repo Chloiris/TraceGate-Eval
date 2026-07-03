@@ -39,6 +39,12 @@ from tracegate.core.run import RealRunError, regenerate_report, run_real_advisor
 from tracegate.metrics.result_collector import collect_results
 from tracegate.metrics.claim_collector import collect_claim_results
 from tracegate.metrics.stage2_collector import collect_stage2_results
+from tracegate.pr_advisor.cli import (
+    AnalyzeOptions,
+    SemanticAdvisorError,
+    analyze_pr,
+    run_live_smoke,
+)
 from tracegate.reports.claim_stage_report_builder import generate_claim_stage_reports
 from tracegate.reports.report_builder import generate_reports
 from tracegate.reports.stage2_report_builder import generate_stage2_reports
@@ -333,6 +339,69 @@ def guardrails_audit_command(run_dir: Path, strict: bool) -> None:
         raise SystemExit("\n".join(result["errors"]))
 
 
+def pr_analyze_command(
+    repo: str,
+    pr_number: int,
+    mode: str,
+    provider: str,
+    real_only: bool,
+    no_mock: bool,
+    no_fallback: bool,
+    output: Path,
+    json_output: Path,
+) -> None:
+    try:
+        payload = analyze_pr(
+            AnalyzeOptions(
+                repo=repo,
+                pr_number=pr_number,
+                mode=mode,
+                provider=provider,
+                real_only=real_only,
+                no_mock=no_mock,
+                no_fallback=no_fallback,
+                output=output,
+                json_output=json_output,
+            )
+        )
+    except SemanticAdvisorError as exc:
+        raise SystemExit(str(exc)) from exc
+    print(f"Semantic PR advisory written: {output}")
+    print(f"Semantic PR advisory JSON written: {json_output}")
+    print(f"evidence_status: {payload['final']['evidence_status']}")
+    print(f"expected_decision: {payload['final']['expected_decision']}")
+    print(f"semantic_api_called: {payload['semantic_api_called']}")
+
+
+def pr_live_smoke_command(
+    provider: str,
+    real_only: bool,
+    no_mock: bool,
+    no_fallback: bool,
+    cases: str,
+    output: Path,
+    json_output: Path,
+) -> None:
+    try:
+        summary = run_live_smoke(
+            provider=provider,
+            real_only=real_only,
+            no_mock=no_mock,
+            no_fallback=no_fallback,
+            cases=cases,
+            output=output,
+            json_output=json_output,
+        )
+    except SemanticAdvisorError as exc:
+        raise SystemExit(str(exc)) from exc
+    print(f"Semantic PR live smoke written: {output}")
+    print(f"Semantic PR live smoke JSON written: {json_output}")
+    print(f"used_real_pr: {summary['used_real_pr']}")
+    print(f"used_real_llm: {summary['used_real_llm']}")
+    print(f"used_mock: {summary['used_mock']}")
+    print(f"used_fallback: {summary['used_fallback']}")
+
+
 def run_stage2_command(
     model: str,
     workers: int,
@@ -549,6 +618,29 @@ def build_parser() -> argparse.ArgumentParser:
     guardrails_audit.add_argument("--run", type=Path, required=True)
     guardrails_audit.add_argument("--strict", action="store_true")
 
+    pr = subparsers.add_parser("pr", help="TraceGate semantic Pull Request advisor commands.")
+    pr_subparsers = pr.add_subparsers(dest="pr_command", required=True)
+
+    pr_analyze = pr_subparsers.add_parser("analyze", help="Analyze a real GitHub Pull Request with semantic advisory.")
+    pr_analyze.add_argument("--repo", required=True, help="GitHub owner/name repository.")
+    pr_analyze.add_argument("--pr-number", type=int, required=True)
+    pr_analyze.add_argument("--mode", choices=["semantic"], required=True)
+    pr_analyze.add_argument("--provider", choices=["deepseek"], required=True)
+    pr_analyze.add_argument("--real-only", action="store_true")
+    pr_analyze.add_argument("--no-mock", action="store_true")
+    pr_analyze.add_argument("--no-fallback", action="store_true")
+    pr_analyze.add_argument("--output", type=Path, required=True)
+    pr_analyze.add_argument("--json-output", type=Path, required=True)
+
+    pr_live_smoke = pr_subparsers.add_parser("live-smoke", help="Run real DeepSeek live smoke on real GitHub PR cases.")
+    pr_live_smoke.add_argument("--provider", choices=["deepseek"], required=True)
+    pr_live_smoke.add_argument("--real-only", action="store_true")
+    pr_live_smoke.add_argument("--no-mock", action="store_true")
+    pr_live_smoke.add_argument("--no-fallback", action="store_true")
+    pr_live_smoke.add_argument("--cases", required=True)
+    pr_live_smoke.add_argument("--output", type=Path, required=True)
+    pr_live_smoke.add_argument("--json-output", type=Path, required=True)
+
     subparsers.add_parser("collect-results", help="Collect test, diff, and constraint metrics.")
     report = subparsers.add_parser("report", help="Generate legacy reports or real-data run reports.")
     report.add_argument("--run", type=Path, help="Real-data run directory, e.g. runs/latest.")
@@ -692,5 +784,28 @@ def main(argv: Sequence[str] | None = None) -> None:
             guardrails_scan_command(strict=args.strict)
         elif args.guardrails_command == "audit":
             guardrails_audit_command(run_dir=args.run, strict=args.strict)
+    elif args.command == "pr":
+        if args.pr_command == "analyze":
+            pr_analyze_command(
+                repo=args.repo,
+                pr_number=args.pr_number,
+                mode=args.mode,
+                provider=args.provider,
+                real_only=args.real_only,
+                no_mock=args.no_mock,
+                no_fallback=args.no_fallback,
+                output=args.output,
+                json_output=args.json_output,
+            )
+        elif args.pr_command == "live-smoke":
+            pr_live_smoke_command(
+                provider=args.provider,
+                real_only=args.real_only,
+                no_mock=args.no_mock,
+                no_fallback=args.no_fallback,
+                cases=args.cases,
+                output=args.output,
+                json_output=args.json_output,
+            )
     else:  # pragma: no cover - argparse enforces command choices
         parser.print_help()
