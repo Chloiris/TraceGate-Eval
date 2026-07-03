@@ -41,6 +41,34 @@ The real-data dataset is intentionally small. It is useful for validating
 ingestion, provenance, hard-label promotion, and guardrails, but it is not
 statistically significant.
 
+## v0.3 Semantic PR Advisor
+
+TraceGate v0.3 adds a semantic Pull Request advisory mode for real GitHub PRs.
+It collects live PR evidence, builds an EvidencePacket, calls the real DeepSeek
+API, verifies the model judgment, and writes Markdown/JSON advisory output.
+
+Rule mode remains available and does not call an LLM. Semantic mode is explicit:
+
+```bash
+python -m tracegate pr analyze \
+  --repo owner/name \
+  --pr-number 123 \
+  --mode semantic \
+  --provider deepseek \
+  --real-only \
+  --no-mock \
+  --no-fallback \
+  --output runs/pr_advisory/latest/advisory.md \
+  --json-output runs/pr_advisory/latest/advisory.json
+```
+
+Semantic mode requires a DeepSeek credential from `DEEPSEEK_API_KEY` or
+`TRACEGATE_LLM_API_KEY`. GitHub Actions semantic mode requires the repository
+secret `DEEPSEEK_API_KEY`. Fork PRs do not receive LLM secrets and are skipped
+with an explicit warning-only message.
+
+More detail: [docs/SEMANTIC_PR_ADVISOR_v0.3.md](docs/SEMANTIC_PR_ADVISOR_v0.3.md).
+
 ## Why This Exists
 
 AI coding agents often receive historical context: previous fixes,

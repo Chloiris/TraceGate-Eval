@@ -1,0 +1,113 @@
+name: TraceGate Semantic Advisory
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+  workflow_dispatch:
+    inputs:
+      repo:
+        description: "GitHub owner/name repository to analyze"
+        required: true
+        default: "Chloiris/TraceGate-Eval"
+      pr-number:
+        description: "Pull Request number to analyze"
+        required: true
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  semantic-advisory:
+    name: Semantic PR advisory
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+    steps:
+      - name: Check out trusted base code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.sha }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install TraceGate
+        run: |
+          python -m pip install -U pip
+          python -m pip install -e ".[dev]"
+
+      - name: Skip fork Pull Requests
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.event.pull_request.base.repo.full_name
+        run: |
+          {
+            echo "# TraceGate Semantic PR Advisory"
+            echo
+            echo "semantic advisor skipped for fork PR because secrets are unavailable"
+            echo
+            echo "- warning_only: true"
+            echo "- used_real_llm: false"
+            echo "- used_mock: false"
+            echo "- used_fallback: false"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Skip same-repository Pull Request when DeepSeek secret is missing
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.event.pull_request.base.repo.full_name && env.DEEPSEEK_API_KEY == ''
+        run: |
+          {
+            echo "# TraceGate Semantic PR Advisory"
+            echo
+            echo "semantic advisor skipped because DEEPSEEK_API_KEY is not configured for this repository"
+            echo
+            echo "- warning_only: true"
+            echo "- used_real_llm: false"
+            echo "- used_mock: false"
+            echo "- used_fallback: false"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Skip manual semantic advisory when DeepSeek secret is missing
+        if: github.event_name == 'workflow_dispatch' && env.DEEPSEEK_API_KEY == ''
+        run: |
+          {
+            echo "# TraceGate Semantic PR Advisory"
+            echo
+            echo "semantic advisor skipped because DEEPSEEK_API_KEY is not configured for this repository"
+            echo
+            echo "- warning_only: true"
+            echo "- used_real_llm: false"
+            echo "- used_mock: false"
+            echo "- used_fallback: false"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Run semantic advisor for Pull Request
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.event.pull_request.base.repo.full_name && env.DEEPSEEK_API_KEY != ''
+        run: |
+          python -m tracegate pr analyze \
+            --repo "${{ github.repository }}" \
+            --pr-number "${{ github.event.pull_request.number }}" \
+            --mode semantic \
+            --provider deepseek \
+            --real-only \
+            --no-mock \
+            --no-fallback \
+            --output runs/pr_advisory/latest/advisory.md \
+            --json-output runs/pr_advisory/latest/advisory.json
+          cat runs/pr_advisory/latest/advisory.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Run semantic advisor manually
+        if: github.event_name == 'workflow_dispatch' && env.DEEPSEEK_API_KEY != ''
+        run: |
+          python -m tracegate pr analyze \
+            --repo "${{ inputs.repo }}" \
+            --pr-number "${{ inputs.pr-number }}" \
+            --mode semantic \
+            --provider deepseek \
+            --real-only \
+            --no-mock \
+            --no-fallback \
+            --output runs/pr_advisory/latest/advisory.md \
+            --json-output runs/pr_advisory/latest/advisory.json
+          cat runs/pr_advisory/latest/advisory.md >> "$GITHUB_STEP_SUMMARY"
