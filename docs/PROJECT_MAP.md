@@ -66,8 +66,17 @@ hard_benchmark_ready=true
 Normal validation and rule runs for this track do not call an LLM:
 
 ```bash
-python -m tracegate data validate --dataset datasets/real_min/cases.jsonl --strict --min-cases 12
-python -m tracegate run --dataset datasets/real_min/cases.jsonl --advisor rule --real-only --no-mock --no-fallback
+python -m tracegate data validate \
+  --dataset datasets/real_min/cases.jsonl \
+  --strict \
+  --min-cases 12
+
+python -m tracegate run \
+  --dataset datasets/real_min/cases.jsonl \
+  --advisor rule \
+  --real-only \
+  --no-mock \
+  --no-fallback
 ```
 
 The accepted hard labels are human-accepted audit records. Labels that were
@@ -123,7 +132,7 @@ does not replace human review.
 
 | Component | Calls an LLM? | Offline benchmark? | Live PR workflow? |
 | --- | --- | --- | --- |
-| Controlled ClaimBench | Yes when re-running model experiments; checked-in reports do not call APIs | Yes | No |
+| Controlled ClaimBench | Yes when re-running model experiments;<br>checked-in reports do not call APIs | Yes | No |
 | Real-data hard benchmark | No for normal validate/run/report commands | Yes | No |
 | Rule PR advisory | No | No | Yes |
 | DeepSeek semantic PR advisor | Yes, via DeepSeek API | No | Yes |
