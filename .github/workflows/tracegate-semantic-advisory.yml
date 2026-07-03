@@ -85,6 +85,20 @@ jobs:
       - name: Run semantic advisor for Pull Request
         if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.event.pull_request.base.repo.full_name && env.DEEPSEEK_API_KEY != ''
         run: |
+          if ! python -m tracegate pr analyze --help >/dev/null 2>&1; then
+            {
+              echo "# TraceGate Semantic PR Advisory"
+              echo
+              echo "semantic advisor skipped because trusted base code does not yet include the v0.3 PR CLI"
+              echo
+              echo "- warning_only: true"
+              echo "- used_real_llm: false"
+              echo "- used_mock: false"
+              echo "- used_fallback: false"
+              echo "- note: local live-smoke must be used to validate this bootstrap PR"
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
           python -m tracegate pr analyze \
             --repo "${{ github.repository }}" \
             --pr-number "${{ github.event.pull_request.number }}" \
@@ -100,6 +114,10 @@ jobs:
       - name: Run semantic advisor manually
         if: github.event_name == 'workflow_dispatch' && env.DEEPSEEK_API_KEY != ''
         run: |
+          if ! python -m tracegate pr analyze --help >/dev/null 2>&1; then
+            echo "trusted checkout does not include tracegate pr analyze" >&2
+            exit 1
+          fi
           python -m tracegate pr analyze \
             --repo "${{ inputs.repo }}" \
             --pr-number "${{ inputs.pr-number }}" \

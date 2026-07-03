@@ -56,6 +56,11 @@ semantic advisor skipped for fork PR because secrets are unavailable
 The workflow uses the `pull_request` event, not `pull_request_target`, and
 checks out trusted base code. It does not execute untrusted PR code.
 
+For the bootstrap PR that introduces v0.3, the trusted base branch may not yet
+contain `tracegate pr analyze`. In that case the workflow emits an explicit
+warning-only skip and relies on local real DeepSeek live smoke. After v0.3 is
+merged, the same workflow runs semantic mode from trusted base code.
+
 ## Evidence Retrieval Scope
 
 For a real PR, the advisor collects:
