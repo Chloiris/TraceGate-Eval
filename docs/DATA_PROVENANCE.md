@@ -47,7 +47,7 @@ Every scored case includes:
 The current normalized dataset sha256 is:
 
 ```text
-84e9c0eff698689a807f675d9199953578d5f9c98c802cec13ccee7d8efecf18
+bab6d5096b04ec0020c9bc1103d169c0fa712f78b62bb4138509c8aab462f57c
 ```
 
 `python -m tracegate guardrails audit --run runs/latest --strict` compares this hash against both dataset and run manifests.

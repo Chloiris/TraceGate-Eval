@@ -18,8 +18,8 @@ The current `main` branch includes two evaluation tracks.
 | Track | Status | Notes |
 | --- | --- | --- |
 | Controlled ClaimBench | implemented | 160 Stage3 runs across 5 modules, 4 evidence statuses, and 8 context groups. |
-| Real-data PR advisory path | implemented | 17 scored public GitHub Pull Request cases: 12 active smoke cases plus 5 human-accepted hard labels. |
-| Hard real-data mini benchmark | partial v0.2-alpha | `hard_benchmark_ready=false` because the accepted hard-label mix still has only 1 unknown case; ready requires `unknown>=3`. |
+| Real-data PR advisory path | implemented | 19 scored public GitHub Pull Request cases: 12 active smoke cases plus 7 human-accepted hard labels. |
+| Hard real-data mini benchmark | ready v0.2-alpha | `hard_benchmark_ready=true`; the accepted hard-label mix now satisfies `unknown>=3`, `conflicting>=2`, `stale>=1`, and `scored_cases>=14`. |
 
 Current real-data flags:
 
@@ -28,10 +28,10 @@ used_real_data: true
 used_synthetic_data: false
 used_mock_model: false
 used_fallback_data: false
-hard_benchmark_ready: false
+hard_benchmark_ready: true
 ```
 
-The real-data dataset is intentionally small. It is useful for validating ingestion, provenance, hard-label promotion, and guardrails, but it is not statistically significant and is not a complete ready benchmark.
+The real-data dataset is intentionally small. It is useful for validating ingestion, provenance, hard-label promotion, and guardrails, but it is not statistically significant.
 
 ## Why This Exists
 
@@ -105,28 +105,28 @@ Tracked files:
 Current scored real-data distribution:
 
 ```text
-scored_cases: 17
+scored_cases: 19
 active: 12
 stale: 2
-unknown: 1
+unknown: 3
 conflicting: 2
-hard_benchmark_ready: false
+hard_benchmark_ready: true
 ```
 
-`hard_benchmark_ready` is false because the current v0.2-alpha distribution is still short on unknown hard cases:
+`hard_benchmark_ready` is true because the current v0.2-alpha distribution meets the minimum hard benchmark mix:
 
 ```text
 required unknown: 3
-current unknown: 1
+current unknown: 3
 required conflicting: 2
 current conflicting: 2
 required stale: 1
 current stale: 2
 required scored_cases: 14
-current scored_cases: 17
+current scored_cases: 19
 ```
 
-The semantic audit reviewed 40 candidates in `manual_labels.jsonl`. Only 5 `action=promote` rows were converted into `human_accepted_codex_audit` labels and promoted into scored metrics. `reject` and `needs_more_evidence` rows remain excluded.
+The semantic audit and focused unknown review covered 40 candidates in `manual_labels.jsonl`. Seven `action=promote` rows were converted into `human_accepted_codex_audit` labels and promoted into scored metrics. `reject` and `needs_more_evidence` rows remain excluded.
 
 ## Output Protocol
 
@@ -300,15 +300,15 @@ scripts/                  Helper entrypoints and plotting script
 ## Boundaries
 
 - ClaimBench uses controlled synthetic sample repositories and manually constructed oracles.
-- The real-data smoke path is small and currently active-only.
-- Hard real cases remain unscored until manual confirmation.
+- The real-data path is small, and its hard benchmark readiness means only that the minimum v0.2-alpha mix is met.
+- Hard real cases enter scored metrics only after manual confirmation.
 - The deterministic real-data advisor is a baseline, not a final LLM agent.
 - The dashboard is a local inspection tool, not an online benchmark service.
 - `/api/analyze-demo` is rule-based and does not represent model output.
 
 ## Roadmap
 
-- Promote manually verified hard real-data labels when evidence is sufficient.
+- Add more manually verified hard real-data labels beyond the minimum v0.2-alpha mix.
 - Add multi-model comparison under the same Stage3 protocol.
 - Connect additional real-data adapters for issues, sessions, failed patches, and rollbacks.
 - Strengthen conflicting-evidence tasks and scoring.

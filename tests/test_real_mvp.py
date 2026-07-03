@@ -330,6 +330,7 @@ def test_hard_benchmark_report_generation_marks_ready(tmp_path: Path) -> None:
         "stale": 1,
         "unknown": 3,
     }
+    assert not any("remains false" in item for item in report["metrics"]["limitations"])
 
 
 def test_mock_advisor_is_forbidden_in_real_only_mode(tmp_path: Path) -> None:
@@ -735,7 +736,9 @@ def test_accepted_labels_redact_local_paths_from_public_text(tmp_path: Path) -> 
 def test_human_accepted_codex_audit_can_promote(tmp_path: Path) -> None:
     labels = tmp_path / "manual_labels.accepted.jsonl"
     dataset = tmp_path / "cases.jsonl"
-    write_queue(labels, [make_accepted_label_row(1)])
+    row = make_accepted_label_row(1)
+    row["files_changed"] = ["src/requests/auth.py"]
+    write_queue(labels, [row])
     summary = promote_manual_labels(
         labels_path=labels,
         dataset_path=dataset,
@@ -749,6 +752,7 @@ def test_human_accepted_codex_audit_can_promote(tmp_path: Path) -> None:
     assert cases[0].is_real is True
     assert cases[0].is_synthetic is False
     assert cases[0].excluded_from_real_metrics is False
+    assert cases[0].files_changed == ["src/requests/auth.py"]
 
 
 def test_accepted_unknown_requires_verify_first(tmp_path: Path) -> None:

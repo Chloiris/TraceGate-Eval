@@ -51,6 +51,13 @@ def compute_metrics(cases: list[EvalCase], advisories: list[AdvisoryDecision]) -
     scored = len(scored_cases)
     active_only = bool(scored_cases) and set(scored_status_distribution) == {"active"}
     is_hard_ready = hard_benchmark_ready(scored_status_distribution, scored)
+    readiness_limitation = (
+        "hard_benchmark_ready is true because the minimum distribution is met: "
+        "unknown>=3, conflicting>=2, stale>=1, scored_cases>=14."
+        if is_hard_ready
+        else "hard_benchmark_ready remains false until the minimum distribution is met: "
+        "unknown>=3, conflicting>=2, stale>=1, scored_cases>=14."
+    )
     return {
         "benchmark_name": "TraceGate v0.2-alpha hard real-data mini benchmark",
         "benchmark_note": "small real-data smoke benchmark, not a statistically significant benchmark",
@@ -78,8 +85,10 @@ def compute_metrics(cases: list[EvalCase], advisories: list[AdvisoryDecision]) -
         "limitations": [
             "v0.2-alpha is a small hard real-data mini benchmark and is not statistically significant.",
             "Hard labels come from Codex evidence audit plus human final acceptance, and do not replace human code review.",
+            "The real-data advisor is a deterministic baseline, not a final LLM agent.",
+            "TraceGate is not a general code review bot.",
             "GitHub Action advisory remains warning-only and should not be treated as a merge blocker.",
-            "hard_benchmark_ready remains false until the minimum distribution is met: unknown>=3, conflicting>=2, stale>=1, scored_cases>=14.",
+            readiness_limitation,
         ],
         "pollution_flag_rate": pollution_count / max(len(advisories), 1),
         "needs_manual_review_rate": manual_count / max(total, 1),

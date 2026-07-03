@@ -597,6 +597,7 @@ def _case_from_accepted_audit_label(row: dict[str, Any]) -> EvalCase:
     pr_url = next((str(url) for url in row.get("evidence_urls", []) if f"/pull/{number}" in str(url)), f"https://github.com/{repo}/pull/{number}")
     issue_url = next((str(url) for url in row.get("evidence_urls", []) if "/issues/" in str(url)), None)
     evidence_summaries = [str(item) for item in row.get("evidence_summary") or []]
+    files_changed = [str(item) for item in row.get("files_changed") or [] if str(item)]
     evidence_items = []
     for index, url in enumerate([str(item) for item in row.get("evidence_urls") or [] if str(item)], start=1):
         excerpt = evidence_summaries[index - 1] if index <= len(evidence_summaries) else str(row.get("rationale") or "")
@@ -633,7 +634,7 @@ def _case_from_accepted_audit_label(row: dict[str, Any]) -> EvalCase:
             "head_commit": None,
             "commit_sha": None,
             "created_at": row.get("reviewed_at") or row.get("accepted_at"),
-            "files_changed": [],
+            "files_changed": files_changed,
             "diff_summary": f"Human accepted semantic audit promoted {status} hard label for {repo} PR #{number}.",
             "problem_statement": str(row.get("rationale") or ""),
             "claim": {
@@ -682,6 +683,7 @@ def write_accepted_labels(
                 "rationale": _sanitize_public_text(row["rationale"]),
                 "evidence_urls": row.get("evidence_urls", []),
                 "evidence_summary": [_sanitize_public_text(item) for item in row.get("evidence_summary", [])],
+                "files_changed": [str(item) for item in row.get("files_changed", []) if str(item)],
                 "missing_evidence": [_sanitize_public_text(item) for item in row.get("missing_evidence", [])],
                 "reviewed_by": row.get("reviewed_by"),
                 "reviewed_at": row.get("reviewed_at"),
