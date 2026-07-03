@@ -22,7 +22,8 @@ from Codex evidence audit labels that received human final acceptance.
 ## Acceptance Source
 
 - Hard labels come from Codex evidence audit plus human final acceptance.
-- `datasets/real_min/labels/manual_labels.accepted.jsonl` contains only `action=promote` rows.
+- `datasets/real_min/labels/manual_labels.accepted.jsonl` contains only
+  `action=promote` rows.
 - Accepted hard labels use `label_source=human_accepted_codex_audit`.
 - Raw `codex_evidence_audit_semantic_v2` labels are not promoted directly.
 - `reject` and `needs_more_evidence` rows are not included in scored metrics.

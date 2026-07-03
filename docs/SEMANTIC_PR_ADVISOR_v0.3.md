@@ -11,9 +11,9 @@ review guidance, not to replace human review or block merges by default.
 
 | Area | v0.2 rule advisory | v0.3 semantic advisory |
 | --- | --- | --- |
-| Input | Changed-file list and repo-local claim config | Real PR metadata, comments, reviews, files, commits, linked issues, history, docs, tests |
+| Input | Changed-file list and repo-local claim config | Real PR metadata, comments, reviews, files, commits,<br>linked issues, history, docs, tests |
 | Model call | None | Real DeepSeek API call in semantic mode |
-| Output | Job summary with matched configured claims | Markdown and JSON advisory with evidence status, decision, evidence used, verifier notes |
+| Output | Job summary with matched configured claims | Markdown and JSON advisory with evidence status,<br>decision, evidence used, verifier notes |
 | Safety | Warning-only | Warning-only plus no mock, no fallback, fork-secret boundary, verifier downgrades |
 
 ## DeepSeek Configuration

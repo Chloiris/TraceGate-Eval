@@ -1,3 +1,5 @@
+[中文 README](docs/README_CN.md)
+
 # TraceGate Eval
 
 TraceGate Eval is a research benchmark for evaluating whether AI coding agents
@@ -34,10 +36,13 @@ This repository contains:
 
 - Stage3 Controlled Claim Benchmark / ClaimBench.
 - A checked-in `deepseek-v4-pro` Stage3 result summary.
-- A small real-data Pull Request advisory smoke path built from public GitHub REST API metadata.
-- Guardrails that prevent mock, synthetic, or fallback data from being counted as real evaluation.
+- A small real-data Pull Request advisory smoke path built from public GitHub
+  REST API metadata.
+- Guardrails that prevent mock, synthetic, or fallback data from being counted
+  as real evaluation.
 
-It is not an online service, not a general code review bot, and not a model leaderboard.
+It is not an online service, not a general code review bot, and not a model
+leaderboard.
 
 ## Current Status
 
@@ -178,7 +183,8 @@ conflicting: 2
 hard_benchmark_ready: true
 ```
 
-`hard_benchmark_ready` is true because the current v0.2-alpha distribution meets the minimum hard benchmark mix:
+`hard_benchmark_ready` is true because the current v0.2-alpha distribution
+meets the minimum hard benchmark mix:
 
 ```text
 required unknown: 3
@@ -300,8 +306,18 @@ python -m tracegate guardrails scan --strict
 Run the real-data smoke path:
 
 ```bash
-python -m tracegate data validate --dataset datasets/real_min/cases.jsonl --strict --min-cases 8
-python -m tracegate run --dataset datasets/real_min/cases.jsonl --advisor rule --real-only --no-mock --no-fallback
+python -m tracegate data validate \
+  --dataset datasets/real_min/cases.jsonl \
+  --strict \
+  --min-cases 8
+
+python -m tracegate run \
+  --dataset datasets/real_min/cases.jsonl \
+  --advisor rule \
+  --real-only \
+  --no-mock \
+  --no-fallback
+
 python -m tracegate report --run runs/latest --format markdown,json
 python -m tracegate guardrails audit --run runs/latest --strict
 ```
