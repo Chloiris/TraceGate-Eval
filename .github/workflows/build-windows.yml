@@ -90,7 +90,7 @@ jobs:
       - name: Install ripgrep runtime dependency
         shell: pwsh
         run: |
-          choco install ripgrep --version=14.1.1 --yes --no-progress
+          choco install ripgrep --yes --no-progress
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           rg --version
 

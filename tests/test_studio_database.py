@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+from io import StringIO
 from pathlib import Path
 
 import pytest
+from alembic import command
 from fastapi.testclient import TestClient
 from pydantic import SecretStr
 from sqlalchemy import inspect, select
@@ -13,6 +15,7 @@ from tracegate.studio.database import StudioDatabase
 from tracegate.studio.migration_runner import (
     DatabaseMigrationError,
     current_revision,
+    migration_config,
     upgrade_database,
 )
 from tracegate.studio.models import AppSettings, OnboardingState
@@ -102,6 +105,19 @@ def test_migration_is_idempotent(tmp_path: Path) -> None:
         assert current_revision(database.engine) == "20260710_0004"
     finally:
         database.dispose()
+
+
+def test_mysql_offline_ddl_does_not_autoincrement_singleton_ids() -> None:
+    output = StringIO()
+    config = migration_config("mysql+pymysql://tracegate:unused@127.0.0.1/tracegate")
+    config.output_buffer = output
+
+    command.upgrade(config, "head", sql=True)
+
+    ddl = output.getvalue()
+    assert "id INTEGER NOT NULL AUTO_INCREMENT" not in ddl
+    assert "CONSTRAINT ck_app_settings_singleton CHECK (id = 1)" in ddl
+    assert "CONSTRAINT ck_onboarding_state_singleton CHECK (id = 1)" in ddl
 
 
 def test_agent_index_migration_upgrades_existing_p0_database_without_data_loss(tmp_path: Path) -> None:

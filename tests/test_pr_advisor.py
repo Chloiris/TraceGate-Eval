@@ -193,6 +193,7 @@ def test_fork_pr_workflow_does_not_access_llm_secret() -> None:
     workflow = Path(".github/workflows/tracegate-semantic-advisory.yml").read_text(encoding="utf-8")
     assert "semantic advisor skipped for fork PR because secrets are unavailable" in workflow
     assert "trusted base code does not yet include the v0.3 PR CLI" in workflow
+    assert "semantic advisor could not complete; this warning-only check does not block delivery" in workflow
     assert "pull_request_target" not in workflow
     assert "head.repo.full_name != github.event.pull_request.base.repo.full_name" in workflow
 

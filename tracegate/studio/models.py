@@ -65,7 +65,7 @@ class AppSettings(Base):
         ),
     )
 
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, default=1)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=False, default=1)
     theme: Mapped[str] = mapped_column(String(16), nullable=False, default="system")
     language: Mapped[str] = mapped_column(String(16), nullable=False, default="zh-CN")
     background_monitoring: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
@@ -112,7 +112,7 @@ class OnboardingState(Base):
         ),
     )
 
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, default=1)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=False, default=1)
     completed: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     current_step: Mapped[str] = mapped_column(String(32), nullable=False, default="welcome")
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

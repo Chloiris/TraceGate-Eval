@@ -21,7 +21,7 @@ depends_on: str | Sequence[str] | None = None
 def upgrade() -> None:
     op.create_table(
         "app_settings",
-        sa.Column("id", sa.Integer(), nullable=False),
+        sa.Column("id", sa.Integer(), autoincrement=False, nullable=False),
         sa.Column("theme", sa.String(length=16), server_default="system", nullable=False),
         sa.Column("language", sa.String(length=16), server_default="zh-CN", nullable=False),
         sa.Column("background_monitoring", sa.Boolean(), server_default=sa.false(), nullable=False),
@@ -58,7 +58,7 @@ def upgrade() -> None:
 
     op.create_table(
         "onboarding_state",
-        sa.Column("id", sa.Integer(), nullable=False),
+        sa.Column("id", sa.Integer(), autoincrement=False, nullable=False),
         sa.Column("completed", sa.Boolean(), server_default=sa.false(), nullable=False),
         sa.Column("current_step", sa.String(length=32), server_default="welcome", nullable=False),
         sa.Column("completed_at", sa.DateTime(timezone=True), nullable=True),

@@ -99,17 +99,29 @@ jobs:
             } >> "$GITHUB_STEP_SUMMARY"
             exit 0
           fi
-          python -m tracegate pr analyze \
-            --repo "${{ github.repository }}" \
-            --pr-number "${{ github.event.pull_request.number }}" \
-            --mode semantic \
-            --provider deepseek \
-            --real-only \
-            --no-mock \
-            --no-fallback \
-            --output runs/pr_advisory/latest/advisory.md \
-            --json-output runs/pr_advisory/latest/advisory.json
-          cat runs/pr_advisory/latest/advisory.md >> "$GITHUB_STEP_SUMMARY"
+          if python -m tracegate pr analyze \
+              --repo "${{ github.repository }}" \
+              --pr-number "${{ github.event.pull_request.number }}" \
+              --mode semantic \
+              --provider deepseek \
+              --real-only \
+              --no-mock \
+              --no-fallback \
+              --output runs/pr_advisory/latest/advisory.md \
+              --json-output runs/pr_advisory/latest/advisory.json; then
+            cat runs/pr_advisory/latest/advisory.md >> "$GITHUB_STEP_SUMMARY"
+          else
+            {
+              echo "# TraceGate Semantic PR Advisory"
+              echo
+              echo "semantic advisor could not complete; this warning-only check does not block delivery"
+              echo
+              echo "- warning_only: true"
+              echo "- used_mock: false"
+              echo "- used_fallback: false"
+              echo "- note: inspect this step's log for the real collection or provider failure"
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
 
       - name: Run semantic advisor manually
         if: github.event_name == 'workflow_dispatch' && env.DEEPSEEK_API_KEY != ''
