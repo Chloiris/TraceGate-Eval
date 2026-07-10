@@ -94,10 +94,10 @@ def hybrid_retrieve(
         rows = session.execute(
             text(
                 "SELECT path, LEFT(content, 2000) AS snippet, "
-                "MATCH(path, content) AGAINST (:query IN NATURAL LANGUAGE MODE) AS rank "
+                "MATCH(path, content) AGAINST (:query IN NATURAL LANGUAGE MODE) AS relevance_score "
                 "FROM indexed_content_fts WHERE index_version_id = :version "
                 "AND MATCH(path, content) AGAINST (:query IN NATURAL LANGUAGE MODE) "
-                "ORDER BY rank DESC LIMIT :limit"
+                "ORDER BY relevance_score DESC LIMIT :limit"
             ),
             {"query": query, "version": version.id, "limit": bounded_limit},
         ).all()
