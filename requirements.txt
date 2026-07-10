@@ -1,11 +1,14 @@
 # Runtime and Web/API demo
+alembic>=1.13,<2.0
 PyYAML>=6.0
 fastapi>=0.115
 pydantic>=2.0
+SQLAlchemy>=2.0,<3.0
 uvicorn>=0.30
 
 # Tests and local smoke checks
 pytest>=8.0
+pytest-asyncio>=0.24
 httpx>=0.27
 
 # Optional report plotting script
