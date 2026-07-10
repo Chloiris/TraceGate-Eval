@@ -166,6 +166,8 @@ async def github_webhook(
     pull_request.state = "merged" if item.merged_at else item.state
     pull_request.url = item.html_url
     pull_request.author = item.author
+    pull_request.base_ref = item.base_ref
+    pull_request.head_ref = item.head_ref
     pull_request.base_sha = item.base_sha
     pull_request.head_sha = item.head_sha
     pull_request.draft = item.draft

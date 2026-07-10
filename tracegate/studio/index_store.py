@@ -111,6 +111,8 @@ def persist_repository_index(session: Session, repository: Repository) -> tuple[
         changed_count=len(snapshot.changed_paths),
         deleted_count=len(snapshot.deleted_paths),
         duration_ms=0,
+        index_duration_ms=0,
+        graph_duration_ms=0,
     )
     session.add(version)
     session.flush()
@@ -164,6 +166,8 @@ def persist_repository_index(session: Session, repository: Repository) -> tuple[
             {"version": version.id, "file_id": file_id, "path": path, "content": content},
         )
 
+    graph_started = time.monotonic()
+    version.index_duration_ms = int((graph_started - started) * 1000)
     repository_map = build_repository_map(repository.id, snapshot)
     for node in repository_map.nodes:
         session.add(
@@ -189,6 +193,7 @@ def persist_repository_index(session: Session, repository: Repository) -> tuple[
             )
         )
 
+    version.graph_duration_ms = int((time.monotonic() - graph_started) * 1000)
     version.status = "ready"
     version.duration_ms = int((time.monotonic() - started) * 1000)
     repository.current_commit_sha = snapshot.commit_sha

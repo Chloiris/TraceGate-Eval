@@ -142,6 +142,7 @@ class ToolDescriptor:
     timeout_seconds: float
     max_output_bytes: int
     input_schema: dict[str, Any]
+    enabled: bool
 
 
 InputT = TypeVar("InputT", bound=BaseModel)
@@ -168,7 +169,7 @@ class _RegisteredTool(Generic[InputT]):
         self.timeout_seconds = timeout_seconds
         self.max_output_bytes = max_output_bytes
 
-    def descriptor(self) -> ToolDescriptor:
+    def descriptor(self, *, enabled: bool) -> ToolDescriptor:
         return ToolDescriptor(
             name=self.name,
             description=self.description,
@@ -176,12 +177,14 @@ class _RegisteredTool(Generic[InputT]):
             timeout_seconds=self.timeout_seconds,
             max_output_bytes=self.max_output_bytes,
             input_schema=self.input_model.model_json_schema(),
+            enabled=enabled,
         )
 
 
 class ToolRegistry:
-    def __init__(self) -> None:
+    def __init__(self, disabled_names: set[str] | None = None) -> None:
         self._tools: dict[str, _RegisteredTool[Any]] = {}
+        self._disabled_names = disabled_names or set()
         self.invocations: list[ToolInvocation] = []
 
     def register(
@@ -208,12 +211,17 @@ class ToolRegistry:
         )
 
     def descriptors(self) -> list[ToolDescriptor]:
-        return [self._tools[name].descriptor() for name in sorted(self._tools)]
+        return [
+            self._tools[name].descriptor(enabled=name not in self._disabled_names)
+            for name in sorted(self._tools)
+        ]
 
     async def execute(self, name: str, payload: dict[str, Any], context: ToolContext) -> Any:
         tool = self._tools.get(name)
         if tool is None:
             raise ToolExecutionError("tool_not_found", f"Tool {name} is not registered")
+        if name in self._disabled_names:
+            raise ToolExecutionError("tool_disabled", f"Tool {name} is disabled by the local Registry policy")
         if context.cancellation_event and context.cancellation_event.is_set():
             raise ToolExecutionError("cancelled", "Tool call was cancelled before execution")
         try:
@@ -765,8 +773,8 @@ class EmptyInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
-def create_read_only_registry() -> ToolRegistry:
-    registry = ToolRegistry()
+def create_read_only_registry(disabled_names: set[str] | None = None) -> ToolRegistry:
+    registry = ToolRegistry(disabled_names)
     registry.register(
         name="list_directory",
         description="List bounded entries below the enrolled repository root.",

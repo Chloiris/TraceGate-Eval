@@ -4,6 +4,7 @@ import hashlib
 import hmac
 import json
 import subprocess
+from types import SimpleNamespace
 from collections.abc import Iterator
 from pathlib import Path
 
@@ -14,7 +15,7 @@ from pydantic import SecretStr
 from tracegate.config import PROJECT_ROOT
 from tracegate.studio.app import SECURITY_HEADERS, create_app
 from tracegate.studio.config import StudioSettings
-from tracegate.github import GitHubRateLimit, PullRequestData
+from tracegate.github import ChangedFileData, CheckRunData, CommitData, GitHubRateLimit, PullRequestData
 from tracegate.studio.models import PullRequest
 
 
@@ -119,6 +120,85 @@ def test_system_status_exposes_unconfigured_services_without_fallback(client: Te
     assert body["components"]["eval"]["state"] == "ready"
 
 
+def test_connection_probes_use_live_components_and_surface_missing_credentials(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("GITHUB_TOKEN", raising=False)
+    monkeypatch.delenv("GH_TOKEN", raising=False)
+    backend = client.post(
+        "/api/v1/connections/test",
+        headers=auth_headers(),
+        json={"component": "backend"},
+    )
+    assert backend.status_code == 200
+    assert backend.json()["component"] == "backend"
+    assert backend.json()["status"] == "ready"
+
+    github = client.post(
+        "/api/v1/connections/test",
+        headers=auth_headers(),
+        json={"component": "github"},
+    )
+    assert github.status_code == 409
+    assert github.json()["error"]["code"] == "github_not_configured"
+
+    model = client.post(
+        "/api/v1/connections/test",
+        headers=auth_headers(),
+        json={"component": "model"},
+    )
+    assert model.status_code == 409
+    assert model.json()["error"]["code"] == "model_not_configured"
+
+
+def test_connection_probes_call_real_adapters_without_exposing_credentials(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class FakeGitHubProvider:
+        def __init__(self, token: str) -> None:
+            assert token == "connection-test-token-material"
+
+        async def test_authenticated_connection(self):  # type: ignore[no-untyped-def]
+            return "octocat", GitHubRateLimit(5000, 4999, None)
+
+        async def close(self) -> None:
+            return None
+
+    class FakeModel:
+        profile = "openai-compatible:test-model:json-compatibility"
+
+        async def complete_structured(self, **_kwargs: object):  # type: ignore[no-untyped-def]
+            return SimpleNamespace(
+                provider_mode="compatibility_json",
+                input_tokens=5,
+                output_tokens=2,
+            )
+
+    monkeypatch.setenv("GITHUB_TOKEN", "connection-test-token-material")
+    monkeypatch.setattr("tracegate.studio.api.GitHubProvider", FakeGitHubProvider)
+    monkeypatch.setattr("tracegate.studio.api.configured_model", lambda _session: FakeModel())
+
+    github = client.post(
+        "/api/v1/connections/test",
+        headers=auth_headers(),
+        json={"component": "github"},
+    )
+    assert github.status_code == 200
+    assert github.json()["message"] == "GitHub authenticated as octocat."
+    assert "connection-test-token-material" not in github.text
+
+    model = client.post(
+        "/api/v1/connections/test",
+        headers=auth_headers(),
+        json={"component": "model"},
+    )
+    assert model.status_code == 200
+    assert model.json()["component"] == "model"
+    assert model.json()["detail"] == "Provider mode: compatibility_json; tokens: 7."
+
+
 def test_missing_eval_artifacts_are_unavailable_not_hardcoded(tmp_path: Path) -> None:
     settings = studio_settings(tmp_path, eval_root=tmp_path / "empty-eval")
     with TestClient(create_app(settings)) as active_client:
@@ -135,6 +215,25 @@ def test_settings_put_is_partial_and_does_not_overwrite_model_fields(client: Tes
     initial = client.get("/api/v1/settings", headers=auth_headers()).json()
     assert initial["theme"] == "system"
     assert initial["model_provider"] is None
+    assert initial["close_notice_dismissed"] is False
+    assert initial["notifications_enabled"] is True
+    assert initial["model_temperature"] == 0
+    assert initial["model_max_output_tokens"] == 4096
+    assert initial["model_timeout_seconds"] == 60
+    assert initial["model_max_retries"] == 2
+    assert initial["model_native_structured_output"] is False
+    assert initial["model_streaming_enabled"] is False
+    assert initial["model_native_tool_calling"] is False
+    assert initial["model_context_scope"] == "changed_files"
+    assert initial["model_input_cost_per_million"] == 0
+    assert initial["model_output_cost_per_million"] == 0
+    assert initial["github_poll_interval_seconds"] == 60
+    assert initial["automatic_analysis_enabled"] is False
+    assert initial["automatic_analysis_include_drafts"] is False
+    assert initial["automatic_analysis_require_checks_success"] is False
+    assert initial["analysis_paused"] is False
+    assert initial["webhook_relay_url"] is None
+    assert initial["webhook_relay_device_id"] is None
 
     response = client.put(
         "/api/v1/settings",
@@ -144,6 +243,27 @@ def test_settings_put_is_partial_and_does_not_overwrite_model_fields(client: Tes
             "language": "en-US",
             "background_monitoring": True,
             "launch_at_startup": True,
+            "close_notice_dismissed": True,
+            "notifications_enabled": False,
+            "model_provider": "deepseek",
+            "model_name": "deepseek-chat",
+            "model_temperature": 0.3,
+            "model_max_output_tokens": 8192,
+            "model_timeout_seconds": 90,
+            "model_max_retries": 1,
+            "model_native_structured_output": False,
+            "model_streaming_enabled": True,
+            "model_native_tool_calling": True,
+            "model_context_scope": "retrieved_context",
+            "model_input_cost_per_million": 0.14,
+            "model_output_cost_per_million": 0.28,
+            "github_poll_interval_seconds": 120,
+            "automatic_analysis_enabled": True,
+            "automatic_analysis_include_drafts": True,
+            "automatic_analysis_require_checks_success": True,
+            "analysis_paused": False,
+            "webhook_relay_url": "http://127.0.0.1:8080",
+            "webhook_relay_device_id": "test-device-1",
         },
     )
     assert response.status_code == 200
@@ -152,11 +272,39 @@ def test_settings_put_is_partial_and_does_not_overwrite_model_fields(client: Tes
     assert body["language"] == "en-US"
     assert body["background_monitoring"] is True
     assert body["launch_at_startup"] is True
-    assert body["model_provider"] is None
+    assert body["close_notice_dismissed"] is True
+    assert body["notifications_enabled"] is False
+    assert body["model_provider"] == "deepseek"
+    assert body["model_name"] == "deepseek-chat"
+    assert body["model_temperature"] == 0.3
+    assert body["model_max_output_tokens"] == 8192
+    assert body["model_timeout_seconds"] == 90
+    assert body["model_max_retries"] == 1
+    assert body["model_native_structured_output"] is False
+    assert body["model_streaming_enabled"] is True
+    assert body["model_native_tool_calling"] is True
+    assert body["model_context_scope"] == "retrieved_context"
+    assert body["model_input_cost_per_million"] == 0.14
+    assert body["model_output_cost_per_million"] == 0.28
+    assert body["github_poll_interval_seconds"] == 120
+    assert body["automatic_analysis_enabled"] is True
+    assert body["automatic_analysis_include_drafts"] is True
+    assert body["automatic_analysis_require_checks_success"] is True
+    assert body["analysis_paused"] is False
+    assert body["webhook_relay_url"] == "http://127.0.0.1:8080"
+    assert body["webhook_relay_device_id"] == "test-device-1"
 
     invalid = client.put("/api/v1/settings", headers=auth_headers(), json={})
     assert invalid.status_code == 422
     assert invalid.json()["error"]["code"] == "validation_error"
+
+    invalid_range = client.put(
+        "/api/v1/settings",
+        headers=auth_headers(),
+        json={"github_poll_interval_seconds": 10, "model_temperature": 3},
+    )
+    assert invalid_range.status_code == 422
+    assert invalid_range.json()["error"]["code"] == "validation_error"
 
 
 def test_onboarding_get_and_put_use_persisted_state(client: TestClient) -> None:
@@ -259,6 +407,15 @@ def test_repository_index_and_graph_use_real_local_git_content(client: TestClien
     assert any(node["label"] == "indexed_function" for node in graph.json()["nodes"])
     assert graph.json()["vector_search_enabled"] is False
 
+    summary = client.get(
+        f"/api/v1/repositories/{created['id']}/summary",
+        headers=auth_headers(),
+    )
+    assert summary.status_code == 200
+    assert summary.json()["file_count"] == 1
+    assert summary.json()["symbol_count"] == 1
+    assert summary.json()["language_counts"] == {"python": 1}
+
     retrieval = client.get(
         f"/api/v1/repositories/{created['id']}/search",
         headers=auth_headers(),
@@ -284,10 +441,45 @@ def test_repository_index_and_graph_use_real_local_git_content(client: TestClien
         session.commit()
         session.refresh(pull_request)
         pull_request_id = pull_request.id
+    paused = client.put(
+        "/api/v1/settings",
+        headers=auth_headers(),
+        json={"analysis_paused": True},
+    )
+    assert paused.status_code == 200
+    paused_analysis = client.post(
+        f"/api/v1/pull-requests/{pull_request_id}/analyze",
+        headers=auth_headers(),
+    )
+    assert paused_analysis.status_code == 409
+    assert paused_analysis.json()["error"]["code"] == "analysis_paused"
+    client.put(
+        "/api/v1/settings",
+        headers=auth_headers(),
+        json={"analysis_paused": False},
+    )
     blocked = client.post(f"/api/v1/pull-requests/{pull_request_id}/analyze", headers=auth_headers())
     assert blocked.status_code == 409
     assert blocked.json()["error"]["code"] == "model_not_configured"
     assert client.get("/api/v1/runs", headers=auth_headers()).json()["total"] == 0
+
+    cleared = client.delete(
+        f"/api/v1/repositories/{created['id']}/cache",
+        headers=auth_headers(),
+    )
+    assert cleared.status_code == 204
+    cleared_summary = client.get(
+        f"/api/v1/repositories/{created['id']}/summary",
+        headers=auth_headers(),
+    ).json()
+    assert cleared_summary["file_count"] == 0
+    assert cleared_summary["index_version"] is None
+    cleared_repository = client.get(
+        f"/api/v1/repositories/{created['id']}",
+        headers=auth_headers(),
+    ).json()
+    assert cleared_repository["current_index_version"] is None
+    assert cleared_repository["current_commit_sha"] is None
 
 
 def test_evaluation_and_registry_endpoints_are_derived_from_real_state(client: TestClient) -> None:
@@ -328,6 +520,38 @@ def test_evaluation_and_registry_endpoints_are_derived_from_real_state(client: T
     assert descriptors["read_file"]["recent_call_count"] == 0
     assert descriptors["apply_patch"]["enabled"] is False
 
+    disabled_agent = client.put(
+        "/api/v1/agents/Planner",
+        headers=auth_headers(),
+        json={"enabled": False},
+    )
+    assert disabled_agent.status_code == 200
+    assert disabled_agent.json()["status"] == "disabled"
+    assert next(
+        agent for agent in client.get("/api/v1/agents", headers=auth_headers()).json()
+        if agent["name"] == "Planner"
+    )["status"] == "disabled"
+
+    disabled_tool = client.put(
+        "/api/v1/tools/search_code",
+        headers=auth_headers(),
+        json={"enabled": False},
+    )
+    assert disabled_tool.status_code == 200
+    assert disabled_tool.json()["enabled"] is False
+    assert next(
+        tool for tool in client.get("/api/v1/tools", headers=auth_headers()).json()
+        if tool["name"] == "search_code"
+    )["enabled"] is False
+
+    write_tool = client.put(
+        "/api/v1/tools/apply_patch",
+        headers=auth_headers(),
+        json={"enabled": True},
+    )
+    assert write_tool.status_code == 409
+    assert write_tool.json()["error"]["code"] == "write_tool_requires_confirmation"
+
     diagnostics = client.get("/api/v1/diagnostics", headers=auth_headers())
     assert diagnostics.status_code == 200
     diagnostic_body = diagnostics.json()
@@ -335,10 +559,61 @@ def test_evaluation_and_registry_endpoints_are_derived_from_real_state(client: T
     assert diagnostic_body["architecture"]
     assert diagnostic_body["database_type"] == "sqlite"
     assert diagnostic_body["sidecar_pid"] > 0
+    assert diagnostic_body["log_level"]
+    assert diagnostic_body["rust_version_info"] == "minimum toolchain 1.77.2"
+    assert diagnostic_body["delivered_notification_count"] == 0
+    assert diagnostic_body["failed_notification_count"] == 0
+    assert diagnostic_body["last_github_api_duration_ms"] is None
     assert diagnostic_body["telemetry_enabled"] is False
     serialized = diagnostics.text
     assert TOKEN not in serialized
     assert "api_key" not in serialized.casefold()
+
+
+def test_notification_records_capture_actual_delivery_outcome(client: TestClient) -> None:
+    delivered = client.post(
+        "/api/v1/notifications",
+        headers=auth_headers(),
+        json={
+            "kind": "analysis_completed",
+            "status": "delivered",
+            "title": "TraceGate · Analysis completed",
+            "body": "Run finished",
+            "deep_link": "tracegate://run/00000000-0000-4000-8000-000000000001",
+        },
+    )
+    assert delivered.status_code == 201
+    assert delivered.json()["status"] == "delivered"
+    assert delivered.json()["error_message"] is None
+
+    failed = client.post(
+        "/api/v1/notifications",
+        headers=auth_headers(),
+        json={
+            "kind": "github_authentication_failed",
+            "status": "failed",
+            "title": "TraceGate · GitHub authentication",
+            "body": "Connection invalid",
+            "error_message": "notifications denied",
+        },
+    )
+    assert failed.status_code == 201
+    assert failed.json()["error_message"] == "notifications denied"
+
+    invalid = client.post(
+        "/api/v1/notifications",
+        headers=auth_headers(),
+        json={
+            "kind": "analysis_failed",
+            "status": "failed",
+            "title": "TraceGate · Analysis failed",
+            "body": "Run failed",
+        },
+    )
+    assert invalid.status_code == 422
+
+    records = client.get("/api/v1/notifications", headers=auth_headers()).json()
+    assert [record["status"] for record in records[:2]] == ["failed", "delivered"]
 
 
 def test_pr_diff_review_map_and_tour_are_bound_to_real_git_and_index(
@@ -447,6 +722,8 @@ def test_public_github_sync_persists_real_provider_shape(
     class FakeProvider:
         def __init__(self, token: str | None = None) -> None:
             assert token is None
+            self.request_count = 4
+            self.total_latency_ms = 12
 
         async def list_pull_requests(self, *_args: object, **_kwargs: object):  # type: ignore[no-untyped-def]
             pull = PullRequestData.model_validate(
@@ -467,6 +744,53 @@ def test_public_github_sync_persists_real_provider_shape(
             )
             return [pull], '"etag-7"', GitHubRateLimit(60, 59, None)
 
+        async def get_check_runs_page(self, *_args: object, **_kwargs: object):  # type: ignore[no-untyped-def]
+            check = CheckRunData.model_validate(
+                {
+                    "id": 701,
+                    "head_sha": "b" * 40,
+                    "name": "Security CI",
+                    "status": "completed",
+                    "conclusion": "failure",
+                    "details_url": "https://github.com/acme/synced/actions/runs/701",
+                    "started_at": "2026-07-10T07:01:00Z",
+                    "completed_at": "2026-07-10T07:02:00Z",
+                    "app": {"name": "GitHub Actions"},
+                }
+            )
+            return [check], '"checks-7"', GitHubRateLimit(60, 58, None)
+
+        async def get_pull_request_files_data(self, *_args: object, **_kwargs: object):  # type: ignore[no-untyped-def]
+            return [
+                ChangedFileData.model_validate(
+                    {
+                        "sha": "c" * 40,
+                        "filename": "src/parser.py",
+                        "status": "modified",
+                        "additions": 4,
+                        "deletions": 1,
+                        "changes": 5,
+                        "blob_url": "https://github.com/acme/synced/blob/file/src/parser.py",
+                        "patch": "@@ -1,2 +1,3 @@\n-old\n+new\n context",
+                    }
+                )
+            ]
+
+        async def get_pull_request_commits_data(self, *_args: object, **_kwargs: object):  # type: ignore[no-untyped-def]
+            return [
+                CommitData.model_validate(
+                    {
+                        "sha": "b" * 40,
+                        "html_url": "https://github.com/acme/synced/commit/" + "b" * 40,
+                        "commit": {
+                            "message": "Update parser",
+                            "author": {"name": "Octo Cat", "email": "octo@example.invalid", "date": "2026-07-10T07:00:00Z"},
+                        },
+                        "author": {"login": "octocat"},
+                    }
+                )
+            ]
+
         async def close(self) -> None:
             return None
 
@@ -482,13 +806,42 @@ def test_public_github_sync_persists_real_provider_shape(
     synced = client.post(f"/api/v1/repositories/{created['id']}/sync", headers=auth_headers())
     assert synced.status_code == 200
     assert synced.json()["changed_pull_requests"] == 1
-    assert synced.json()["github_rate_remaining"] == 59
+    assert synced.json()["changed_check_runs"] == 1
+    assert synced.json()["github_rate_remaining"] == 58
 
     inbox = client.get("/api/v1/pull-requests", headers=auth_headers())
     assert inbox.status_code == 200
     assert inbox.json()["total"] == 1
     assert inbox.json()["items"][0]["head_sha"] == "b" * 40
     assert inbox.json()["items"][0]["analysis_status"] == "not_analyzed"
+    assert inbox.json()["items"][0]["checks_status"] == "failure"
+
+    checks = client.get(
+        f"/api/v1/pull-requests/{inbox.json()['items'][0]['id']}/checks",
+        headers=auth_headers(),
+    )
+    assert checks.status_code == 200
+    assert checks.json()["aggregate_status"] == "failure"
+    assert checks.json()["items"][0]["name"] == "Security CI"
+    assert checks.json()["items"][0]["app_name"] == "GitHub Actions"
+
+    pull_request_id = inbox.json()["items"][0]["id"]
+    commits = client.get(
+        f"/api/v1/pull-requests/{pull_request_id}/commits",
+        headers=auth_headers(),
+    )
+    assert commits.status_code == 200
+    assert commits.json()[0]["message"] == "Update parser"
+    assert commits.json()[0]["author_login"] == "octocat"
+
+    files = client.get(
+        f"/api/v1/pull-requests/{pull_request_id}/files",
+        headers=auth_headers(),
+    )
+    assert files.status_code == 200
+    assert files.json()[0]["path"] == "src/parser.py"
+    assert files.json()[0]["hunks"][0]["new_start"] == 1
+    assert len(files.json()[0]["hunks"][0]["patch_hash"]) == 64
 
 
 def test_github_webhook_requires_hmac_deduplicates_and_updates_enrolled_repository(

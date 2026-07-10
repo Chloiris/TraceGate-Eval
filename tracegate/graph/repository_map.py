@@ -39,16 +39,65 @@ def _id(prefix: str, value: str) -> str:
 
 
 def build_repository_map(repository_id: str, snapshot: IndexSnapshot) -> RepositoryMap:
-    nodes: list[GraphNode] = []
+    repository_node = _id("repository", repository_id)
+    nodes: list[GraphNode] = [
+        GraphNode(repository_node, "repository", "Repository", ".")
+    ]
     edges: list[GraphEdge] = []
     file_nodes: dict[str, str] = {}
+    directory_nodes: dict[str, str] = {}
     module_to_path: dict[str, str] = {}
+
+    def ensure_directory(path: str) -> str:
+        existing = directory_nodes.get(path)
+        if existing:
+            return existing
+        node_id = _id("directory", path)
+        directory_nodes[path] = node_id
+        nodes.append(GraphNode(node_id, "directory", path.rsplit("/", 1)[-1], path))
+        parent = path.rsplit("/", 1)[0] if "/" in path else ""
+        parent_id = ensure_directory(parent) if parent else repository_node
+        edges.append(
+            GraphEdge(
+                _id("edge", f"{parent_id}:{node_id}:contains"),
+                parent_id,
+                node_id,
+                "contains",
+            )
+        )
+        return node_id
 
     for path, indexed in sorted(snapshot.files.items()):
         file_id = _id("file", path)
         file_nodes[path] = file_id
         module_to_path[path.rsplit(".", 1)[0].replace("/", ".")] = path
-        nodes.append(GraphNode(file_id, "file", path.rsplit("/", 1)[-1], path, language=indexed.parsed.language))
+        basename = path.rsplit("/", 1)[-1]
+        test_file = (
+            basename.startswith("test_")
+            or basename.endswith(
+                (".test.js", ".test.jsx", ".test.ts", ".test.tsx", ".spec.js", ".spec.ts")
+            )
+            or "/tests/" in f"/{path}/"
+        )
+        nodes.append(
+            GraphNode(
+                file_id,
+                "test" if test_file else "file",
+                basename,
+                path,
+                language=indexed.parsed.language,
+            )
+        )
+        parent = path.rsplit("/", 1)[0] if "/" in path else ""
+        parent_id = ensure_directory(parent) if parent else repository_node
+        edges.append(
+            GraphEdge(
+                _id("edge", f"{parent_id}:{file_id}:contains"),
+                parent_id,
+                file_id,
+                "contains",
+            )
+        )
         for symbol in indexed.parsed.symbols:
             symbol_id = _id("symbol", f"{path}:{symbol.qualified_name}")
             nodes.append(

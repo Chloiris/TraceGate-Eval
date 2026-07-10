@@ -18,6 +18,7 @@ from .database import StudioDatabase
 from .errors import StudioAPIError
 from .migration_runner import require_current_revision, upgrade_database
 from .monitor import RepositoryMonitor
+from .relay_monitor import RelayMonitor
 from .run_manager import RunManager
 from .webhooks import router as webhook_router
 
@@ -42,7 +43,12 @@ def _error_response(status_code: int, code: str, message: str) -> JSONResponse:
 def create_app(settings: StudioSettings) -> FastAPI:
     database = StudioDatabase(settings.database_url)
     run_manager = RunManager(database.session_factory)
-    repository_monitor = RepositoryMonitor(database.session_factory, settings.github_poll_seconds)
+    repository_monitor = RepositoryMonitor(
+        database.session_factory,
+        settings.github_poll_seconds,
+        run_manager,
+    )
+    relay_monitor = RelayMonitor(database.session_factory, run_manager)
     logger = logging.getLogger("tracegate.studio.api")
 
     @asynccontextmanager
@@ -53,9 +59,11 @@ def create_app(settings: StudioSettings) -> FastAPI:
             require_current_revision(database.engine, settings.database_url)
             database.check_connection()
             repository_monitor.start()
+            relay_monitor.start()
             logger.info("api_ready database_migrated=true")
             yield
         finally:
+            await relay_monitor.shutdown()
             await repository_monitor.shutdown()
             await run_manager.shutdown()
             database.dispose()
@@ -73,6 +81,7 @@ def create_app(settings: StudioSettings) -> FastAPI:
     app.state.database = database
     app.state.run_manager = run_manager
     app.state.repository_monitor = repository_monitor
+    app.state.relay_monitor = relay_monitor
 
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=list(settings.allowed_hosts))
     app.add_middleware(

@@ -5,7 +5,9 @@ from .provider import (
     ModelProvider,
     ModelProviderError,
     ModelResult,
+    ModelToolCall,
     OpenAICompatibleProvider,
+    ToolSelectionResult,
 )
 
 __all__ = [
@@ -13,5 +15,7 @@ __all__ = [
     "ModelProvider",
     "ModelProviderError",
     "ModelResult",
+    "ModelToolCall",
     "OpenAICompatibleProvider",
+    "ToolSelectionResult",
 ]

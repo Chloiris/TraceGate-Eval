@@ -35,6 +35,10 @@ def test_initial_migration_creates_core_tables_and_singletons(tmp_path: Path) ->
             "agent_runs",
             "alembic_version",
             "app_settings",
+            "check_runs",
+            "changed_files",
+            "changed_hunks",
+            "commits",
             "eval_runs",
             "evidence_records",
             "findings",
@@ -48,18 +52,41 @@ def test_initial_migration_creates_core_tables_and_singletons(tmp_path: Path) ->
             "graph_nodes",
             "graph_edges",
             "memory_claims",
+            "model_profiles",
+            "notification_records",
             "onboarding_state",
             "pull_request_snapshots",
             "pull_requests",
             "repository_syncs",
             "repositories",
         } <= tables
-        assert current_revision(database.engine) == "20260710_0003"
+        assert current_revision(database.engine) == "20260710_0004"
         with database.session_factory() as session:
             settings = session.scalar(select(AppSettings))
             onboarding = session.scalar(select(OnboardingState))
             assert settings is not None
             assert settings.theme == "system"
+            assert settings.close_notice_dismissed is False
+            assert settings.notifications_enabled is True
+            assert settings.model_temperature == 0.0
+            assert settings.model_max_output_tokens == 4096
+            assert settings.model_timeout_seconds == 60
+            assert settings.model_max_retries == 2
+            assert settings.model_native_structured_output is False
+            assert settings.model_streaming_enabled is False
+            assert settings.model_native_tool_calling is False
+            assert settings.model_context_scope == "changed_files"
+            assert settings.model_input_cost_per_million == 0.0
+            assert settings.model_output_cost_per_million == 0.0
+            assert settings.github_poll_interval_seconds == 60
+            assert settings.automatic_analysis_enabled is False
+            assert settings.automatic_analysis_include_drafts is False
+            assert settings.automatic_analysis_require_checks_success is False
+            assert settings.analysis_paused is False
+            assert settings.webhook_relay_url is None
+            assert settings.webhook_relay_device_id is None
+            assert settings.disabled_agents_json == []
+            assert settings.disabled_tools_json == []
             assert onboarding is not None
             assert onboarding.current_step == "welcome"
     finally:
@@ -72,7 +99,7 @@ def test_migration_is_idempotent(tmp_path: Path) -> None:
     upgrade_database(url)
     database = StudioDatabase(url)
     try:
-        assert current_revision(database.engine) == "20260710_0003"
+        assert current_revision(database.engine) == "20260710_0004"
     finally:
         database.dispose()
 
@@ -94,7 +121,7 @@ def test_agent_index_migration_upgrades_existing_p0_database_without_data_loss(t
     upgrade_database(url)
     upgraded = StudioDatabase(url)
     try:
-        assert current_revision(upgraded.engine) == "20260710_0003"
+        assert current_revision(upgraded.engine) == "20260710_0004"
         with upgraded.engine.connect() as connection:
             assert connection.exec_driver_sql(
                 "SELECT full_name FROM repositories WHERE id = 'repo-1'"

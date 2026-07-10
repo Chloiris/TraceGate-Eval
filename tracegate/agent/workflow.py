@@ -17,9 +17,10 @@ from sqlalchemy.orm import Session, sessionmaker
 from tracegate.models import ModelProvider
 from tracegate.pr_advisor.evidence_packet import EvidenceItem, EvidencePacket, detect_risk_areas, sanitize_text, stable_id
 from tracegate.pr_advisor.verifier import verify_judgment
-from tracegate.repository import RepositoryBoundary
+from tracegate.repository import RepositoryBoundary, RepositoryPathError
 from tracegate.retrieval import hybrid_retrieve
 from tracegate.tools import ToolContext, ToolExecutionError, ToolRegistry
+from tracegate.vcs import GitCommandError, GitProvider
 
 from tracegate.studio.models import (
     AgentRun,
@@ -115,6 +116,7 @@ class WorkflowState(TypedDict, total=False):
     output_tokens: int
     latency_ms: int
     retry_count: int
+    retrieval_hit_count: int
 
 
 def utcnow() -> datetime:
@@ -129,10 +131,13 @@ class TraceGateAgentWorkflow:
         session_factory: sessionmaker[Session],
         model: ModelProvider,
         tools: ToolRegistry,
+        *,
+        context_scope: Literal["changed_files", "retrieved_context"] = "retrieved_context",
     ) -> None:
         self.session_factory = session_factory
         self.model = model
         self.tools = tools
+        self.context_scope = context_scope
         builder = StateGraph(WorkflowState)
         handlers = (
             ("Planner", self._planner),
@@ -218,6 +223,7 @@ class TraceGateAgentWorkflow:
                 run.output_tokens = result.get("output_tokens", 0)
                 run.latency_ms = result.get("latency_ms", 0)
                 run.retry_count = result.get("retry_count", 0)
+                run.retrieval_hit_count = result.get("retrieval_hit_count", 0)
                 run.finished_at = utcnow()
                 pull_request = session.get(PullRequest, run.pull_request_id) if run.pull_request_id else None
                 if pull_request:
@@ -286,7 +292,7 @@ class TraceGateAgentWorkflow:
         return {"plan": result.payload, **self._usage_update(state, result)}
 
     async def _retriever(self, state: WorkflowState, step_id: str) -> WorkflowState:
-        repository, _pull_request = self._repository_and_pr(state)
+        repository, pull_request = self._repository_and_pr(state)
         plan = PlanOutput.model_validate(state["plan"])
         results: list[dict[str, Any]] = []
         with self.session_factory() as session:
@@ -332,7 +338,48 @@ class TraceGateAgentWorkflow:
             key = (str(item.get("path")), item.get("symbol"))
             if key[0] and key not in deduplicated:
                 deduplicated[key] = item
-        return {"retrieval": list(deduplicated.values())[:30]}
+        if self.context_scope == "changed_files":
+            if not repository.local_path or not pull_request.base_sha or not pull_request.head_sha:
+                raise WorkflowExecutionError("Changed-file-only model context requires a local workspace and Base/Head SHAs")
+            try:
+                boundary = RepositoryBoundary(Path(repository.local_path))
+                git = GitProvider(boundary)
+                changed_paths = {
+                    line.strip()
+                    for line in git.run(
+                        "diff",
+                        "--name-only",
+                        "--find-renames",
+                        f"{pull_request.base_sha}...{pull_request.head_sha}",
+                    ).stdout.splitlines()
+                    if line.strip()
+                }
+            except (OSError, RepositoryPathError, GitCommandError) as exc:
+                raise WorkflowExecutionError("Could not resolve changed-file-only model context") from exc
+            deduplicated = {
+                key: item for key, item in deduplicated.items() if key[0] in changed_paths
+            }
+            missing = changed_paths - {key[0] for key in deduplicated}
+            if missing:
+                with self.session_factory() as session:
+                    rows = list(
+                        session.scalars(
+                            select(IndexedFile).where(
+                                IndexedFile.index_version_id == state["index_version"],
+                                IndexedFile.path.in_(sorted(missing)),
+                            )
+                        )
+                    )
+                for row in rows:
+                    deduplicated[(row.path, None)] = {
+                        "path": row.path,
+                        "symbol": None,
+                        "snippet": row.content,
+                        "source": "changed_file_index",
+                        "score": 100.0,
+                    }
+        bounded = list(deduplicated.values())[:30]
+        return {"retrieval": bounded, "retrieval_hit_count": len(bounded)}
 
     async def _context_resolver(self, state: WorkflowState, _step_id: str) -> WorkflowState:
         repository, pull_request = self._repository_and_pr(state)
@@ -504,10 +551,12 @@ class TraceGateAgentWorkflow:
             }
         )
         with self.session_factory() as session:
+            persisted_findings: list[FindingDraft] = []
             for item in state.get("findings", []):
                 finding = FindingDraft.model_validate(
                     {key: item.get(key) for key in FindingDraft.model_fields}
                 )
+                persisted_findings.append(finding)
                 session.add(
                     Finding(
                         agent_run_id=state["run_id"],
@@ -526,6 +575,27 @@ class TraceGateAgentWorkflow:
                         verifier_status=item.get("verifier_status", "needs_confirmation"),
                         model_profile=self.model.profile,
                     )
+                )
+            pull_request = session.get(PullRequest, state["pull_request_id"])
+            if pull_request is not None:
+                severity_weight = {"info": 10, "low": 25, "medium": 50, "high": 75, "critical": 100}
+                highest = max(
+                    persisted_findings,
+                    key=lambda item: (severity_weight[item.severity], item.confidence),
+                    default=None,
+                )
+                pull_request.risk_level = highest.severity if highest else None
+                pull_request.risk_score = (
+                    round(severity_weight[highest.severity] * highest.confidence, 2)
+                    if highest
+                    else 0.0
+                )
+                pull_request.conclusion_summary = verified_report.summary
+                pull_request.impact_paths_json = sorted(
+                    {item.path for item in persisted_findings if item.path}
+                )
+                pull_request.recommended_review_order_json = list(
+                    verified_report.recommended_review_order
                 )
             session.commit()
         return {"report": verified_report.model_dump(mode="json"), **self._usage_update(state, result)}

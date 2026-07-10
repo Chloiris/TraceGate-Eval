@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
@@ -12,6 +12,7 @@ from tracegate.github import GitHubAPIError
 
 from .github_sync import sync_repository_pull_requests
 from .models import AppSettings, Repository
+from .run_manager import RunManager
 
 
 logger = logging.getLogger("tracegate.studio.monitor")
@@ -25,14 +26,21 @@ class MonitorSnapshot:
     last_started_at: datetime | None
     last_finished_at: datetime | None
     last_error: str | None
+    rate_limited_until: datetime | None
 
 
 class RepositoryMonitor:
     """Finite-interval local PR poller for explicitly monitored repositories."""
 
-    def __init__(self, session_factory: sessionmaker[Session], interval_seconds: int) -> None:
+    def __init__(
+        self,
+        session_factory: sessionmaker[Session],
+        interval_seconds: int,
+        run_manager: RunManager | None = None,
+    ) -> None:
         self.session_factory = session_factory
-        self.interval_seconds = interval_seconds
+        self.default_interval_seconds = interval_seconds
+        self.run_manager = run_manager
         self._stop = asyncio.Event()
         self._wake = asyncio.Event()
         self._task: asyncio.Task[None] | None = None
@@ -41,6 +49,7 @@ class RepositoryMonitor:
         self._last_started_at: datetime | None = None
         self._last_finished_at: datetime | None = None
         self._last_error: str | None = None
+        self._rate_limited_until: datetime | None = None
 
     def start(self) -> None:
         if self._task is None or self._task.done():
@@ -65,9 +74,15 @@ class RepositoryMonitor:
             last_started_at=self._last_started_at,
             last_finished_at=self._last_finished_at,
             last_error=self._last_error,
+            rate_limited_until=self._rate_limited_until,
         )
 
     async def poll_once(self) -> int:
+        now = datetime.now(timezone.utc)
+        if self._rate_limited_until is not None and now < self._rate_limited_until:
+            self._last_error = f"GitHub rate limit backoff until {self._rate_limited_until.isoformat()}"
+            return 0
+        self._rate_limited_until = None
         with self.session_factory() as session:
             settings = session.get(AppSettings, 1)
             if settings is None or not settings.background_monitoring:
@@ -99,12 +114,23 @@ class RepositoryMonitor:
                         await sync_repository_pull_requests(session, repository)
                     except GitHubAPIError as exc:
                         self._last_error = f"{type(exc).__name__}: {exc}"
+                        if exc.status_code == 429:
+                            self._rate_limited_until = exc.reset_at or (
+                                datetime.now(timezone.utc)
+                                + timedelta(seconds=max(60, self.configured_interval_seconds()))
+                            )
                         logger.warning(
                             "repository_poll_failed repository_id=%s error_type=%s",
                             repository_id,
                             type(exc).__name__,
                         )
+                        if exc.status_code == 429:
+                            break
                     else:
+                        if self.run_manager is not None:
+                            automatic = self.run_manager.enqueue_automatic(repository_id)
+                            if automatic.skipped_reason:
+                                self._last_error = automatic.skipped_reason
                         completed += 1
         finally:
             self._queued_repositories = 0
@@ -117,6 +143,14 @@ class RepositoryMonitor:
             await self.poll_once()
             self._wake.clear()
             try:
-                await asyncio.wait_for(self._wake.wait(), timeout=self.interval_seconds)
+                await asyncio.wait_for(self._wake.wait(), timeout=self.configured_interval_seconds())
             except TimeoutError:
                 continue
+
+    def configured_interval_seconds(self) -> int:
+        """Read the persisted interval for every wait so Settings changes apply immediately."""
+        with self.session_factory() as session:
+            settings = session.get(AppSettings, 1)
+            if settings is None:
+                return self.default_interval_seconds
+            return settings.github_poll_interval_seconds

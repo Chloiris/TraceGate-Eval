@@ -2,17 +2,20 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import os
 import platform
 import re
+import time
 from collections.abc import Generator
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, Query, Request, Response
 from fastapi.responses import StreamingResponse
-from sqlalchemy import func, select
+from pydantic import BaseModel
+from sqlalchemy import delete, func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -25,16 +28,27 @@ from .models import (
     AgentRun,
     AgentStep,
     AppSettings,
+    ChangedFileRecord,
+    ChangedHunkRecord,
+    CheckRunRecord,
+    CommitRecord,
     EvidenceRecord,
     Finding,
+    GraphEdgeRecord,
+    IndexedFile,
+    IndexVersion,
+    NotificationRecord,
     OnboardingState,
     PullRequest,
     Repository,
+    RepositorySync,
     ToolCallRecord,
 )
-from .run_manager import configured_model
+from .run_manager import configured_model, enqueue_analysis_run
 from .schemas import (
     ComponentStatus,
+    ConnectionTestRequest,
+    ConnectionTestResponse,
     AgentRunListResponse,
     AgentRunResponse,
     AgentRunDetailResponse,
@@ -46,10 +60,15 @@ from .schemas import (
     HealthResponse,
     OnboardingResponse,
     OnboardingUpdate,
+    NotificationCreate,
+    NotificationResponse,
     IndexVersionResponse,
     PullRequestDiffResponse,
     ReviewMapResponse,
     ChangeTourResponse,
+    CheckRunListResponse,
+    ChangedFileDetailResponse,
+    CommitResponse,
     PullRequestListResponse,
     PullRequestResponse,
     RepositoryCreate,
@@ -57,6 +76,7 @@ from .schemas import (
     RepositoryListResponse,
     RepositoryResponse,
     RepositorySyncResponse,
+    RepositorySummaryResponse,
     RetrievalResponse,
     RepositoryUpdate,
     SettingsResponse,
@@ -65,22 +85,27 @@ from .schemas import (
     SystemStatusResponse,
     AgentDescriptorResponse,
     ToolDescriptorResponse,
+    RegistryToggleRequest,
     DiagnosticsResponse,
     AgentEvidenceGraphResponse,
     UpdateStatusResponse,
 )
 from .security import require_local_token
-from tracegate.github import GitHubAPIError
+from tracegate.github import GitHubAPIError, GitHubProvider
 from tracegate.repository import RepositoryBoundary, RepositoryPathError
 from tracegate.retrieval import hybrid_retrieve
-from tracegate.models import ModelConfigurationError
-from tracegate.agent.workflow import NODE_NAMES, PROMPT_VERSION, WORKFLOW_VERSION
+from tracegate.models import ModelConfigurationError, ModelProviderError
+from tracegate.agent.workflow import NODE_NAMES, WORKFLOW_VERSION
 from tracegate.tools import create_read_only_registry
 from tracegate.vcs import GitCommandError, GitProvider
 from .config import default_data_dir
 
 
 router = APIRouter(prefix="/api/v1", dependencies=[Depends(require_local_token)])
+
+
+class _ConnectionProbe(BaseModel):
+    ok: Literal[True]
 
 
 def utcnow() -> datetime:
@@ -166,6 +191,38 @@ def _database_status() -> ComponentStatus:
     )
 
 
+def _webhook_relay_status(app_settings: AppSettings, snapshot: object) -> ComponentStatus:
+    if not app_settings.webhook_relay_url or not app_settings.webhook_relay_device_id:
+        return ComponentStatus(
+            state="not_configured",
+            configured=False,
+            message="Webhook Relay 未配置",
+            detail="Local ETag polling remains available without a public Relay.",
+        )
+    if not os.environ.get("TRACEGATE_RELAY_DEVICE_TOKEN"):
+        return ComponentStatus(
+            state="not_configured",
+            configured=False,
+            message="Webhook Relay 未配置",
+            detail="Pair this device and restart the Sidecar so it can read the secure Relay token.",
+        )
+    connected = bool(getattr(snapshot, "connected", False))
+    last_error = getattr(snapshot, "last_error", None)
+    if connected:
+        return ComponentStatus(
+            state="ready",
+            configured=True,
+            message="Webhook Relay SSE is connected.",
+            detail=f"Paired device: {app_settings.webhook_relay_device_id}",
+        )
+    return ComponentStatus(
+        state="error" if last_error else "unavailable",
+        configured=True,
+        message="Webhook Relay connection is unavailable.",
+        detail=last_error or "The authenticated SSE consumer is starting or reconnecting.",
+    )
+
+
 @router.get("/health", response_model=HealthResponse)
 def health(request: Request) -> HealthResponse:
     request.app.state.database.check_connection()
@@ -183,6 +240,8 @@ def system_status(request: Request, session: SessionDependency) -> SystemStatusR
     app_settings = _settings_row(session)
     github = _github_status(settings)
     model = _model_status(settings, app_settings)
+    relay_snapshot = request.app.state.relay_monitor.snapshot()
+    webhook_relay = _webhook_relay_status(app_settings, relay_snapshot)
     eval_status = eval_component_status(settings.eval_root)
     components = SystemComponents(
         api=ComponentStatus(
@@ -194,6 +253,7 @@ def system_status(request: Request, session: SessionDependency) -> SystemStatusR
         database=_database_status(),
         github=github,
         model=model,
+        webhook_relay=webhook_relay,
         eval=eval_status,
     )
     states = [component.state for component in components.__dict__.values()]
@@ -201,6 +261,70 @@ def system_status(request: Request, session: SessionDependency) -> SystemStatusR
         state in {"not_configured", "unavailable"} for state in states
     ) else "ready"
     return SystemStatusResponse(status=status, components=components, checked_at=utcnow())
+
+
+@router.post("/connections/test", response_model=ConnectionTestResponse)
+async def test_connection(
+    payload: ConnectionTestRequest,
+    request: Request,
+    session: SessionDependency,
+) -> ConnectionTestResponse:
+    started = time.monotonic()
+    if payload.component == "backend":
+        request.app.state.database.check_connection()
+        return ConnectionTestResponse(
+            component="backend",
+            message="Authenticated local API and database connection succeeded.",
+            detail="The probe used the current authenticated process and live database connection.",
+            latency_ms=int((time.monotonic() - started) * 1000),
+        )
+    if payload.component == "github":
+        token = os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN")
+        if not token:
+            raise StudioAPIError(
+                409,
+                "github_not_configured",
+                "GitHub 尚未连接; store a credential and restart the Sidecar before testing.",
+            )
+        provider = GitHubProvider(token=token)
+        try:
+            login, rate_limit = await provider.test_authenticated_connection()
+        except GitHubAPIError as exc:
+            raise StudioAPIError(
+                502,
+                "github_connection_failed",
+                f"GitHub connection test failed: {exc}",
+            ) from exc
+        finally:
+            await provider.close()
+        return ConnectionTestResponse(
+            component="github",
+            message=f"GitHub authenticated as {login}.",
+            detail=(
+                f"REST rate limit remaining: {rate_limit.remaining}"
+                if rate_limit.remaining is not None
+                else "GitHub did not return a rate-limit remainder."
+            ),
+            latency_ms=int((time.monotonic() - started) * 1000),
+        )
+
+    try:
+        model = configured_model(session)
+        result = await model.complete_structured(
+            system_prompt="You are a connection probe. Return the required JSON and no additional claims.",
+            user_prompt='Return exactly {"ok": true}.',
+            output_schema=_ConnectionProbe,
+        )
+    except ModelConfigurationError as exc:
+        raise StudioAPIError(409, "model_not_configured", f"Model connection test failed: {exc}") from exc
+    except ModelProviderError as exc:
+        raise StudioAPIError(502, "model_connection_failed", f"Model connection test failed: {exc}") from exc
+    return ConnectionTestResponse(
+        component="model",
+        message=f"Model connection succeeded with {model.profile}.",
+        detail=f"Provider mode: {result.provider_mode}; tokens: {result.input_tokens + result.output_tokens}.",
+        latency_ms=int((time.monotonic() - started) * 1000),
+    )
 
 
 @router.get("/evaluations", response_model=EvaluationSummaryResponse)
@@ -265,13 +389,14 @@ _AGENT_METADATA: dict[str, tuple[str, list[str], list[str]]] = {
 
 
 @router.get("/agents", response_model=list[AgentDescriptorResponse])
-def agents() -> list[AgentDescriptorResponse]:
+def agents(session: SessionDependency) -> list[AgentDescriptorResponse]:
+    disabled = set(_settings_row(session).disabled_agents_json)
     return [
         AgentDescriptorResponse(
             name=name,
             version=WORKFLOW_VERSION,
             responsibility=_AGENT_METADATA[name][0],
-            status="enabled",
+            status="disabled" if name in disabled else "enabled",
             capabilities=_AGENT_METADATA[name][1],
             allowed_tools=_AGENT_METADATA[name][2],
         )
@@ -279,9 +404,37 @@ def agents() -> list[AgentDescriptorResponse]:
     ]
 
 
+@router.put("/agents/{agent_name}", response_model=AgentDescriptorResponse)
+def update_agent_registry(
+    agent_name: str,
+    payload: RegistryToggleRequest,
+    session: SessionDependency,
+) -> AgentDescriptorResponse:
+    if agent_name not in _AGENT_METADATA or agent_name not in NODE_NAMES:
+        raise StudioAPIError(404, "agent_not_found", "Agent is not registered in the production workflow.")
+    settings = _settings_row(session)
+    disabled = set(settings.disabled_agents_json)
+    if payload.enabled:
+        disabled.discard(agent_name)
+    else:
+        disabled.add(agent_name)
+    settings.disabled_agents_json = sorted(disabled)
+    settings.updated_at = utcnow()
+    session.commit()
+    return AgentDescriptorResponse(
+        name=agent_name,
+        version=WORKFLOW_VERSION,
+        responsibility=_AGENT_METADATA[agent_name][0],
+        status="enabled" if payload.enabled else "disabled",
+        capabilities=_AGENT_METADATA[agent_name][1],
+        allowed_tools=_AGENT_METADATA[agent_name][2],
+    )
+
+
 @router.get("/tools", response_model=list[ToolDescriptorResponse])
 def tools(session: SessionDependency) -> list[ToolDescriptorResponse]:
-    descriptors = create_read_only_registry().descriptors()
+    settings = _settings_row(session)
+    descriptors = create_read_only_registry(set(settings.disabled_tools_json)).descriptors()
     rows: list[ToolDescriptorResponse] = []
     for descriptor in descriptors:
         recent_call_count = int(
@@ -318,13 +471,75 @@ def tools(session: SessionDependency) -> list[ToolDescriptorResponse]:
                 timeout_seconds=descriptor.timeout_seconds,
                 max_output_bytes=descriptor.max_output_bytes,
                 input_schema=descriptor.input_schema,
-                enabled=descriptor.permission.value != "WRITE_CONFIRMATION",
+                enabled=descriptor.enabled and descriptor.permission.value != "WRITE_CONFIRMATION",
                 recent_call_count=recent_call_count,
                 recent_error_count=recent_error_count,
                 most_recent_error=most_recent_error,
             )
         )
     return rows
+
+
+@router.get("/notifications", response_model=list[NotificationResponse])
+def list_notifications(
+    session: SessionDependency,
+    limit: int = Query(default=50, ge=1, le=200),
+) -> list[NotificationRecord]:
+    return list(
+        session.scalars(
+            select(NotificationRecord)
+            .order_by(NotificationRecord.attempted_at.desc())
+            .limit(limit)
+        )
+    )
+
+
+@router.post("/notifications", response_model=NotificationResponse, status_code=201)
+def create_notification(
+    payload: NotificationCreate,
+    session: SessionDependency,
+) -> NotificationRecord:
+    for model, identifier, label in (
+        (Repository, payload.repository_id, "repository"),
+        (PullRequest, payload.pull_request_id, "pull_request"),
+        (AgentRun, payload.agent_run_id, "agent_run"),
+    ):
+        if identifier is not None and session.get(model, identifier) is None:
+            raise StudioAPIError(404, f"{label}_not_found", f"Notification {label} was not found.")
+    record = NotificationRecord(**payload.model_dump(), attempted_at=utcnow())
+    session.add(record)
+    session.commit()
+    session.refresh(record)
+    return record
+
+
+@router.put("/tools/{tool_name}", response_model=ToolDescriptorResponse)
+def update_tool_registry(
+    tool_name: str,
+    payload: RegistryToggleRequest,
+    session: SessionDependency,
+) -> ToolDescriptorResponse:
+    settings = _settings_row(session)
+    descriptors = {item.name: item for item in create_read_only_registry().descriptors()}
+    descriptor = descriptors.get(tool_name)
+    if descriptor is None:
+        raise StudioAPIError(404, "tool_not_found", "Tool is not registered in the production Registry.")
+    if descriptor.permission.value == "WRITE_CONFIRMATION" and payload.enabled:
+        raise StudioAPIError(
+            409,
+            "write_tool_requires_confirmation",
+            "Write tools cannot be enabled globally; each use requires write mode and exact confirmation.",
+        )
+    disabled = set(settings.disabled_tools_json)
+    if payload.enabled:
+        disabled.discard(tool_name)
+    else:
+        disabled.add(tool_name)
+    settings.disabled_tools_json = sorted(disabled)
+    settings.updated_at = utcnow()
+    session.commit()
+    refreshed = next(item for item in tools(session) if item.name == tool_name)
+    return refreshed
 
 
 def _artifact_version(root: Path, relative_path: str, pattern: str) -> str | None:
@@ -355,14 +570,48 @@ def diagnostics(request: Request, session: SessionDependency) -> DiagnosticsResp
         "apps/desktop/src-tauri/Cargo.toml",
         r'^version\s*=\s*"([^"]+)"',
     )
+    rust_minimum = _artifact_version(
+        settings.eval_root,
+        "apps/desktop/src-tauri/Cargo.toml",
+        r'^rust-version\s*=\s*"([^"]+)"',
+    )
+    rust_version_info = os.environ.get("TRACEGATE_RUST_VERSION_INFO") or (
+        f"minimum toolchain {rust_minimum}" if rust_minimum else None
+    )
     database_url = request.app.state.database.engine.url
     monitor = request.app.state.repository_monitor.snapshot()
+    relay_monitor = request.app.state.relay_monitor.snapshot()
     workspaces = list(
         session.scalars(
             select(Repository.local_path)
             .where(Repository.local_path.is_not(None))
             .order_by(Repository.full_name)
         )
+    )
+    latest_sync = session.scalar(
+        select(RepositorySync).order_by(RepositorySync.started_at.desc()).limit(1)
+    )
+    latest_index = session.scalar(
+        select(IndexVersion).order_by(IndexVersion.created_at.desc()).limit(1)
+    )
+    latest_run = session.scalar(
+        select(AgentRun).order_by(AgentRun.created_at.desc()).limit(1)
+    )
+    delivered_notifications = int(
+        session.scalar(
+            select(func.count()).select_from(NotificationRecord).where(
+                NotificationRecord.status == "delivered"
+            )
+        )
+        or 0
+    )
+    failed_notifications = int(
+        session.scalar(
+            select(func.count()).select_from(NotificationRecord).where(
+                NotificationRecord.status == "failed"
+            )
+        )
+        or 0
     )
     return DiagnosticsResponse(
         software_version=settings.version,
@@ -372,6 +621,8 @@ def diagnostics(request: Request, session: SessionDependency) -> DiagnosticsResp
         python_version=platform.python_version(),
         frontend_version=frontend_version,
         desktop_version=desktop_version,
+        rust_version_info=rust_version_info,
+        log_level=logging.getLevelName(logging.getLogger().getEffectiveLevel()),
         database_type=database_url.get_backend_name(),
         database_path=(database_url.database if database_url.get_backend_name() == "sqlite" else None),
         log_path=str(default_data_dir() / "logs" / "tracegate-studio.jsonl"),
@@ -380,9 +631,22 @@ def diagnostics(request: Request, session: SessionDependency) -> DiagnosticsResp
         api_port=settings.port,
         github=_github_status(settings),
         model=_model_status(settings, app_settings),
+        webhook_relay=_webhook_relay_status(app_settings, relay_monitor),
         monitor=monitor.__dict__,
+        relay_monitor=relay_monitor.__dict__,
         agent_queue=request.app.state.run_manager.active_count(),
         index_queue=0,
+        last_github_api_request_count=(latest_sync.github_api_request_count if latest_sync else None),
+        last_github_api_duration_ms=(latest_sync.github_api_duration_ms if latest_sync else None),
+        last_index_duration_ms=(latest_index.index_duration_ms if latest_index else None),
+        last_graph_duration_ms=(latest_index.graph_duration_ms if latest_index else None),
+        last_retrieval_result_count=(latest_run.retrieval_hit_count if latest_run else None),
+        last_model_latency_ms=(latest_run.latency_ms if latest_run else None),
+        last_model_input_tokens=(latest_run.input_tokens if latest_run else None),
+        last_model_output_tokens=(latest_run.output_tokens if latest_run else None),
+        last_model_retry_count=(latest_run.retry_count if latest_run else None),
+        delivered_notification_count=delivered_notifications,
+        failed_notification_count=failed_notifications,
         telemetry_enabled=False,
     )
 
@@ -414,8 +678,10 @@ def update_settings(payload: SettingsUpdate, request: Request, session: SessionD
     row.updated_at = utcnow()
     session.commit()
     session.refresh(row)
-    if "background_monitoring" in payload.model_fields_set:
+    if {"background_monitoring", "github_poll_interval_seconds"} & payload.model_fields_set:
         request.app.state.repository_monitor.wake()
+    if {"webhook_relay_url", "webhook_relay_device_id"} & payload.model_fields_set:
+        request.app.state.relay_monitor.wake()
     return row
 
 
@@ -424,12 +690,14 @@ def _onboarding_response(
     app_settings: AppSettings,
     onboarding: OnboardingState,
     repository_added: bool,
+    relay_snapshot: object,
 ) -> OnboardingResponse:
     return OnboardingResponse(
         completed=onboarding.completed,
         current_step=onboarding.current_step,
         github=_github_status(settings),
         model=_model_status(settings, app_settings),
+        webhook_relay=_webhook_relay_status(app_settings, relay_snapshot),
         repository_added=repository_added,
         background_monitoring=app_settings.background_monitoring,
         launch_at_startup=app_settings.launch_at_startup,
@@ -448,6 +716,7 @@ def get_onboarding(request: Request, session: SessionDependency) -> OnboardingRe
         app_settings,
         onboarding,
         repository_added,
+        request.app.state.relay_monitor.snapshot(),
     )
 
 
@@ -491,6 +760,7 @@ def update_onboarding(
         app_settings,
         onboarding,
         repository_added,
+        request.app.state.relay_monitor.snapshot(),
     )
 
 
@@ -569,6 +839,84 @@ def get_repository(repository_id: str, session: SessionDependency) -> Repository
     return _repository(session, repository_id)
 
 
+@router.get("/repositories/{repository_id}/summary", response_model=RepositorySummaryResponse)
+def repository_summary(
+    repository_id: str,
+    session: SessionDependency,
+) -> RepositorySummaryResponse:
+    repository = _repository(session, repository_id)
+    active_pull_requests = int(
+        session.scalar(
+            select(func.count()).select_from(PullRequest).where(
+                PullRequest.repository_id == repository.id,
+                PullRequest.state == "open",
+            )
+        )
+        or 0
+    )
+    if not repository.current_index_version:
+        return RepositorySummaryResponse(
+            repository_id=repository.id,
+            commit_sha=repository.current_commit_sha,
+            index_version=None,
+            file_count=0,
+            directory_count=0,
+            symbol_count=0,
+            dependency_edge_count=0,
+            language_counts={},
+            active_pull_requests=active_pull_requests,
+        )
+    version = session.get(IndexVersion, repository.current_index_version)
+    if version is None:
+        raise StudioAPIError(
+            409,
+            "repository_index_unavailable",
+            "The repository points to a missing Index Version.",
+        )
+    files = list(
+        session.scalars(
+            select(IndexedFile).where(IndexedFile.index_version_id == version.id)
+        )
+    )
+    language_counts: dict[str, int] = {}
+    directories: set[str] = set()
+    for item in files:
+        language_counts[item.language] = language_counts.get(item.language, 0) + 1
+        parent = Path(item.path).parent.as_posix()
+        if parent != ".":
+            directories.add(parent)
+    edge_count = int(
+        session.scalar(
+            select(func.count()).select_from(GraphEdgeRecord).where(
+                GraphEdgeRecord.index_version_id == version.id
+            )
+        )
+        or 0
+    )
+    return RepositorySummaryResponse(
+        repository_id=repository.id,
+        commit_sha=version.commit_sha,
+        index_version=version.id,
+        file_count=version.file_count,
+        directory_count=len(directories),
+        symbol_count=version.symbol_count,
+        dependency_edge_count=edge_count,
+        language_counts=language_counts,
+        active_pull_requests=active_pull_requests,
+    )
+
+
+@router.delete("/repositories/{repository_id}/cache", status_code=204)
+def clear_repository_cache(repository_id: str, session: SessionDependency) -> Response:
+    repository = _repository(session, repository_id)
+    session.execute(delete(IndexVersion).where(IndexVersion.repository_id == repository.id))
+    repository.current_commit_sha = None
+    repository.current_index_version = None
+    repository.updated_at = utcnow()
+    session.commit()
+    return Response(status_code=204)
+
+
 @router.put("/repositories/{repository_id}", response_model=RepositoryResponse)
 def update_repository(
     repository_id: str,
@@ -610,6 +958,7 @@ async def sync_repository(repository_id: str, session: SessionDependency) -> Rep
         sync_id=result.record.id,
         status=result.status,  # type: ignore[arg-type]
         changed_pull_requests=result.changed_pull_requests,
+        changed_check_runs=result.changed_check_runs,
         etag=result.record.etag,
         github_rate_remaining=repository.github_rate_remaining,
         finished_at=result.record.finished_at or utcnow(),
@@ -704,6 +1053,89 @@ def get_pull_request(pull_request_id: str, session: SessionDependency) -> PullRe
     if pull_request is None:
         raise StudioAPIError(404, "pull_request_not_found", "Pull Request was not found.")
     return pull_request
+
+
+@router.get("/pull-requests/{pull_request_id}/checks", response_model=CheckRunListResponse)
+def get_pull_request_checks(
+    pull_request_id: str,
+    session: SessionDependency,
+) -> CheckRunListResponse:
+    pull_request = session.get(PullRequest, pull_request_id)
+    if pull_request is None:
+        raise StudioAPIError(404, "pull_request_not_found", "Pull Request was not found.")
+    rows = list(
+        session.scalars(
+            select(CheckRunRecord)
+            .where(CheckRunRecord.pull_request_id == pull_request.id)
+            .order_by(CheckRunRecord.name, CheckRunRecord.github_id)
+        )
+    )
+    return CheckRunListResponse(
+        items=rows,
+        aggregate_status=pull_request.checks_status,  # type: ignore[arg-type]
+        synced_at=pull_request.last_checks_synced_at,
+    )
+
+
+@router.get("/pull-requests/{pull_request_id}/commits", response_model=list[CommitResponse])
+def get_pull_request_commits(
+    pull_request_id: str,
+    session: SessionDependency,
+) -> list[CommitRecord]:
+    pull_request = session.get(PullRequest, pull_request_id)
+    if pull_request is None:
+        raise StudioAPIError(404, "pull_request_not_found", "Pull Request was not found.")
+    return list(
+        session.scalars(
+            select(CommitRecord)
+            .where(CommitRecord.pull_request_id == pull_request.id)
+            .order_by(CommitRecord.position)
+        )
+    )
+
+
+@router.get("/pull-requests/{pull_request_id}/files", response_model=list[ChangedFileDetailResponse])
+def get_pull_request_files(
+    pull_request_id: str,
+    session: SessionDependency,
+) -> list[ChangedFileDetailResponse]:
+    pull_request = session.get(PullRequest, pull_request_id)
+    if pull_request is None:
+        raise StudioAPIError(404, "pull_request_not_found", "Pull Request was not found.")
+    if not pull_request.head_sha:
+        raise StudioAPIError(
+            409,
+            "pull_request_head_missing",
+            "Pull Request changed files require a synchronized Head SHA.",
+        )
+    rows = list(
+        session.scalars(
+            select(ChangedFileRecord)
+            .where(
+                ChangedFileRecord.pull_request_id == pull_request.id,
+                ChangedFileRecord.head_sha == pull_request.head_sha,
+            )
+            .order_by(ChangedFileRecord.path)
+        )
+    )
+    result: list[ChangedFileDetailResponse] = []
+    for row in rows:
+        hunks = list(
+            session.scalars(
+                select(ChangedHunkRecord)
+                .where(ChangedHunkRecord.changed_file_id == row.id)
+                .order_by(ChangedHunkRecord.sequence)
+            )
+        )
+        result.append(
+            ChangedFileDetailResponse.model_validate(
+                {
+                    **{field: getattr(row, field) for field in ChangedFileDetailResponse.model_fields if field != "hunks"},
+                    "hunks": hunks,
+                }
+            )
+        )
+    return result
 
 
 @router.get("/pull-requests/{pull_request_id}/diff", response_model=PullRequestDiffResponse)
@@ -1078,17 +1510,20 @@ def pull_request_tour(pull_request_id: str, session: SessionDependency) -> Chang
                 "confidence": "high" if has_relation else "low",
             }
         )
-    complete = len(changed_paths) <= 1 or all(relation_count[path] > 0 for path in changed_paths)
+    single_file = len(changed_paths) <= 1
+    complete = single_file or all(relation_count[path] > 0 for path in changed_paths)
+    if single_file:
+        message = "Single changed indexed code file; no cross-file dependency order was inferred."
+    elif complete:
+        message = "Review order is grounded in confirmed static relationships."
+    else:
+        message = "Recommended order may be incomplete: one or more changed files have no confirmed static relationship."
     return ChangeTourResponse(
         pull_request_id=review.pull_request_id,
         head_sha=review.head_sha,
         source="git_diff+static_index+agent_evidence",
         complete=complete,
-        message=(
-            "Review order is grounded in confirmed static relationships."
-            if complete
-            else "Recommended order may be incomplete: one or more changed files have no confirmed static relationship."
-        ),
+        message=message,
         steps=steps,
     )
 
@@ -1104,6 +1539,12 @@ async def analyze_pull_request(
     if pull_request is None:
         raise StudioAPIError(404, "pull_request_not_found", "Pull Request was not found.")
     repository = _repository(session, pull_request.repository_id)
+    if _settings_row(session).analysis_paused:
+        raise StudioAPIError(
+            409,
+            "analysis_paused",
+            "Analysis is paused in PR Inbox; resume analysis before starting a Run.",
+        )
     if not pull_request.head_sha:
         raise StudioAPIError(409, "pull_request_head_missing", "Pull Request has no Head SHA.")
     if repository.current_commit_sha != pull_request.head_sha or not repository.current_index_version:
@@ -1116,38 +1557,15 @@ async def analyze_pull_request(
         model = configured_model(session)
     except ModelConfigurationError as exc:
         raise StudioAPIError(409, "model_not_configured", str(exc)) from exc
-    if not force:
-        existing = session.scalar(
-            select(AgentRun)
-            .where(
-                AgentRun.pull_request_id == pull_request.id,
-                AgentRun.head_sha == pull_request.head_sha,
-                AgentRun.index_version == repository.current_index_version,
-                AgentRun.prompt_version == PROMPT_VERSION,
-                AgentRun.model_profile == model.profile,
-                AgentRun.status.in_(["queued", "running", "completed"]),
-            )
-            .order_by(AgentRun.created_at.desc())
-            .limit(1)
-        )
-        if existing is not None:
-            return AnalyzeResponse(run=existing, reused=True)
-    run = AgentRun(
-        repository_id=repository.id,
-        pull_request_id=pull_request.id,
-        status="queued",
-        head_sha=pull_request.head_sha,
-        index_version=repository.current_index_version,
-        prompt_version=PROMPT_VERSION,
-        workflow_version=WORKFLOW_VERSION,
-        model_profile=model.profile,
-    )
-    pull_request.analysis_status = "queued"
-    session.add(run)
+    try:
+        result = enqueue_analysis_run(session, pull_request, repository, model, force=force)
+    except ValueError as exc:
+        raise StudioAPIError(409, "workflow_registry_disabled", str(exc)) from exc
     session.commit()
-    session.refresh(run)
-    request.app.state.run_manager.start(run.id, model)
-    return AnalyzeResponse(run=run, reused=False)
+    session.refresh(result.run)
+    if not result.reused:
+        request.app.state.run_manager.start(result.run.id, model)
+    return AnalyzeResponse(run=result.run, reused=result.reused)
 
 
 @router.get("/runs", response_model=AgentRunListResponse)

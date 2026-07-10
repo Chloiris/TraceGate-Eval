@@ -35,6 +35,34 @@ class AppSettings(Base):
         CheckConstraint("id = 1", name="ck_app_settings_singleton"),
         CheckConstraint("theme IN ('system', 'light', 'dark')", name="ck_app_settings_theme"),
         CheckConstraint("language IN ('zh-CN', 'en-US')", name="ck_app_settings_language"),
+        CheckConstraint(
+            "model_temperature >= 0 AND model_temperature <= 2",
+            name="ck_app_settings_model_temperature",
+        ),
+        CheckConstraint(
+            "model_max_output_tokens >= 256 AND model_max_output_tokens <= 32768",
+            name="ck_app_settings_model_max_output_tokens",
+        ),
+        CheckConstraint(
+            "model_timeout_seconds >= 5 AND model_timeout_seconds <= 300",
+            name="ck_app_settings_model_timeout_seconds",
+        ),
+        CheckConstraint(
+            "model_max_retries >= 0 AND model_max_retries <= 3",
+            name="ck_app_settings_model_max_retries",
+        ),
+        CheckConstraint(
+            "model_context_scope IN ('changed_files', 'retrieved_context')",
+            name="ck_app_settings_model_context_scope",
+        ),
+        CheckConstraint(
+            "model_input_cost_per_million >= 0 AND model_output_cost_per_million >= 0",
+            name="ck_app_settings_model_costs",
+        ),
+        CheckConstraint(
+            "github_poll_interval_seconds >= 30 AND github_poll_interval_seconds <= 3600",
+            name="ck_app_settings_github_poll_interval_seconds",
+        ),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, default=1)
@@ -42,9 +70,30 @@ class AppSettings(Base):
     language: Mapped[str] = mapped_column(String(16), nullable=False, default="zh-CN")
     background_monitoring: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     launch_at_startup: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    close_notice_dismissed: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    notifications_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     model_provider: Mapped[str | None] = mapped_column(String(64))
     model_base_url: Mapped[str | None] = mapped_column(String(2048))
     model_name: Mapped[str | None] = mapped_column(String(255))
+    model_temperature: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    model_max_output_tokens: Mapped[int] = mapped_column(Integer, nullable=False, default=4096)
+    model_timeout_seconds: Mapped[int] = mapped_column(Integer, nullable=False, default=60)
+    model_max_retries: Mapped[int] = mapped_column(Integer, nullable=False, default=2)
+    model_native_structured_output: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    model_streaming_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    model_native_tool_calling: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    model_context_scope: Mapped[str] = mapped_column(String(32), nullable=False, default="changed_files")
+    model_input_cost_per_million: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    model_output_cost_per_million: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    github_poll_interval_seconds: Mapped[int] = mapped_column(Integer, nullable=False, default=60)
+    automatic_analysis_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    automatic_analysis_include_drafts: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    automatic_analysis_require_checks_success: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    analysis_paused: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    webhook_relay_url: Mapped[str | None] = mapped_column(String(2048))
+    webhook_relay_device_id: Mapped[str | None] = mapped_column(String(128))
+    disabled_agents_json: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
+    disabled_tools_json: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.current_timestamp()
     )
@@ -125,6 +174,8 @@ class PullRequest(Base):
     state: Mapped[str] = mapped_column(String(32), nullable=False)
     url: Mapped[str] = mapped_column(String(2048), nullable=False)
     author: Mapped[str | None] = mapped_column(String(255))
+    base_ref: Mapped[str | None] = mapped_column(String(255))
+    head_ref: Mapped[str | None] = mapped_column(String(255))
     base_sha: Mapped[str | None] = mapped_column(String(64))
     head_sha: Mapped[str | None] = mapped_column(String(64))
     updated_at_github: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
@@ -133,12 +184,97 @@ class PullRequest(Base):
     deletions: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     changed_files: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     analysis_status: Mapped[str] = mapped_column(String(32), nullable=False, default="not_analyzed")
+    checks_etag: Mapped[str | None] = mapped_column(String(512))
+    checks_status: Mapped[str] = mapped_column(String(32), nullable=False, default="not_available")
+    last_checks_synced_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    risk_level: Mapped[str | None] = mapped_column(String(16))
+    risk_score: Mapped[float | None] = mapped_column(Float)
+    conclusion_summary: Mapped[str | None] = mapped_column(Text)
+    impact_paths_json: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
+    recommended_review_order_json: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
+    latest_model_profile: Mapped[str | None] = mapped_column(String(255))
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.current_timestamp()
     )
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.current_timestamp()
     )
+
+
+class CommitRecord(Base):
+    __tablename__ = "commits"
+    __table_args__ = (
+        UniqueConstraint("pull_request_id", "sha", name="uq_commits_pr_sha"),
+        Index("ix_commits_pr_position", "pull_request_id", "position"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    pull_request_id: Mapped[str] = mapped_column(
+        ForeignKey("pull_requests.id", ondelete="CASCADE"), nullable=False
+    )
+    sha: Mapped[str] = mapped_column(String(64), nullable=False)
+    message: Mapped[str] = mapped_column(Text, nullable=False)
+    author_name: Mapped[str | None] = mapped_column(String(255))
+    author_email: Mapped[str | None] = mapped_column(String(320))
+    author_login: Mapped[str | None] = mapped_column(String(255))
+    authored_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    html_url: Mapped[str | None] = mapped_column(String(2048))
+    position: Mapped[int] = mapped_column(Integer, nullable=False)
+    synced_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.current_timestamp()
+    )
+
+
+class ChangedFileRecord(Base):
+    __tablename__ = "changed_files"
+    __table_args__ = (
+        UniqueConstraint(
+            "pull_request_id", "head_sha", "path", name="uq_changed_files_pr_head_path"
+        ),
+        Index("ix_changed_files_pr_head", "pull_request_id", "head_sha"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    pull_request_id: Mapped[str] = mapped_column(
+        ForeignKey("pull_requests.id", ondelete="CASCADE"), nullable=False
+    )
+    head_sha: Mapped[str] = mapped_column(String(64), nullable=False)
+    blob_sha: Mapped[str] = mapped_column(String(64), nullable=False)
+    path: Mapped[str] = mapped_column(String(2048), nullable=False)
+    previous_path: Mapped[str | None] = mapped_column(String(2048))
+    status: Mapped[str] = mapped_column(String(32), nullable=False)
+    additions: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    deletions: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    changes: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    blob_url: Mapped[str | None] = mapped_column(String(2048))
+    raw_url: Mapped[str | None] = mapped_column(String(2048))
+    contents_url: Mapped[str | None] = mapped_column(String(2048))
+    patch: Mapped[str | None] = mapped_column(Text)
+    patch_hash: Mapped[str | None] = mapped_column(String(64))
+    synced_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.current_timestamp()
+    )
+
+
+class ChangedHunkRecord(Base):
+    __tablename__ = "changed_hunks"
+    __table_args__ = (
+        UniqueConstraint("changed_file_id", "sequence", name="uq_changed_hunks_file_sequence"),
+        Index("ix_changed_hunks_file_new_start", "changed_file_id", "new_start"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    changed_file_id: Mapped[str] = mapped_column(
+        ForeignKey("changed_files.id", ondelete="CASCADE"), nullable=False
+    )
+    sequence: Mapped[int] = mapped_column(Integer, nullable=False)
+    header: Mapped[str] = mapped_column(String(1024), nullable=False)
+    old_start: Mapped[int] = mapped_column(Integer, nullable=False)
+    old_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    new_start: Mapped[int] = mapped_column(Integer, nullable=False)
+    new_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    patch: Mapped[str] = mapped_column(Text, nullable=False)
+    patch_hash: Mapped[str] = mapped_column(String(64), nullable=False)
 
 
 class RepositorySync(Base):
@@ -152,6 +288,9 @@ class RepositorySync(Base):
     etag: Mapped[str | None] = mapped_column(String(512))
     commit_sha: Mapped[str | None] = mapped_column(String(64))
     changed_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    checks_changed_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    github_api_request_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    github_api_duration_ms: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     error_code: Mapped[str | None] = mapped_column(String(128))
     error_message: Mapped[str | None] = mapped_column(Text)
     started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
@@ -174,6 +313,31 @@ class PullRequestSnapshot(Base):
     captured_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.current_timestamp())
 
 
+class CheckRunRecord(Base):
+    __tablename__ = "check_runs"
+    __table_args__ = (
+        UniqueConstraint("pull_request_id", "github_id", name="uq_check_runs_pr_github_id"),
+        Index("ix_check_runs_pr_status", "pull_request_id", "status"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    pull_request_id: Mapped[str] = mapped_column(
+        ForeignKey("pull_requests.id", ondelete="CASCADE"), nullable=False
+    )
+    github_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    head_sha: Mapped[str] = mapped_column(String(64), nullable=False)
+    name: Mapped[str] = mapped_column(String(500), nullable=False)
+    status: Mapped[str] = mapped_column(String(32), nullable=False)
+    conclusion: Mapped[str | None] = mapped_column(String(64))
+    details_url: Mapped[str | None] = mapped_column(String(2048))
+    app_name: Mapped[str | None] = mapped_column(String(255))
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    synced_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.current_timestamp()
+    )
+
+
 class IndexVersion(Base):
     __tablename__ = "index_versions"
     __table_args__ = (
@@ -190,6 +354,8 @@ class IndexVersion(Base):
     changed_count: Mapped[int] = mapped_column(Integer, nullable=False)
     deleted_count: Mapped[int] = mapped_column(Integer, nullable=False)
     duration_ms: Mapped[int] = mapped_column(Integer, nullable=False)
+    index_duration_ms: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    graph_duration_ms: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.current_timestamp())
 
 
@@ -251,6 +417,34 @@ class GraphEdgeRecord(Base):
     confirmed: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
 
 
+class ModelProfile(Base):
+    __tablename__ = "model_profiles"
+    __table_args__ = (
+        UniqueConstraint("fingerprint", name="uq_model_profiles_fingerprint"),
+        Index("ix_model_profiles_provider_model", "provider", "model_name"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    fingerprint: Mapped[str] = mapped_column(String(64), nullable=False)
+    profile_label: Mapped[str] = mapped_column(String(255), nullable=False)
+    provider: Mapped[str] = mapped_column(String(64), nullable=False)
+    base_url: Mapped[str] = mapped_column(String(2048), nullable=False)
+    model_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    temperature: Mapped[float] = mapped_column(Float, nullable=False)
+    max_output_tokens: Mapped[int] = mapped_column(Integer, nullable=False)
+    timeout_seconds: Mapped[int] = mapped_column(Integer, nullable=False)
+    max_retries: Mapped[int] = mapped_column(Integer, nullable=False)
+    native_structured_output: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    streaming_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    native_tool_calling: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    context_scope: Mapped[str] = mapped_column(String(32), nullable=False)
+    input_cost_per_million: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    output_cost_per_million: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.current_timestamp()
+    )
+
+
 class AgentRun(Base):
     __tablename__ = "agent_runs"
     __table_args__ = (
@@ -275,10 +469,15 @@ class AgentRun(Base):
     index_version: Mapped[str | None] = mapped_column(String(64))
     workflow_version: Mapped[str | None] = mapped_column(String(64))
     model_profile: Mapped[str | None] = mapped_column(String(255))
+    model_profile_id: Mapped[str | None] = mapped_column(
+        ForeignKey("model_profiles.id", ondelete="SET NULL")
+    )
+    context_scope: Mapped[str] = mapped_column(String(32), nullable=False, default="changed_files")
     input_tokens: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     output_tokens: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     latency_ms: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     retry_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    retrieval_hit_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     cancellation_requested: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     error_code: Mapped[str | None] = mapped_column(String(128))
     error_message: Mapped[str | None] = mapped_column(Text)
@@ -438,3 +637,35 @@ class WebhookDelivery(Base):
         DateTime(timezone=True), nullable=False, server_default=func.current_timestamp()
     )
     processed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class NotificationRecord(Base):
+    __tablename__ = "notification_records"
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('delivered', 'failed')",
+            name="ck_notification_records_status",
+        ),
+        Index("ix_notification_records_kind_attempted", "kind", "attempted_at"),
+        Index("ix_notification_records_status_attempted", "status", "attempted_at"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    kind: Mapped[str] = mapped_column(String(64), nullable=False)
+    status: Mapped[str] = mapped_column(String(16), nullable=False)
+    title: Mapped[str] = mapped_column(String(500), nullable=False)
+    body: Mapped[str] = mapped_column(Text, nullable=False)
+    deep_link: Mapped[str | None] = mapped_column(String(2048))
+    repository_id: Mapped[str | None] = mapped_column(
+        ForeignKey("repositories.id", ondelete="SET NULL")
+    )
+    pull_request_id: Mapped[str | None] = mapped_column(
+        ForeignKey("pull_requests.id", ondelete="SET NULL")
+    )
+    agent_run_id: Mapped[str | None] = mapped_column(
+        ForeignKey("agent_runs.id", ondelete="SET NULL")
+    )
+    error_message: Mapped[str | None] = mapped_column(Text)
+    attempted_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.current_timestamp()
+    )

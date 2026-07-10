@@ -76,6 +76,12 @@ async def test_langgraph_workflow_persists_steps_tools_evidence_and_verified_fin
     _git(["init", "-q"], workspace)
     _git(["config", "user.email", "tracegate@example.invalid"], workspace)
     _git(["config", "user.name", "TraceGate Test"], workspace)
+    (workspace / "main.py").write_text("def indexed_function():\n    return 0\n", encoding="utf-8")
+    _git(["add", "."], workspace)
+    _git(["commit", "-qm", "base fixture"], workspace)
+    base_sha = subprocess.run(
+        ["git", "rev-parse", "HEAD"], cwd=workspace, check=True, capture_output=True, text=True
+    ).stdout.strip()
     (workspace / "main.py").write_text("def indexed_function():\n    return -1\n", encoding="utf-8")
     _git(["add", "."], workspace)
     _git(["commit", "-qm", "agent fixture"], workspace)
@@ -106,7 +112,7 @@ async def test_langgraph_workflow_persists_steps_tools_evidence_and_verified_fin
                 title="Security parser change",
                 state="open",
                 url="https://github.com/acme/agent/pull/1",
-                base_sha="a" * 40,
+                base_sha=base_sha,
                 head_sha=head_sha,
             )
             session.add(pull_request)
@@ -128,6 +134,7 @@ async def test_langgraph_workflow_persists_steps_tools_evidence_and_verified_fin
             database.session_factory,
             model,
             create_read_only_registry(),
+            context_scope="changed_files",
         )
         result = await workflow.run(run_id)
 
@@ -139,6 +146,8 @@ async def test_langgraph_workflow_persists_steps_tools_evidence_and_verified_fin
             assert stored_run.status == "completed"
             assert stored_run.workflow_version == "tracegate-langgraph-v1"
             assert stored_run.input_tokens == 40
+            assert stored_run.retrieval_hit_count >= 1
+            assert stored_run.context_scope == "changed_files"
             assert session.scalar(select_count(AgentStep, AgentStep.agent_run_id == run_id)) == 7
             assert session.scalar(select_count(EvidenceRecord, EvidenceRecord.agent_run_id == run_id)) >= 1
             assert session.scalar(select_count(ToolCallRecord)) >= 1
@@ -146,6 +155,13 @@ async def test_langgraph_workflow_persists_steps_tools_evidence_and_verified_fin
             assert finding.commit_sha == head_sha
             assert finding.verifier_status == "verified"
             assert finding.evidence_ids_json
+            stored_pr = session.get(PullRequest, stored_run.pull_request_id)
+            assert stored_pr is not None
+            assert stored_pr.risk_level == "medium"
+            assert stored_pr.risk_score == 40.0
+            assert stored_pr.conclusion_summary == "One evidence-bound concern requires review."
+            assert stored_pr.impact_paths_json == ["main.py"]
+            assert stored_pr.recommended_review_order_json == ["main.py"]
     finally:
         database.dispose()
 

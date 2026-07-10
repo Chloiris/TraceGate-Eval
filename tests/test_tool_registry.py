@@ -53,6 +53,20 @@ async def test_read_and_search_tools_use_real_repository_content(tool_context: T
 
 
 @pytest.mark.asyncio
+async def test_registry_disabled_tool_is_reported_and_blocked(tool_context: ToolContext) -> None:
+    registry = create_read_only_registry({"search_code"})
+    descriptors = {item.name: item for item in registry.descriptors()}
+    assert descriptors["search_code"].enabled is False
+    assert descriptors["read_file"].enabled is True
+
+    with pytest.raises(ToolExecutionError) as caught:
+        await registry.execute("search_code", {"query": "needle"}, tool_context)
+
+    assert caught.value.code == "tool_disabled"
+    assert registry.invocations == []
+
+
+@pytest.mark.asyncio
 async def test_registry_rejects_invalid_paths_and_commands(tool_context: ToolContext) -> None:
     registry = create_read_only_registry()
     with pytest.raises(ToolExecutionError, match="forbidden"):
