@@ -141,9 +141,13 @@ where
 }
 
 pub fn deliver<R: Runtime>(app: &AppHandle<R>, route: DeepLinkRoute) {
+    stage(app, route);
+    let _ = window::show_main_window(app);
+}
+
+pub fn stage<R: Runtime>(app: &AppHandle<R>, route: DeepLinkRoute) {
     app.state::<DesktopState>()
         .set_pending_deep_link(route.clone());
-    let _ = window::show_main_window(app);
     let event = DeepLinkEvent {
         frontend_path: route.frontend_path(),
         route,

@@ -1,8 +1,10 @@
 mod commands;
 mod credentials;
 mod deep_link;
+mod github_oauth;
 mod lifecycle;
 mod platform;
+mod relay_pairing;
 mod sidecar;
 mod state;
 mod tray;
@@ -29,7 +31,9 @@ pub fn run() {
         ))
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_shell::init())
+        .plugin(tauri_plugin_window_state::Builder::default().build())
         .manage(DesktopState::default())
+        .manage(github_oauth::GitHubOAuthState::default())
         .invoke_handler(tauri::generate_handler![
             commands::get_desktop_status,
             commands::get_api_connection,
@@ -38,10 +42,16 @@ pub fn run() {
             commands::delete_credential,
             commands::take_pending_deep_link,
             commands::show_main_window,
+            commands::hide_main_window,
             commands::get_autostart_enabled,
             commands::set_autostart_enabled,
             commands::show_review_notification,
+            commands::open_workspace,
+            commands::open_workspace_file,
             commands::quit_tracegate,
+            github_oauth::begin_github_device_flow,
+            github_oauth::poll_github_device_flow,
+            relay_pairing::pair_webhook_relay,
         ])
         .on_window_event(window::handle_window_event)
         .on_menu_event(tray::handle_menu_event)

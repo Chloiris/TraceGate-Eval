@@ -11,6 +11,7 @@ const MAX_SECRET_LENGTH: usize = 8192;
 pub enum CredentialKind {
     Github,
     Model,
+    Relay,
 }
 
 impl CredentialKind {
@@ -18,6 +19,7 @@ impl CredentialKind {
         match self {
             Self::Github => "github-token",
             Self::Model => "model-api-key",
+            Self::Relay => "webhook-relay-device-token",
         }
     }
 
@@ -25,6 +27,7 @@ impl CredentialKind {
         match self {
             Self::Github => "GITHUB_TOKEN",
             Self::Model => "TRACEGATE_LLM_API_KEY",
+            Self::Relay => "TRACEGATE_RELAY_DEVICE_TOKEN",
         }
     }
 }
@@ -116,6 +119,10 @@ mod tests {
         assert_eq!(
             CredentialKind::Model.environment_name(),
             "TRACEGATE_LLM_API_KEY"
+        );
+        assert_eq!(
+            CredentialKind::Relay.environment_name(),
+            "TRACEGATE_RELAY_DEVICE_TOKEN"
         );
     }
 

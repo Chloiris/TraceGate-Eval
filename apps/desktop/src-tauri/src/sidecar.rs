@@ -227,9 +227,21 @@ impl SidecarSupervisor {
             .env("TRACEGATE_DATA_DIR", &app_data)
             .env("TRACEGATE_PARENT_WATCHDOG", "1")
             .env("TRACEGATE_DESKTOP_PID", std::process::id().to_string())
+            .env(
+                "TRACEGATE_RUST_VERSION_INFO",
+                format!(
+                    "minimum toolchain {}; desktop crate {}",
+                    option_env!("CARGO_PKG_RUST_VERSION").unwrap_or("unspecified"),
+                    env!("CARGO_PKG_VERSION")
+                ),
+            )
             .current_dir(&app_data);
 
-        for kind in [CredentialKind::Github, CredentialKind::Model] {
+        for kind in [
+            CredentialKind::Github,
+            CredentialKind::Model,
+            CredentialKind::Relay,
+        ] {
             if let Some(secret) = read_credential(kind)
                 .map_err(|_| SidecarError::SecureStorage(kind.environment_name()))?
             {
@@ -343,6 +355,14 @@ impl SidecarSupervisor {
             .lock()
             .expect("Sidecar status mutex poisoned") = status.clone();
         let _ = app.emit(SIDECAR_STATUS_EVENT, status);
+        if matches!(self.status(), SidecarStatus::Failed { .. }) {
+            let _ = crate::commands::show_actionable_notification(
+                app.clone(),
+                "TraceGate Studio".to_owned(),
+                "The local Sidecar could not restart. Open Diagnostics for details.".to_owned(),
+                None,
+            );
+        }
     }
 }
 
