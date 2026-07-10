@@ -79,6 +79,7 @@ temp/
 *.db-wal
 *.db-journal
 backups/
+.tracegate-dev/
 
 # IDE and OS files
 .idea/
