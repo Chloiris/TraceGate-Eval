@@ -72,6 +72,19 @@ def _api_json(repo: str, path: str) -> Any:
     return _run_gh_json(["api", f"repos/{repo}/{path}"])
 
 
+def _api_paginated(repo: str, path: str, *, max_pages: int = 30) -> list[Any]:
+    items: list[Any] = []
+    separator = "&" if "?" in path else "?"
+    for page in range(1, max_pages + 1):
+        payload = _api_json(repo, f"{path}{separator}per_page=100&page={page}")
+        if not isinstance(payload, list):
+            raise GitHubCollectionError(f"GitHub API returned a non-list response for {path}")
+        items.extend(payload)
+        if len(payload) < 100:
+            return items
+    return items
+
+
 def _extract_reference_numbers(view: dict[str, Any]) -> list[int]:
     texts: list[str] = []
     for key in ("title", "body"):
@@ -119,16 +132,15 @@ def collect_pull_request(repo: str, pr_number: int) -> PullRequestSnapshot:
     if not isinstance(view, dict):
         raise GitHubCollectionError("gh pr view did not return an object")
 
-    issue_comments = _api_json(repo, f"issues/{pr_number}/comments?per_page=100") or []
-    review_comments = _api_json(repo, f"pulls/{pr_number}/comments?per_page=100") or []
-    reviews_api = _api_json(repo, f"pulls/{pr_number}/reviews?per_page=100") or []
-    files_api = _api_json(repo, f"pulls/{pr_number}/files?per_page=100") or []
-
-    diff_names_text = _run_gh(
-        ["pr", "diff", str(pr_number), "-R", repo, "--name-only"],
-        timeout_seconds=120,
-    )
-    diff_file_names = [line.strip() for line in diff_names_text.splitlines() if line.strip()]
+    issue_comments = _api_paginated(repo, f"issues/{pr_number}/comments")
+    review_comments = _api_paginated(repo, f"pulls/{pr_number}/comments")
+    reviews_api = _api_paginated(repo, f"pulls/{pr_number}/reviews")
+    files_api = _api_paginated(repo, f"pulls/{pr_number}/files")
+    diff_file_names = [
+        str(item["filename"])
+        for item in files_api
+        if isinstance(item, dict) and item.get("filename")
+    ]
     related_refs = _collect_related_refs(repo, pr_number, view)
     return PullRequestSnapshot(
         repo=repo,

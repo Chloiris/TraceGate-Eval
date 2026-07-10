@@ -42,7 +42,10 @@ apps/desktop/src-tauri/binaries/tracegate-backend-*
 !apps/desktop/src-tauri/binaries/.gitkeep
 
 # Generated run artifacts and model outputs
-runs/
+runs/*
+!runs/latest/
+runs/latest/*
+!runs/latest/metrics.json
 runs_stage2/
 runs_claim/
 datasets/real_min/raw/

@@ -87,6 +87,13 @@ jobs:
           components: rustfmt, clippy
           targets: x86_64-pc-windows-msvc
 
+      - name: Install ripgrep runtime dependency
+        shell: pwsh
+        run: |
+          choco install ripgrep --version=14.1.1 --yes --no-progress
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          rg --version
+
       - name: Verify pinned x86_64 toolchain
         shell: pwsh
         run: |
@@ -172,8 +179,8 @@ jobs:
 
           Get-ChildItem artifacts/windows -File | ForEach-Object {
             "{0}  {1}" -f (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant(), $_.Name
-          } | Set-Content artifacts/windows/SHA256SUMS-windows.txt
-          Get-Content artifacts/windows/SHA256SUMS-windows.txt
+          } | Set-Content artifacts/windows/SHA256SUMS.txt
+          Get-Content artifacts/windows/SHA256SUMS.txt
 
       - name: Write test summary
         shell: pwsh
