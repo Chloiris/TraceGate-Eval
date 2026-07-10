@@ -12,3 +12,4 @@ fi
 pnpm --filter @tracegate/web build
 ./scripts/build-sidecar.sh
 pnpm --filter @tracegate/desktop build
+./scripts/package-macos.sh

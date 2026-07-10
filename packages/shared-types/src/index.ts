@@ -25,6 +25,17 @@ export const apiConnectionSchema = z.object({
 
 export type ApiConnection = z.infer<typeof apiConnectionSchema>;
 
+export const credentialKindSchema = z.enum(["github", "model"]);
+export type CredentialKind = z.infer<typeof credentialKindSchema>;
+
+export const credentialStatusSchema = z.object({
+  kind: credentialKindSchema,
+  configured: z.boolean(),
+  storage: z.string().min(1),
+  restartRequiredAfterChange: z.boolean(),
+});
+export type CredentialStatus = z.infer<typeof credentialStatusSchema>;
+
 export const healthResponseSchema = z.object({
   status: z.literal("ok"),
   service: z.literal("tracegate-studio"),

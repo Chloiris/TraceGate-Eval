@@ -121,6 +121,11 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          cargo test \
+            --manifest-path apps/desktop/src-tauri/Cargo.toml \
+            credentials::tests::native_secure_store_round_trip \
+            -- \
+            --ignored 2>&1 | tee .ci-artifacts/macos/credential-store.log
           ./scripts/build-macos.sh 2>&1 | tee .ci-artifacts/macos/build.log
 
       - name: Verify native staged and bundled executables

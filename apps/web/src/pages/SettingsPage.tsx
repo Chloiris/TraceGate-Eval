@@ -1,5 +1,5 @@
-import { useState, type FormEvent } from "react";
-import type { Settings } from "@tracegate/shared-types";
+import { useEffect, useState, type FormEvent } from "react";
+import type { CredentialKind, CredentialStatus, Settings } from "@tracegate/shared-types";
 
 import { StatusCard } from "../components/StatusCard";
 import { ErrorState, LoadingState } from "../components/RequestState";
@@ -56,9 +56,10 @@ export function SettingsPage({ host }: SettingsPageProps) {
           </div>
         ) : null}
         <p className="field-note">
-          P0 API 尚未提供凭据写入端点，因此本页面不会展示不可用的“连接”按钮，也不会把 Token
-          保存进普通设置。
+          密钥不经过 FastAPI 设置端点，也不写入 SQLite。桌面端使用系统安全凭据存储；浏览器开发模式
+          继续要求显式环境变量。
         </p>
+        <CredentialPanel host={host} />
       </section>
 
       <section className="settings-panel" aria-labelledby="host-title">
@@ -71,6 +72,126 @@ export function SettingsPage({ host }: SettingsPageProps) {
           ))}
         </ul>
       </section>
+    </div>
+  );
+}
+
+const credentialLabels: Record<CredentialKind, { title: string; placeholder: string }> = {
+  github: { title: "GitHub Fine-grained PAT", placeholder: "输入 GitHub Token" },
+  model: { title: "模型 API Key", placeholder: "输入模型 Provider 密钥" },
+};
+
+function CredentialPanel({ host }: { host: HostBridge }) {
+  const readCredentialStatus = host.getCredentialStatus?.bind(host);
+  const storeCredential = host.storeCredential?.bind(host);
+  const deleteCredential = host.deleteCredential?.bind(host);
+  const [statuses, setStatuses] = useState<Partial<Record<CredentialKind, CredentialStatus>>>({});
+  const [values, setValues] = useState<Record<CredentialKind, string>>({ github: "", model: "" });
+  const [busy, setBusy] = useState<CredentialKind | null>(null);
+  const [message, setMessage] = useState<string | null>(null);
+  const [failure, setFailure] = useState<string | null>(null);
+
+  useEffect(() => {
+    const readStatus = host.getCredentialStatus?.bind(host);
+    if (!readStatus) return;
+    let active = true;
+    void Promise.all([readStatus("github"), readStatus("model")])
+      .then(([github, model]) => {
+        if (active) setStatuses({ github, model });
+      })
+      .catch((error: unknown) => {
+        if (active) setFailure(errorMessage(error));
+      });
+    return () => {
+      active = false;
+    };
+  }, [host]);
+
+  if (!storeCredential || !deleteCredential || !readCredentialStatus) {
+    return <p className="field-note">浏览器宿主不提供密钥写入。请通过后端进程环境变量配置真实凭据。</p>;
+  }
+
+  async function save(kind: CredentialKind) {
+    if (!storeCredential) {
+      setFailure("当前宿主不支持系统安全凭据存储。");
+      return;
+    }
+    setBusy(kind);
+    setFailure(null);
+    setMessage(null);
+    try {
+      const status = await storeCredential(kind, values[kind]);
+      setStatuses((current) => ({ ...current, [kind]: status }));
+      setValues((current) => ({ ...current, [kind]: "" }));
+      setMessage(`${credentialLabels[kind].title} 已写入 ${status.storage}。重启 TraceGate 后后端连接状态生效。`);
+    } catch (error) {
+      setFailure(errorMessage(error));
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function remove(kind: CredentialKind) {
+    if (!deleteCredential) {
+      setFailure("当前宿主不支持系统安全凭据存储。");
+      return;
+    }
+    setBusy(kind);
+    setFailure(null);
+    setMessage(null);
+    try {
+      const status = await deleteCredential(kind);
+      setStatuses((current) => ({ ...current, [kind]: status }));
+      setMessage(`${credentialLabels[kind].title} 已从 ${status.storage} 删除。重启 TraceGate 后后端连接状态生效。`);
+    } catch (error) {
+      setFailure(errorMessage(error));
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  return (
+    <div className="credential-grid">
+      {(["github", "model"] as const).map((kind) => {
+        const status = statuses[kind];
+        return (
+          <div className="credential-card" key={kind}>
+            <label className="field">
+              <span>{credentialLabels[kind].title}</span>
+              <input
+                type="password"
+                autoComplete="new-password"
+                value={values[kind]}
+                placeholder={credentialLabels[kind].placeholder}
+                onChange={(event) => setValues((current) => ({ ...current, [kind]: event.target.value }))}
+              />
+            </label>
+            <p className="field-note">
+              {status ? `${status.configured ? "已配置" : "未配置"} · ${status.storage}` : "正在读取安全存储状态…"}
+            </p>
+            <div className="form-actions">
+              <button
+                className="button button-primary"
+                type="button"
+                disabled={busy !== null || values[kind].length < 20}
+                onClick={() => void save(kind)}
+              >
+                保存到系统凭据库
+              </button>
+              <button
+                className="button button-secondary"
+                type="button"
+                disabled={busy !== null || !status?.configured}
+                onClick={() => void remove(kind)}
+              >
+                删除
+              </button>
+            </div>
+          </div>
+        );
+      })}
+      {message ? <p className="inline-success" role="status">{message}</p> : null}
+      {failure ? <p className="inline-error" role="alert">安全凭据操作失败：{failure}</p> : null}
     </div>
   );
 }

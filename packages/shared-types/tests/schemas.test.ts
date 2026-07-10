@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   componentStatusSchema,
+  credentialStatusSchema,
   isComponentReady,
   systemStatusSchema,
 } from "../src/index";
@@ -36,5 +37,16 @@ describe("shared API schemas", () => {
         checked_at: "2026-07-10T10:00:00+08:00",
       }),
     ).toThrow();
+  });
+
+  it("accepts credential presence without a secret field", () => {
+    const status = credentialStatusSchema.parse({
+      kind: "github",
+      configured: true,
+      storage: "macOS Keychain",
+      restartRequiredAfterChange: true,
+    });
+    expect(status.configured).toBe(true);
+    expect("secret" in status).toBe(false);
   });
 });

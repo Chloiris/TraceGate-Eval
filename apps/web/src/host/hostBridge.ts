@@ -1,4 +1,10 @@
-import { apiConnectionSchema, type ApiConnection } from "@tracegate/shared-types";
+import {
+  apiConnectionSchema,
+  credentialStatusSchema,
+  type ApiConnection,
+  type CredentialKind,
+  type CredentialStatus,
+} from "@tracegate/shared-types";
 
 export type HostKind = "browser" | "tauri" | "ue-webview" | "maya-webview";
 
@@ -6,6 +12,9 @@ export interface HostBridge {
   readonly kind: HostKind;
   readonly displayName: string;
   getApiConnection(): Promise<ApiConnection>;
+  getCredentialStatus?(kind: CredentialKind): Promise<CredentialStatus>;
+  storeCredential?(kind: CredentialKind, secret: string): Promise<CredentialStatus>;
+  deleteCredential?(kind: CredentialKind): Promise<CredentialStatus>;
 }
 
 export class HostBridgeError extends Error {
@@ -60,6 +69,21 @@ export class TauriHost implements HostBridge {
         { cause: error },
       );
     }
+  }
+
+  async getCredentialStatus(kind: CredentialKind): Promise<CredentialStatus> {
+    const { invoke } = await import("@tauri-apps/api/core");
+    return credentialStatusSchema.parse(await invoke<unknown>("get_credential_status", { kind }));
+  }
+
+  async storeCredential(kind: CredentialKind, secret: string): Promise<CredentialStatus> {
+    const { invoke } = await import("@tauri-apps/api/core");
+    return credentialStatusSchema.parse(await invoke<unknown>("store_credential", { kind, secret }));
+  }
+
+  async deleteCredential(kind: CredentialKind): Promise<CredentialStatus> {
+    const { invoke } = await import("@tauri-apps/api/core");
+    return credentialStatusSchema.parse(await invoke<unknown>("delete_credential", { kind }));
   }
 }
 

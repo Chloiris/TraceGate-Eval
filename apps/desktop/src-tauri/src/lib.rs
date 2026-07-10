@@ -1,4 +1,5 @@
 mod commands;
+mod credentials;
 mod deep_link;
 mod lifecycle;
 mod platform;
@@ -27,6 +28,9 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::get_desktop_status,
             commands::get_api_connection,
+            commands::get_credential_status,
+            commands::store_credential,
+            commands::delete_credential,
             commands::take_pending_deep_link,
             commands::show_main_window,
             commands::quit_tracegate,

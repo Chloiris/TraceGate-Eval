@@ -127,6 +127,8 @@ jobs:
       - name: Build and authenticated-health-check Windows Sidecar and Tauri bundles
         shell: pwsh
         run: |
+          cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml credentials::tests::native_secure_store_round_trip -- --ignored *>&1 | Tee-Object .ci-artifacts/windows/credential-store.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           ./scripts/build-windows.ps1 *>&1 | Tee-Object .ci-artifacts/windows/build.log
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 

@@ -840,13 +840,41 @@ p {
   font-size: 0.75rem;
 }
 
-.field select {
+.field select,
+.field input[type="password"] {
   min-height: 44px;
   padding: 0 12px;
   border: 1px solid var(--line-strong);
   border-radius: 9px;
   background: var(--bg-elevated);
   color: var(--text);
+}
+
+.credential-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  margin-top: 18px;
+}
+
+.credential-card {
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  background: var(--surface-soft);
+}
+
+.credential-card .form-actions {
+  justify-content: flex-start;
+  gap: 8px;
+  padding-top: 13px;
+  margin-top: 13px;
+}
+
+.credential-grid > .inline-error,
+.credential-grid > .inline-success {
+  grid-column: 1 / -1;
+  margin-top: 0;
 }
 
 .settings-panel .switch-row + .switch-row {
@@ -1061,6 +1089,7 @@ p {
   .status-grid,
   .status-grid-two,
   .form-grid,
+  .credential-grid,
   .startup-checks {
     grid-template-columns: 1fr;
   }

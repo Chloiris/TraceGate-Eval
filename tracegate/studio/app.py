@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+import logging
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
@@ -37,6 +38,7 @@ def _error_response(status_code: int, code: str, message: str) -> JSONResponse:
 
 def create_app(settings: StudioSettings) -> FastAPI:
     database = StudioDatabase(settings.database_url)
+    logger = logging.getLogger("tracegate.studio.api")
 
     @asynccontextmanager
     async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
@@ -45,9 +47,11 @@ def create_app(settings: StudioSettings) -> FastAPI:
                 upgrade_database(settings.database_url)
             require_current_revision(database.engine, settings.database_url)
             database.check_connection()
+            logger.info("api_ready database_migrated=true")
             yield
         finally:
             database.dispose()
+            logger.info("api_stopped database_disposed=true")
 
     app = FastAPI(
         title="TraceGate Studio API",

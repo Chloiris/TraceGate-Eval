@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import logging
 import os
 import sys
 import urllib.error
@@ -11,7 +12,8 @@ from collections.abc import Sequence
 import uvicorn
 
 from .app import create_app
-from .config import StudioConfigurationError, StudioSettings
+from .config import StudioConfigurationError, StudioSettings, default_data_dir
+from .logging_config import configure_logging
 from .parent_watchdog import start_parent_watchdog
 
 
@@ -81,17 +83,12 @@ def run(argv: Sequence[str] | None = None) -> int:
     except StudioConfigurationError as exc:
         print(f"TraceGate Studio configuration error: {exc}", file=sys.stderr)
         return 2
-    print(
-        json.dumps(
-            {
-                "event": "tracegate_studio_sidecar_starting",
-                "host": settings.host,
-                "port": settings.port,
-                "authentication": "bearer",
-            },
-            separators=(",", ":"),
-        ),
-        flush=True,
+    log_path = configure_logging(default_data_dir(), args.log_level.upper())
+    logging.getLogger("tracegate.studio").info(
+        "sidecar_starting host=%s port=%s authentication=bearer log=%s",
+        settings.host,
+        settings.port,
+        log_path,
     )
     start_parent_watchdog()
     uvicorn.run(
@@ -100,6 +97,7 @@ def run(argv: Sequence[str] | None = None) -> int:
         port=settings.port,
         log_level=args.log_level,
         access_log=False,
+        log_config=None,
         proxy_headers=False,
         server_header=False,
         workers=1,

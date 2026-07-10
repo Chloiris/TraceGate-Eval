@@ -1,12 +1,28 @@
 use tauri::{AppHandle, State};
 
 use crate::{
+    credentials::{self, CredentialKind, CredentialStatus},
     deep_link::DeepLinkRoute,
     lifecycle,
     sidecar::ApiConnection,
     state::{DesktopState, DesktopStatus},
     window,
 };
+
+#[tauri::command]
+pub fn get_credential_status(kind: CredentialKind) -> Result<CredentialStatus, String> {
+    credentials::credential_status(kind).map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub fn store_credential(kind: CredentialKind, secret: String) -> Result<CredentialStatus, String> {
+    credentials::store_credential(kind, &secret).map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub fn delete_credential(kind: CredentialKind) -> Result<CredentialStatus, String> {
+    credentials::delete_credential(kind).map_err(|error| error.to_string())
+}
 
 #[tauri::command]
 pub fn get_desktop_status(state: State<'_, DesktopState>) -> DesktopStatus {

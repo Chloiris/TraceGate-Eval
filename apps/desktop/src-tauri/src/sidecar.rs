@@ -18,7 +18,10 @@ use tauri_plugin_shell::{
 };
 use thiserror::Error;
 
-use crate::platform;
+use crate::{
+    credentials::{read_credential, CredentialKind},
+    platform,
+};
 
 pub const SIDECAR_STATUS_EVENT: &str = "tracegate-sidecar-status";
 pub const SIDECAR_LOGICAL_NAME: &str = "tracegate-backend";
@@ -76,6 +79,8 @@ enum SidecarError {
     CreateCommand(String),
     #[error("failed to spawn the Sidecar: {0}")]
     Spawn(String),
+    #[error("failed to read {0} from operating-system credential storage")]
+    SecureStorage(&'static str),
     #[error("Sidecar health check timed out")]
     HealthTimeout,
     #[error("Sidecar process exited unexpectedly")]
@@ -209,7 +214,7 @@ impl SidecarSupervisor {
         let token = generate_token();
         let environment = filter_environment(std::env::vars_os());
 
-        let command = app
+        let mut command = app
             .shell()
             .sidecar(SIDECAR_LOGICAL_NAME)
             .map_err(|error| SidecarError::CreateCommand(error.to_string()))?
@@ -223,6 +228,14 @@ impl SidecarSupervisor {
             .env("TRACEGATE_PARENT_WATCHDOG", "1")
             .env("TRACEGATE_DESKTOP_PID", std::process::id().to_string())
             .current_dir(&app_data);
+
+        for kind in [CredentialKind::Github, CredentialKind::Model] {
+            if let Some(secret) = read_credential(kind)
+                .map_err(|_| SidecarError::SecureStorage(kind.environment_name()))?
+            {
+                command = command.env(kind.environment_name(), secret);
+            }
+        }
 
         let (mut events, child) = command
             .spawn()
