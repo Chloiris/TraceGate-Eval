@@ -24,19 +24,23 @@ Playwright exercised:
 - Agent Step and Tool Call trace;
 - explicit retry failure when the model is not configured;
 - Agent/Tool Registry, including disabled `apply_patch` write mode.
+- persistent Agent Registry disable/enable with execution-time policy;
+- full Change Tour symbols, Evidence and checkpoints;
+- diagnostic provider/index/graph/model/retrieval/notification metrics and an
+  honest unconfigured Relay state.
 
 Command and result:
 
 ```text
 pnpm test:e2e
-4 passed (6.3s)
+4 passed (7.8s)
 ```
 
 Backend and package verification:
 
 ```text
 python -m pytest -q
-110 passed, 1 third-party deprecation warning
+125 passed, 1 third-party deprecation warning
 
 pnpm typecheck
 passed: shared-types, api-client, web
@@ -54,10 +58,10 @@ pnpm --filter @tracegate/web test
 8 passed
 ```
 
-Production Vite build passed. Repository Map plus deterministic exports is an
-8.81 kB lazy chunk. Monaco
-is a separately loaded local chunk with a local editor worker; it never waits
-for a CDN.
+Production Vite build passed. Repository Map and PR Detail are lazy chunks.
+Monaco is a separately loaded local chunk with a local editor worker; it never
+waits for a CDN. The large Monaco chunk still produces a build-size warning and
+remains a performance optimization target.
 
 Current Rust/native gates:
 
@@ -65,16 +69,26 @@ Current Rust/native gates:
 cargo fmt --check
 cargo clippy --all-targets -- -D warnings
 cargo test
-15 passed, 1 explicit native-credential mutation test ignored
+20 passed, 1 explicit native-credential mutation test ignored
 
 ./scripts/build-macos.sh
 native arm64 Sidecar health-check passed; Tauri release .app bundled
-SHA-256 d77ff3520d143392d25736a890a47ce15d5da627ae3e757ae57fd11ed8e0aa39
+SHA-256 bd29c2b7c587cdb4d285e91423a2d1535866dc073f013959508da24a807d0324
 ```
 
 The official Tauri notification/autostart plugins compile in that package, but
 the OS notification click path and login-time launch were not manually
 exercised and remain `IMPLEMENTED_UNVERIFIED`.
+
+The latest `.app` launch produced one Tauri process plus the expected
+PyInstaller bootloader/worker, migrated through `20260710_0004`, logged
+`api_ready`, then shut down cleanly on termination with database disposal and
+no remaining app-owned process. The local Computer Use interface reported the
+application running but could not inspect a window/status item, so this pass
+does not upgrade window/tray interaction status.
+
+Local browser/data-ready and 100/1000-file benchmark measurements are recorded
+in `docs/performance.md` and `docs/performance-results.json`.
 
 ## Screenshots
 

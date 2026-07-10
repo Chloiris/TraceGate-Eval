@@ -22,7 +22,7 @@
 
 | Feature | Status | Evidence / note |
 | --- | --- | --- |
-| Existing suite plus Studio tests | VERIFIED_MACOS | 110 Python tests plus 20 Vitest tests and 4 Chrome Playwright flows; original Eval coverage remains intact |
+| Existing suite plus Studio tests | VERIFIED_MACOS | 125 Python tests, 20 TypeScript/Vitest tests, 20 Rust tests (1 explicit secure-store mutation ignored), and 4 Chrome Playwright flows; original Eval coverage remains intact |
 | ClaimBench controlled benchmark | VERIFIED_MACOS | Existing tests and checked-in 160-run reports; metric definitions unchanged |
 | Real-PR hard benchmark | VERIFIED_MACOS | Existing tests and checked-in 19 scored cases |
 | EvidencePacket and redaction | VERIFIED_MACOS | Existing `tests/test_pr_advisor.py` |
@@ -44,15 +44,15 @@
 | Local API authentication and CORS | VERIFIED_MACOS | Auth/CORS tests plus Tauri-origin runtime verification |
 | SQLAlchemy 2 persistence | VERIFIED_MACOS | Studio models and API persistence tests |
 | SQLite default database | VERIFIED_MACOS | Real onboarding/settings persistence and database tests |
-| Alembic migration and SQLite migration test | VERIFIED_MACOS | `20260710_0001`; fresh/idempotent migration tests |
+| Alembic migration and SQLite migration test | VERIFIED_MACOS | `20260710_0001` through `20260710_0004`; fresh, idempotent, and upgrade-with-data tests |
 | Structured/redacted rotating logs | VERIFIED_MACOS | Packaged Sidecar wrote redacted JSONL with 5 MiB/3-backup limits and clean shutdown events |
 | System status API | VERIFIED_MACOS | Explicit ready/not-configured/unavailable states tested and rendered |
-| Diagnostics API/page | VERIFIED_MACOS | Redacted runtime/storage/queue/update state is API-tested and rendered in the React client |
+| Diagnostics API/page | VERIFIED_MACOS | Redacted runtime/storage/queue/update state plus GitHub/index/graph/model/retrieval/notification metrics are API-tested and browser-rendered |
 | Non-secret settings persistence | VERIFIED_MACOS | Theme/language/background choices persist; API never accepts a secret |
 | Platform secure credential storage | VERIFIED_MACOS | Native Keychain round-trip passed and deleted its verification entry; Windows code awaits CI |
 | Python Sidecar entry and health check | VERIFIED_MACOS | Independent and packaged authenticated health checks passed |
-| macOS arm64 PyInstaller Sidecar | VERIFIED_MACOS | Native Mach-O artifact built and bundled |
-| Tauri 2 shell | VERIFIED_MACOS | Packaged `.app` launched with real Sidecar/WebView |
+| macOS arm64 PyInstaller Sidecar | VERIFIED_MACOS | Native Mach-O artifact built, authenticated-health-checked and bundled on 2026-07-10 |
+| Tauri 2 shell | VERIFIED_MACOS | Latest packaged `.app` launched with one Tauri owner and real Sidecar; logs show migration, `api_ready`, graceful shutdown and no orphan process |
 | macOS menu-bar tray and restore | IMPLEMENTED_UNVERIFIED | Rust construction/dispatch tests pass; direct status-item clicking was unavailable |
 | Close-to-hide | VERIFIED_MACOS | Window closed while desktop and Sidecar processes remained alive |
 | True quit stops Sidecar | VERIFIED_MACOS | Desktop plus PyInstaller bootloader/worker all disappeared after Quit |
@@ -86,7 +86,7 @@
 | Incremental commit-bound index | VERIFIED_MACOS | Content hash/change/deletion and Head SHA binding tests |
 | ripgrep/symbol/FTS5 hybrid retrieval | VERIFIED_MACOS | Sources remain labeled; vector retrieval explicitly disabled |
 | Repository Map backend | VERIFIED_MACOS | Persisted parsed/indexed relationships and commit/index binding tests |
-| Repository Map React Flow UI | VERIFIED_MACOS | Lazy React Flow, 800-node cap, filters, MiniMap and measured layout ADR-002 |
+| Repository Map React Flow UI | VERIFIED_MACOS | Directory-first aggregation, 800-node cap, filters, MiniMap, collapse, save/restore and measured layout ADR-002; backend-local graph paging remains future work |
 | Review Map backend | VERIFIED_MACOS | Real Git diff + static graph + persisted Agent Evidence API test |
 | Review Map UI and Diff bidirectional jump | VERIFIED_MACOS | Chrome Playwright and `p1-review-map-macos.png` |
 | Finding schema/storage foundation | VERIFIED_MACOS | Required traceability fields, filters and UI are persisted/API-tested |
@@ -100,11 +100,11 @@
 
 | Feature | Status | Evidence / next gate |
 | --- | --- | --- |
-| Change Tour | VERIFIED_MACOS | Static relationship/evidence ordering API with low-confidence incomplete state tests |
+| Change Tour | VERIFIED_MACOS | Static relationship/evidence ordering API plus files/symbols/purpose/prerequisite/risk/Evidence/checkpoints UI; low-confidence wording verified in Chrome |
 | Agent Evidence Graph | VERIFIED_MACOS | Dedicated run-owned task→step→tool→evidence→finding API/React Flow graph is covered by API and Chrome E2E |
 | Webhook relay with HMAC/deduplication | VERIFIED_MACOS | Separate FastAPI relay has one-use repository-scoped pairing, authenticated SSE, HMAC/replay tests and hardened compose; container/TLS deployment is unverified |
 | Optional MySQL 8 profile | IMPLEMENTED_UNVERIFIED | PyMySQL profile, dialect-aware migrations/retrieval, MySQL 8.4 CI service and smoke script exist; offline SQL compiles but Docker is unavailable locally |
-| Agent and Tool Registry screens | VERIFIED_MACOS | Seven workflow nodes and 19 actual tools rendered from API; Chrome screenshot/test |
+| Agent and Tool Registry screens | VERIFIED_MACOS | Seven workflow nodes and 19 actual tools, persistent toggles and execution-time enforcement; API/unit/Chrome toggle tests |
 | MCP client adapter | VERIFIED_MACOS | MCP 2025-11-25 stdio negotiation/list/call with executable/tool allowlists, filtered env and bounded fixture tests |
 | Deep links | IMPLEMENTED_UNVERIFIED | Scheme/parser/single-instance delivery and real frontend repo/PR/run routing tests exist; OS URL invocation is not verified |
 | Autostart toggle | IMPLEMENTED_UNVERIFIED | Official Tauri autostart manager and native settings bridge compile/test; defaults off and real login behavior remains manual by platform |
@@ -112,7 +112,15 @@
 | English localization | VERIFIED_MACOS | Persisted locale switches the shell, status primitives, Dashboard, Onboarding, repositories, PR Inbox/detail, maps, runs, Eval, Registry, Diagnostics and Settings; English render has a Vitest integration check |
 | Graph JSON export | VERIFIED_MACOS | Repository Map downloads the current typed API payload in the browser flow |
 | Graph PNG/SVG export | VERIFIED_MACOS | Standalone deterministic SVG is unit-tested; Chrome E2E downloads PNG and verifies its binary signature |
-| GitHub OAuth Device Flow / App | VERIFIED_MACOS | GitHub Device Flow adapter enforces official URI/polling semantics and passes tokens only to a secure `SecretStr` sink; desktop UI still ships PAT first |
+| GitHub OAuth Device Flow / App | IMPLEMENTED_UNVERIFIED | Rust Device Flow state is memory-only, validates official URI/polling semantics and writes tokens directly to Keychain/Credential Manager; no live GitHub authorization was performed |
+
+## Latest local performance evidence
+
+The reproducible smoke record in `docs/performance.md` measured 100/1000-file
+production index/graph paths, Review Map, a 157 ms browser data-ready wall-clock
+upper bound, and five 0.1% idle Python-worker CPU samples. GitHub sync and real
+model latency remain `BLOCKED` because this pass had neither remote-operation
+permission nor a model credential.
 
 ## P3: explicitly deferred interfaces
 
@@ -128,10 +136,13 @@
 
 ### macOS arm64
 
-P0 browser, API, SQLite/Alembic, packaged Sidecar, Tauri shell, close-hide,
-single-instance and true-quit behavior are `VERIFIED_MACOS`. Exact commands,
-artifact hash, limitations and screenshots are recorded in
-`docs/verification/p0-macos.md`. Direct tray restore remains
+P0 browser, API, SQLite/Alembic, packaged Sidecar, Tauri shell, prior
+close-hide/single-instance/true-quit evidence, and the latest process/Sidecar
+startup/shutdown are `VERIFIED_MACOS`. The latest build is
+`artifacts/macos/TraceGate-Studio-macos-arm64.zip` with SHA-256
+`bd29c2b7c587cdb4d285e91423a2d1535866dc073f013959508da24a807d0324`.
+The current UI automation surface could not inspect a new app window/status
+item, so direct tray restore and notification click remain
 `IMPLEMENTED_UNVERIFIED`.
 
 ### Windows x86_64 CI

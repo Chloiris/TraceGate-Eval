@@ -45,6 +45,135 @@ and package unsigned NSIS/portable artifacts. No current Windows runner result
 or Windows GUI acceptance is claimed. The draft PR/workflow must be inspected
 again only with repository-owner approval.
 
+### Studio product surface
+
+- GitHub PR Inbox with ETag polling, Checks, commits, changed files/hunks, rate
+  limits, optional OAuth Device Flow/PAT, and optional authenticated Relay.
+- Commit-bound incremental parsing, symbol/FTS/ripgrep retrieval, Repository
+  Map, Review Map, Change Tour, Monaco Diff, and VS Code/GitHub jumps.
+- Seven-node LangGraph review with controlled Tool Calling, SSE, cancellation,
+  retry, Findings, Evidence, Agent Trace, and Agent Evidence Graph.
+- Eval Center for the unchanged 19-case real-PR set and 160 ClaimBench runs,
+  including hashes, confusion matrix, comparisons, errors, and exports.
+- Tauri single-instance host with a bundled Python Sidecar, random local API
+  token, secure credentials, tray, close-to-hide, deep links, notifications,
+  autostart preference, and graceful true quit.
+
+Screenshots from the running local product:
+
+| Monaco PR Diff | Review Map | Eval Center | Registry |
+| --- | --- | --- | --- |
+| [![PR Diff](docs/screenshots/p1-pr-diff-macos.png)](docs/screenshots/p1-pr-diff-macos.png) | [![Review Map](docs/screenshots/p1-review-map-macos.png)](docs/screenshots/p1-review-map-macos.png) | [![Eval Center](docs/screenshots/p1-eval-center-macos.png)](docs/screenshots/p1-eval-center-macos.png) | [![Registry](docs/screenshots/p1-registry-macos.png)](docs/screenshots/p1-registry-macos.png) |
+
+Windows tray code is implemented, but there is no Windows screenshot or GUI
+acceptance evidence. Its status remains `IMPLEMENTED_UNVERIFIED`.
+
+### Architecture
+
+```mermaid
+flowchart LR
+  U["React + TypeScript WebView"] -->|"Zod-validated /api/v1 + SSE"| A["FastAPI Sidecar"]
+  T["Tauri/Rust host"] -->|"per-launch token + lifecycle"| A
+  T --> K["Keychain / Credential Manager"]
+  A --> D["SQLite default / optional MySQL"]
+  A --> G["GitHub REST + optional Relay"]
+  A --> I["Parser · Index · FTS · Graph"]
+  A --> L["LangGraph workflow"]
+  L --> E["Evidence · Findings · Trace"]
+  A --> B["TraceGate Eval · ClaimBench"]
+```
+
+```mermaid
+flowchart LR
+  P["Planner"] --> R["Repository Retriever"] --> C["Context Resolver"] --> A["Code Analyst"] --> K["Risk Reviewer"] --> V["Verifier"] --> O["Report Composer"]
+  R -. "controlled tools" .-> T["Tool Registry"]
+  C -. "commit-bound evidence" .-> E["EvidencePacket / Memory claims"]
+  V -. "path · line · SHA checks" .-> F["Verified Findings"]
+```
+
+Key directories:
+
+```text
+apps/web/                    React product UI
+apps/desktop/src-tauri/      Tauri host and native capabilities
+packages/shared-types/       Zod contracts
+packages/api-client/         Authenticated typed client and SSE parser
+tracegate/studio/            FastAPI, SQLAlchemy, migrations, sync and runtime
+tracegate/agent/             LangGraph workflow
+tracegate/tools/             Controlled Tool Registry
+tracegate/indexing|graph/    Commit-bound parser/index/maps
+e2e/                         Chrome product flows
+```
+
+### Studio development and configuration
+
+Browser mode:
+
+```bash
+./scripts/bootstrap.sh
+./scripts/dev.sh
+```
+
+macOS arm64 build:
+
+```bash
+./scripts/build-macos.sh
+```
+
+Windows build is performed on Windows, not by renaming a macOS binary:
+
+```powershell
+.\scripts\bootstrap.ps1
+.\scripts\build-windows.ps1
+```
+
+Or run the owner-approved `build-windows.yml` workflow. It is designed to
+produce an unsigned NSIS installer, portable archive, hashes, build info, and
+logs; no current Windows artifact is claimed.
+
+GitHub credentials are optional for public read and required for private
+repositories/monitoring. Desktop credentials go to the OS secure store. A real
+model run requires provider, Base URL, model name, context scope, and a key in
+secure storage or `TRACEGATE_LLM_API_KEY`/`DEEPSEEK_API_KEY`. Native Tool
+Calling and compatibility Tool selection are labelled separately.
+
+SQLite is the default. Optional MySQL mode uses a SQLAlchemy MySQL URL and the
+checked-in Compose/CI profile; local MySQL runtime verification remains
+unavailable when Docker/MySQL is absent. See
+[Studio migrations](docs/studio-migrations.md), [API](docs/api.md), and
+[product tour](docs/product-tour.md).
+
+### Verification, security, and limitations
+
+```bash
+./scripts/test.sh
+pnpm test:e2e
+uv run python scripts/benchmark_studio.py --files 100 1000
+```
+
+The latest local pass recorded 125 Python tests, 20 TypeScript/Vitest tests, 20
+Rust tests, 4 Chrome E2E flows, a macOS arm64 `.app`/Sidecar health check, and a
+reproducible 100/1000-file smoke benchmark. See
+[implementation status](docs/implementation-status.md) and
+[performance results](docs/performance.md).
+
+Security boundaries include loopback-only bearer auth, exact CORS, OS secure
+credentials, filtered child environments, path/symlink/sensitive-file guards,
+bounded commands/provider responses, HMAC/replay protection, prompt-injection
+separation, verifier checks, and redacted rotating JSON logs. Telemetry is off.
+See [security model](docs/security-model.md) and [privacy](docs/privacy.md).
+
+Known limitations: no real-model E2E in the current credential-free
+environment; no new GitHub remote verification without explicit permission;
+no Windows CI/GUI evidence; partial JS/TS/Java parsing; no vector embeddings;
+large graph caps; native notification/tray clicks remain manual acceptance.
+
+Contributions should preserve provenance and failure honesty, include tests and
+migrations for schema changes, and avoid secrets/run artifacts. Start with
+[`CONTRIBUTING.md`](CONTRIBUTING.md) and open an issue before changing metric
+definitions. The repository currently carries the MIT license in
+[`LICENSE`](LICENSE); packaged third-party components retain their own licenses.
+
 TraceGate Eval is a research benchmark for evaluating whether AI coding agents
 use historical engineering context safely.
 

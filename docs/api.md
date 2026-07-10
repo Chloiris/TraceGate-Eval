@@ -23,7 +23,7 @@ Core endpoints:
 | --- | --- |
 | `GET /api/v1/health` | Process health and version; no secret-bearing details. |
 | `GET /api/v1/system/status` | Explicit API, database, GitHub, model and Eval capability states. |
-| `GET /api/v1/diagnostics` | Redacted versions, paths, process/port, queues and monitoring state. |
+| `GET /api/v1/diagnostics` | Redacted versions, paths, process/port, queues, monitoring, provider/index/graph/model/retrieval timing and notification outcomes. |
 | `GET /api/v1/system/update` | Signed-update interface status; currently explicitly unconfigured. |
 | `GET/PUT /api/v1/settings` | Non-secret theme, locale, monitoring, model metadata and startup preference. |
 | `GET/PUT /api/v1/onboarding` | Persisted first-run progress without credentials. |
@@ -35,6 +35,8 @@ Core endpoints:
 | `GET /api/v1/repositories/{id}/search` | Labeled ripgrep/symbol/FTS hybrid retrieval. |
 | `GET /api/v1/pull-requests` | Persisted PR Inbox with filters. |
 | `GET /api/v1/pull-requests/{id}` | Persisted PR metadata and commit identity. |
+| `GET /api/v1/pull-requests/{id}/commits` | Structured persisted commit history from GitHub synchronization. |
+| `GET /api/v1/pull-requests/{id}/files` | Structured changed files and parsed changed hunks bound to Head SHA. |
 | `GET /api/v1/pull-requests/{id}/diff` | Real local Git content for the selected changed file. |
 | `GET /api/v1/pull-requests/{id}/graph` | Review Map from Git diff + static index + Agent Evidence. |
 | `GET /api/v1/pull-requests/{id}/tour` | Bounded Change Tour with explicit incomplete/confidence state. |
@@ -48,6 +50,9 @@ Core endpoints:
 | `GET /api/v1/findings` / `evidence` | Run/PR-scoped traceability records. |
 | `GET /api/v1/evaluations` | Checked-in real benchmark/ClaimBench artifacts plus SHA-256 provenance. |
 | `GET /api/v1/agents` / `tools` | Actual workflow and Tool Registry schemas/permissions/stats. |
+| `PUT /api/v1/agents/{name}` | Persistently enable/disable a production Agent; disabled required Agents block new runs. |
+| `PUT /api/v1/tools/{name}` | Persistently enable/disable a Tool; write-confirmation Tools cannot be globally enabled. |
+| `GET/POST /api/v1/notifications` | Read or record actual OS handoff/failure outcomes; an attempted notification is not called displayed. |
 | `POST /api/v1/webhooks/github` | Optional direct HMAC-SHA256 GitHub delivery with durable deduplication. |
 
 Errors use a non-success HTTP status and an `{ "error": { "code",
