@@ -240,7 +240,7 @@ class ChangedFileRecord(Base):
     )
     head_sha: Mapped[str] = mapped_column(String(64), nullable=False)
     blob_sha: Mapped[str] = mapped_column(String(64), nullable=False)
-    path: Mapped[str] = mapped_column(String(2048), nullable=False)
+    path: Mapped[str] = mapped_column(String(512), nullable=False)
     previous_path: Mapped[str | None] = mapped_column(String(2048))
     status: Mapped[str] = mapped_column(String(32), nullable=False)
     additions: Mapped[int] = mapped_column(Integer, nullable=False, default=0)

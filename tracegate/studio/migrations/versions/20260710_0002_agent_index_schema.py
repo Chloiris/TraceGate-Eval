@@ -99,7 +99,7 @@ def upgrade() -> None:
         "indexed_files",
         sa.Column("id", sa.String(36), nullable=False),
         sa.Column("index_version_id", sa.String(36), nullable=False),
-        sa.Column("path", sa.String(2048), nullable=False),
+        sa.Column("path", sa.String(512), nullable=False),
         sa.Column("language", sa.String(32), nullable=False),
         sa.Column("content_hash", sa.String(64), nullable=False),
         sa.Column("size_bytes", sa.Integer(), nullable=False),

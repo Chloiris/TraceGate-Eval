@@ -367,6 +367,7 @@ impl SidecarSupervisor {
 }
 
 fn terminate_child(child: CommandChild) {
+    #[cfg(unix)]
     let pid = child.pid();
     let _ = child.kill();
     #[cfg(unix)]

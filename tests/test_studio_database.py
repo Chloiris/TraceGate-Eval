@@ -118,6 +118,8 @@ def test_mysql_offline_ddl_does_not_autoincrement_singleton_ids() -> None:
     assert "id INTEGER NOT NULL AUTO_INCREMENT" not in ddl
     assert "CONSTRAINT ck_app_settings_singleton CHECK (id = 1)" in ddl
     assert "CONSTRAINT ck_onboarding_state_singleton CHECK (id = 1)" in ddl
+    indexed_files_ddl = ddl.split("CREATE TABLE indexed_files", 1)[1].split(";", 1)[0]
+    assert "path VARCHAR(512) NOT NULL" in indexed_files_ddl
 
 
 def test_agent_index_migration_upgrades_existing_p0_database_without_data_loss(tmp_path: Path) -> None:

@@ -121,7 +121,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          cargo test \
+          TAURI_CONFIG='{"bundle":{"externalBin":[]}}' cargo test \
             --manifest-path apps/desktop/src-tauri/Cargo.toml \
             credentials::tests::native_secure_store_round_trip \
             -- \
