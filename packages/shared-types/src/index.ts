@@ -25,7 +25,7 @@ export const apiConnectionSchema = z.object({
 
 export type ApiConnection = z.infer<typeof apiConnectionSchema>;
 
-export const credentialKindSchema = z.enum(["github", "model"]);
+export const credentialKindSchema = z.enum(["github", "model", "relay"]);
 export type CredentialKind = z.infer<typeof credentialKindSchema>;
 
 export const credentialStatusSchema = z.object({
@@ -53,12 +53,24 @@ export const systemStatusSchema = z.object({
     database: componentStatusSchema,
     github: componentStatusSchema,
     model: componentStatusSchema,
+    webhook_relay: componentStatusSchema,
     eval: componentStatusSchema,
   }),
   checked_at: z.string().min(1),
 });
 
 export type SystemStatus = z.infer<typeof systemStatusSchema>;
+
+export const connectionComponentSchema = z.enum(["backend", "github", "model"]);
+export const connectionTestResponseSchema = z.object({
+  component: connectionComponentSchema,
+  status: z.literal("ready"),
+  message: z.string().min(1),
+  detail: z.string().nullable(),
+  latency_ms: z.number().int().nonnegative(),
+});
+export type ConnectionComponent = z.infer<typeof connectionComponentSchema>;
+export type ConnectionTestResponse = z.infer<typeof connectionTestResponseSchema>;
 
 export const themeSchema = z.enum(["system", "light", "dark"]);
 export const languageSchema = z.enum(["zh-CN", "en-US"]);
@@ -68,9 +80,28 @@ export const settingsSchema = z.object({
   language: languageSchema,
   background_monitoring: z.boolean(),
   launch_at_startup: z.boolean(),
+  close_notice_dismissed: z.boolean(),
+  notifications_enabled: z.boolean(),
   model_provider: z.string().nullable(),
   model_base_url: z.string().nullable(),
   model_name: z.string().nullable(),
+  model_temperature: z.number().min(0).max(2),
+  model_max_output_tokens: z.number().int().min(256).max(32768),
+  model_timeout_seconds: z.number().int().min(5).max(300),
+  model_max_retries: z.number().int().min(0).max(3),
+  model_native_structured_output: z.boolean(),
+  model_streaming_enabled: z.boolean(),
+  model_native_tool_calling: z.boolean(),
+  model_context_scope: z.enum(["changed_files", "retrieved_context"]),
+  model_input_cost_per_million: z.number().min(0).max(10000),
+  model_output_cost_per_million: z.number().min(0).max(10000),
+  github_poll_interval_seconds: z.number().int().min(30).max(3600),
+  automatic_analysis_enabled: z.boolean(),
+  automatic_analysis_include_drafts: z.boolean(),
+  automatic_analysis_require_checks_success: z.boolean(),
+  analysis_paused: z.boolean(),
+  webhook_relay_url: z.string().url().nullable(),
+  webhook_relay_device_id: z.string().nullable(),
   updated_at: z.string().min(1),
 });
 
@@ -82,9 +113,28 @@ export const settingsUpdateSchema = settingsSchema
     language: true,
     background_monitoring: true,
     launch_at_startup: true,
+    close_notice_dismissed: true,
+    notifications_enabled: true,
     model_provider: true,
     model_base_url: true,
     model_name: true,
+    model_temperature: true,
+    model_max_output_tokens: true,
+    model_timeout_seconds: true,
+    model_max_retries: true,
+    model_native_structured_output: true,
+    model_streaming_enabled: true,
+    model_native_tool_calling: true,
+    model_context_scope: true,
+    model_input_cost_per_million: true,
+    model_output_cost_per_million: true,
+    github_poll_interval_seconds: true,
+    automatic_analysis_enabled: true,
+    automatic_analysis_include_drafts: true,
+    automatic_analysis_require_checks_success: true,
+    analysis_paused: true,
+    webhook_relay_url: true,
+    webhook_relay_device_id: true,
   })
   .partial()
   .refine((value) => Object.keys(value).length > 0, "At least one setting is required");
@@ -108,6 +158,7 @@ export const onboardingStateSchema = z.object({
   current_step: onboardingStepSchema,
   github: componentStatusSchema,
   model: componentStatusSchema,
+  webhook_relay: componentStatusSchema,
   repository_added: z.boolean(),
   background_monitoring: z.boolean(),
   launch_at_startup: z.boolean(),
@@ -183,10 +234,24 @@ export const repositoryListSchema = z.object({
 });
 export type RepositoryList = z.infer<typeof repositoryListSchema>;
 
+export const repositorySummarySchema = z.object({
+  repository_id: z.string().uuid(),
+  commit_sha: z.string().nullable(),
+  index_version: z.string().uuid().nullable(),
+  file_count: z.number().int().nonnegative(),
+  directory_count: z.number().int().nonnegative(),
+  symbol_count: z.number().int().nonnegative(),
+  dependency_edge_count: z.number().int().nonnegative(),
+  language_counts: z.record(z.string(), z.number().int().nonnegative()),
+  active_pull_requests: z.number().int().nonnegative(),
+});
+export type RepositorySummary = z.infer<typeof repositorySummarySchema>;
+
 export const repositorySyncSchema = z.object({
   sync_id: z.string().uuid(),
   status: z.enum(["completed", "not_modified", "failed"]),
   changed_pull_requests: z.number().int().nonnegative(),
+  changed_check_runs: z.number().int().nonnegative(),
   etag: z.string().nullable(),
   github_rate_remaining: z.number().int().nullable(),
   finished_at: isoDateSchema,
@@ -203,6 +268,8 @@ export const indexVersionSchema = z.object({
   changed_count: z.number().int().nonnegative(),
   deleted_count: z.number().int().nonnegative(),
   duration_ms: z.number().int().nonnegative(),
+  index_duration_ms: z.number().int().nonnegative(),
+  graph_duration_ms: z.number().int().nonnegative(),
   created_at: isoDateSchema,
 });
 export type IndexVersion = z.infer<typeof indexVersionSchema>;
@@ -214,20 +281,17 @@ const graphNodeBase = z.object({
   language: z.string().nullable(),
 });
 
-export const graphNodeSchema = z.discriminatedUnion("kind", [
-  graphNodeBase.extend({ kind: z.literal("file"), symbol: z.null() }),
-  graphNodeBase.extend({ kind: z.literal("class"), symbol: z.string().min(1) }),
-  graphNodeBase.extend({ kind: z.literal("interface"), symbol: z.string().min(1) }),
-  graphNodeBase.extend({ kind: z.literal("function"), symbol: z.string().min(1) }),
-  graphNodeBase.extend({ kind: z.literal("method"), symbol: z.string().min(1) }),
-]);
+export const graphNodeSchema = graphNodeBase.extend({
+  kind: z.enum(["repository", "directory", "file", "test", "class", "interface", "function", "method", "api_route", "database_entity"]),
+  symbol: z.string().min(1).nullable(),
+});
 export type GraphNode = z.infer<typeof graphNodeSchema>;
 
 export const graphEdgeSchema = z.object({
   id: z.string().min(1),
   source: z.string().min(1),
   target: z.string().min(1),
-  kind: z.enum(["contains", "import", "call"]),
+  kind: z.enum(["contains", "import", "export", "call", "inherit", "implement", "reference", "route", "database", "test", "config", "changed-with"]),
   confirmed: z.boolean(),
 });
 export type GraphEdge = z.infer<typeof graphEdgeSchema>;
@@ -251,6 +315,8 @@ export const pullRequestSchema = z.object({
   state: z.string().min(1),
   url: z.string().url(),
   author: z.string().nullable(),
+  base_ref: z.string().nullable(),
+  head_ref: z.string().nullable(),
   base_sha: z.string().nullable(),
   head_sha: z.string().nullable(),
   draft: z.boolean(),
@@ -258,6 +324,14 @@ export const pullRequestSchema = z.object({
   deletions: z.number().int().nonnegative(),
   changed_files: z.number().int().nonnegative(),
   analysis_status: z.string().min(1),
+  checks_status: z.enum(["not_available", "pending", "success", "failure", "neutral"]),
+  last_checks_synced_at: isoDateSchema.nullable(),
+  risk_level: z.enum(["info", "low", "medium", "high", "critical"]).nullable(),
+  risk_score: z.number().min(0).max(100).nullable(),
+  conclusion_summary: z.string().nullable(),
+  impact_paths_json: z.array(z.string()),
+  recommended_review_order_json: z.array(z.string()),
+  latest_model_profile: z.string().nullable(),
   updated_at_github: isoDateSchema.nullable(),
   created_at: isoDateSchema,
   updated_at: isoDateSchema,
@@ -271,6 +345,79 @@ export const pullRequestListSchema = z.object({
   offset: z.number().int().nonnegative(),
 });
 export type PullRequestList = z.infer<typeof pullRequestListSchema>;
+
+export const checkRunSchema = z.object({
+  id: z.string().uuid(),
+  github_id: z.number().int().positive(),
+  pull_request_id: z.string().uuid(),
+  head_sha: z.string().min(7),
+  name: z.string().min(1),
+  status: z.string().min(1),
+  conclusion: z.string().nullable(),
+  details_url: z.string().url().nullable(),
+  app_name: z.string().nullable(),
+  started_at: isoDateSchema.nullable(),
+  completed_at: isoDateSchema.nullable(),
+  synced_at: isoDateSchema,
+});
+export type CheckRun = z.infer<typeof checkRunSchema>;
+
+export const checkRunListSchema = z.object({
+  items: z.array(checkRunSchema),
+  aggregate_status: z.enum(["not_available", "pending", "success", "failure", "neutral"]),
+  synced_at: isoDateSchema.nullable(),
+});
+export type CheckRunList = z.infer<typeof checkRunListSchema>;
+
+export const pullRequestCommitSchema = z.object({
+  id: z.string().uuid(),
+  pull_request_id: z.string().uuid(),
+  sha: z.string().min(7),
+  message: z.string(),
+  author_name: z.string().nullable(),
+  author_email: z.string().nullable(),
+  author_login: z.string().nullable(),
+  authored_at: isoDateSchema.nullable(),
+  html_url: z.string().url().nullable(),
+  position: z.number().int().positive(),
+  synced_at: isoDateSchema,
+});
+export type PullRequestCommit = z.infer<typeof pullRequestCommitSchema>;
+export const pullRequestCommitListSchema = z.array(pullRequestCommitSchema);
+
+export const changedHunkSchema = z.object({
+  id: z.string().uuid(),
+  sequence: z.number().int().positive(),
+  header: z.string().min(1),
+  old_start: z.number().int().nonnegative(),
+  old_count: z.number().int().nonnegative(),
+  new_start: z.number().int().nonnegative(),
+  new_count: z.number().int().nonnegative(),
+  patch: z.string().min(1),
+  patch_hash: z.string().regex(/^[a-f0-9]{64}$/),
+});
+export type ChangedHunk = z.infer<typeof changedHunkSchema>;
+
+export const changedFileDetailSchema = z.object({
+  id: z.string().uuid(),
+  pull_request_id: z.string().uuid(),
+  head_sha: z.string().min(7),
+  blob_sha: z.string().min(7),
+  path: z.string().min(1),
+  previous_path: z.string().nullable(),
+  status: z.string().min(1),
+  additions: z.number().int().nonnegative(),
+  deletions: z.number().int().nonnegative(),
+  changes: z.number().int().nonnegative(),
+  blob_url: z.string().url().nullable(),
+  raw_url: z.string().url().nullable(),
+  contents_url: z.string().url().nullable(),
+  patch_hash: z.string().regex(/^[a-f0-9]{64}$/).nullable(),
+  synced_at: isoDateSchema,
+  hunks: z.array(changedHunkSchema),
+});
+export type ChangedFileDetail = z.infer<typeof changedFileDetailSchema>;
+export const changedFileDetailListSchema = z.array(changedFileDetailSchema);
 
 export const pullRequestDiffSchema = z.object({
   pull_request_id: z.string().uuid(),
@@ -295,10 +442,13 @@ export const agentRunSchema = z.object({
   index_version: z.string().nullable(),
   workflow_version: z.string().nullable(),
   model_profile: z.string().nullable(),
+  model_profile_id: z.string().uuid().nullable().default(null),
+  context_scope: z.enum(["changed_files", "retrieved_context"]),
   input_tokens: z.number().int().nonnegative(),
   output_tokens: z.number().int().nonnegative(),
   latency_ms: z.number().int().nonnegative(),
   retry_count: z.number().int().nonnegative(),
+  retrieval_hit_count: z.number().int().nonnegative(),
   cancellation_requested: z.boolean(),
   error_code: z.string().nullable(),
   error_message: z.string().nullable(),
@@ -396,6 +546,40 @@ export const evidenceSchema = z.object({
 });
 export type Evidence = z.infer<typeof evidenceSchema>;
 
+export const notificationKindSchema = z.enum([
+  "new_pull_request",
+  "new_pull_request_commit",
+  "analysis_started",
+  "high_risk_finding",
+  "analysis_completed",
+  "analysis_failed",
+  "github_authentication_failed",
+  "sidecar_restart_failed",
+  "test",
+]);
+export const notificationCreateSchema = z.object({
+  kind: notificationKindSchema,
+  status: z.enum(["delivered", "failed"]),
+  title: z.string().min(1).max(500),
+  body: z.string().min(1).max(4000),
+  deep_link: z.string().startsWith("tracegate://").nullable().optional(),
+  repository_id: z.string().uuid().nullable().optional(),
+  pull_request_id: z.string().uuid().nullable().optional(),
+  agent_run_id: z.string().uuid().nullable().optional(),
+  error_message: z.string().max(4000).nullable().optional(),
+});
+export type NotificationCreate = z.infer<typeof notificationCreateSchema>;
+export const notificationRecordSchema = notificationCreateSchema.extend({
+  id: z.string().uuid(),
+  deep_link: z.string().startsWith("tracegate://").nullable(),
+  repository_id: z.string().uuid().nullable(),
+  pull_request_id: z.string().uuid().nullable(),
+  agent_run_id: z.string().uuid().nullable(),
+  error_message: z.string().nullable(),
+  attempted_at: isoDateSchema,
+});
+export type NotificationRecord = z.infer<typeof notificationRecordSchema>;
+
 export const evaluationArtifactSchema = z.object({
   path: z.string().min(1),
   sha256: z.string().regex(/^[a-f0-9]{64}$/),
@@ -442,7 +626,7 @@ export const agentDescriptorSchema = z.object({
   name: z.string().min(1),
   version: z.string().min(1),
   responsibility: z.string().min(1),
-  status: z.literal("enabled"),
+  status: z.enum(["enabled", "disabled"]),
   capabilities: z.array(z.string().min(1)),
   allowed_tools: z.array(z.string().min(1)),
 });
@@ -472,6 +656,8 @@ export const toolDescriptorSchema = z.object({
 });
 export type ToolDescriptor = z.infer<typeof toolDescriptorSchema>;
 export const toolDescriptorListSchema = z.array(toolDescriptorSchema);
+export const registryToggleSchema = z.object({ enabled: z.boolean() });
+export type RegistryToggle = z.infer<typeof registryToggleSchema>;
 
 export const reviewMapNodeSchema = z.object({
   id: z.string().min(1),
@@ -536,6 +722,8 @@ export const diagnosticsSchema = z.object({
   python_version: z.string().min(1),
   frontend_version: z.string().nullable(),
   desktop_version: z.string().nullable(),
+  rust_version_info: z.string().nullable(),
+  log_level: z.string().min(1),
   database_type: z.string().min(1),
   database_path: z.string().nullable(),
   log_path: z.string().min(1),
@@ -544,6 +732,7 @@ export const diagnosticsSchema = z.object({
   api_port: z.number().int().positive(),
   github: componentStatusSchema,
   model: componentStatusSchema,
+  webhook_relay: componentStatusSchema,
   monitor: z.object({
     running: z.boolean(),
     polling: z.boolean(),
@@ -551,9 +740,30 @@ export const diagnosticsSchema = z.object({
     last_started_at: isoDateSchema.nullable(),
     last_finished_at: isoDateSchema.nullable(),
     last_error: z.string().nullable(),
+    rate_limited_until: isoDateSchema.nullable(),
+  }),
+  relay_monitor: z.object({
+    running: z.boolean(),
+    connected: z.boolean(),
+    reconnect_count: z.number().int().nonnegative(),
+    last_connected_at: isoDateSchema.nullable(),
+    last_event_at: isoDateSchema.nullable(),
+    last_repository: z.string().nullable(),
+    last_error: z.string().nullable(),
   }),
   agent_queue: z.number().int().nonnegative(),
   index_queue: z.number().int().nonnegative(),
+  last_github_api_request_count: z.number().int().nonnegative().nullable(),
+  last_github_api_duration_ms: z.number().int().nonnegative().nullable(),
+  last_index_duration_ms: z.number().int().nonnegative().nullable(),
+  last_graph_duration_ms: z.number().int().nonnegative().nullable(),
+  last_retrieval_result_count: z.number().int().nonnegative().nullable(),
+  last_model_latency_ms: z.number().int().nonnegative().nullable(),
+  last_model_input_tokens: z.number().int().nonnegative().nullable(),
+  last_model_output_tokens: z.number().int().nonnegative().nullable(),
+  last_model_retry_count: z.number().int().nonnegative().nullable(),
+  delivered_notification_count: z.number().int().nonnegative(),
+  failed_notification_count: z.number().int().nonnegative(),
   telemetry_enabled: z.literal(false),
 });
 export type Diagnostics = z.infer<typeof diagnosticsSchema>;

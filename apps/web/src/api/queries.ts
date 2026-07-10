@@ -9,9 +9,13 @@ export const queryKeys = {
   settings: ["settings"] as const,
   onboarding: ["onboarding"] as const,
   repositories: ["repositories"] as const,
+  repositorySummary: (repositoryId: string) => ["repository-summary", repositoryId] as const,
   pullRequests: (repositoryId?: string) => ["pull-requests", repositoryId ?? "all"] as const,
   repositoryGraph: (repositoryId: string) => ["repository-graph", repositoryId] as const,
   pullRequest: (pullRequestId: string) => ["pull-request", pullRequestId] as const,
+  pullRequestChecks: (pullRequestId: string) => ["pull-request-checks", pullRequestId] as const,
+  pullRequestCommits: (pullRequestId: string) => ["pull-request-commits", pullRequestId] as const,
+  pullRequestFiles: (pullRequestId: string) => ["pull-request-files", pullRequestId] as const,
   pullRequestDiff: (pullRequestId: string, path?: string) => ["pull-request-diff", pullRequestId, path ?? "first"] as const,
   pullRequestGraph: (pullRequestId: string) => ["pull-request-graph", pullRequestId] as const,
   pullRequestTour: (pullRequestId: string) => ["pull-request-tour", pullRequestId] as const,
@@ -119,6 +123,19 @@ export function useDeleteRepository() {
   });
 }
 
+export function useClearRepositoryCache() {
+  const client = useApiClient();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (repositoryId: string) => client.clearRepositoryCache(repositoryId),
+    onSuccess: (_result, repositoryId) => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.repositories });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.repositorySummary(repositoryId) });
+      void queryClient.removeQueries({ queryKey: queryKeys.repositoryGraph(repositoryId) });
+    },
+  });
+}
+
 export function useSyncRepository() {
   const client = useApiClient();
   const queryClient = useQueryClient();
@@ -127,6 +144,9 @@ export function useSyncRepository() {
     onSuccess: (_result, repositoryId) => {
       void queryClient.invalidateQueries({ queryKey: queryKeys.repositories });
       void queryClient.invalidateQueries({ queryKey: queryKeys.pullRequests(repositoryId) });
+      void queryClient.invalidateQueries({ queryKey: ["pull-request-checks"] });
+      void queryClient.invalidateQueries({ queryKey: ["pull-request-commits"] });
+      void queryClient.invalidateQueries({ queryKey: ["pull-request-files"] });
     },
   });
 }
@@ -139,7 +159,18 @@ export function useIndexRepository() {
     onSuccess: (_result, repositoryId) => {
       void queryClient.invalidateQueries({ queryKey: queryKeys.repositories });
       void queryClient.invalidateQueries({ queryKey: queryKeys.repositoryGraph(repositoryId) });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.repositorySummary(repositoryId) });
     },
+  });
+}
+
+export function useRepositorySummary(repositoryId?: string) {
+  const client = useApiClient();
+  return useQuery({
+    queryKey: queryKeys.repositorySummary(repositoryId ?? "none"),
+    queryFn: ({ signal }) => client.getRepositorySummary(repositoryId ?? "", signal),
+    enabled: Boolean(repositoryId),
+    retry: 1,
   });
 }
 
@@ -157,6 +188,36 @@ export function usePullRequest(pullRequestId?: string) {
   return useQuery({
     queryKey: queryKeys.pullRequest(pullRequestId ?? "none"),
     queryFn: ({ signal }) => client.getPullRequest(pullRequestId ?? "", signal),
+    enabled: Boolean(pullRequestId),
+    retry: 1,
+  });
+}
+
+export function usePullRequestChecks(pullRequestId?: string) {
+  const client = useApiClient();
+  return useQuery({
+    queryKey: queryKeys.pullRequestChecks(pullRequestId ?? "none"),
+    queryFn: ({ signal }) => client.listCheckRuns(pullRequestId ?? "", signal),
+    enabled: Boolean(pullRequestId),
+    retry: 1,
+  });
+}
+
+export function usePullRequestCommits(pullRequestId?: string) {
+  const client = useApiClient();
+  return useQuery({
+    queryKey: queryKeys.pullRequestCommits(pullRequestId ?? "none"),
+    queryFn: ({ signal }) => client.listPullRequestCommits(pullRequestId ?? "", signal),
+    enabled: Boolean(pullRequestId),
+    retry: 1,
+  });
+}
+
+export function usePullRequestFiles(pullRequestId?: string) {
+  const client = useApiClient();
+  return useQuery({
+    queryKey: queryKeys.pullRequestFiles(pullRequestId ?? "none"),
+    queryFn: ({ signal }) => client.listPullRequestFiles(pullRequestId ?? "", signal),
     enabled: Boolean(pullRequestId),
     retry: 1,
   });
@@ -304,12 +365,32 @@ export function useAgents() {
   });
 }
 
+export function useSetAgentEnabled() {
+  const client = useApiClient();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ name, enabled }: { name: string; enabled: boolean }) =>
+      client.setAgentEnabled(name, enabled),
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: queryKeys.agents }),
+  });
+}
+
 export function useTools() {
   const client = useApiClient();
   return useQuery({
     queryKey: queryKeys.tools,
     queryFn: ({ signal }) => client.listTools(signal),
     retry: 1,
+  });
+}
+
+export function useSetToolEnabled() {
+  const client = useApiClient();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ name, enabled }: { name: string; enabled: boolean }) =>
+      client.setToolEnabled(name, enabled),
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: queryKeys.tools }),
   });
 }
 

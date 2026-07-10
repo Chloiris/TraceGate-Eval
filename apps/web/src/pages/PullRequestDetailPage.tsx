@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { DiffEditor, loader } from "@monaco-editor/react";
+import { useEffect, useState } from "react";
+import { DiffEditor, Editor, loader } from "@monaco-editor/react";
 import * as monaco from "monaco-editor/esm/vs/editor/editor.api.js";
 import EditorWorker from "monaco-editor/esm/vs/editor/editor.worker?worker";
 import "monaco-editor/esm/vs/basic-languages/javascript/javascript.contribution";
@@ -16,13 +16,19 @@ import {
   useEvidence,
   useFindings,
   usePullRequest,
+  usePullRequestChecks,
+  usePullRequestCommits,
   usePullRequestDiff,
+  usePullRequestFiles,
   usePullRequestGraph,
   usePullRequestTour,
+  useRepositories,
   useRun,
   useRuns,
+  useSyncRepository,
 } from "../api/queries";
 import { ErrorState, LoadingState } from "../components/RequestState";
+import type { HostBridge } from "../host/hostBridge";
 import { errorMessage } from "../lib/errors";
 import { useUiStore } from "../store/uiStore";
 import { useI18n } from "../i18n";
@@ -41,7 +47,7 @@ function languageFor(path: string | null): string {
   return ({ py: "python", ts: "typescript", tsx: "typescript", js: "javascript", jsx: "javascript", rs: "rust", java: "java", json: "json", md: "markdown", yml: "yaml", yaml: "yaml" } as Record<string, string>)[extension ?? ""] ?? "plaintext";
 }
 
-export function PullRequestDetailPage() {
+export function PullRequestDetailPage({ host }: { host: HostBridge }) {
   const { text } = useI18n();
   const pullRequestId = useUiStore((state) => state.selectedPullRequestId);
   const selectedDiffPath = useUiStore((state) => state.selectedDiffPath);
@@ -50,8 +56,13 @@ export function PullRequestDetailPage() {
   const selectRun = useUiStore((state) => state.selectRun);
   const setActiveView = useUiStore((state) => state.setActiveView);
   const [tab, setTab] = useState<DetailTab>("overview");
+  const [targetLine, setTargetLine] = useState<number | null>(null);
+  const repositories = useRepositories();
   const pullRequest = usePullRequest(pullRequestId ?? undefined);
   const diff = usePullRequestDiff(pullRequestId ?? undefined, selectedDiffPath ?? undefined);
+  const checks = usePullRequestChecks(pullRequestId ?? undefined);
+  const commits = usePullRequestCommits(pullRequestId ?? undefined);
+  const fileDetails = usePullRequestFiles(pullRequestId ?? undefined);
   const reviewMap = usePullRequestGraph(pullRequestId ?? undefined);
   const tour = usePullRequestTour(pullRequestId ?? undefined);
   const runs = useRuns(pullRequestId ?? undefined);
@@ -60,10 +71,12 @@ export function PullRequestDetailPage() {
   const findings = useFindings(effectiveRunId);
   const evidence = useEvidence(effectiveRunId);
   const analyze = useAnalyzePullRequest();
+  const syncRepository = useSyncRepository();
 
-  function jumpToPath(path: string | null) {
+  function jumpToPath(path: string | null, line?: number | null) {
     if (!path) return;
     selectDiffPath(path);
+    setTargetLine(line ?? null);
     setTab("files");
   }
 
@@ -74,6 +87,7 @@ export function PullRequestDetailPage() {
   if (pullRequest.isError) return <ErrorState title={text("PR 详情不可用", "PR details unavailable")} message={errorMessage(pullRequest.error)} onRetry={() => void pullRequest.refetch()} />;
 
   const current = pullRequest.data;
+  const repository = repositories.data?.items.find((item) => item.id === current.repository_id);
   return (
     <div className="page-stack pr-detail-page">
       <header className="detail-hero">
@@ -85,14 +99,14 @@ export function PullRequestDetailPage() {
       <div className="tab-list" role="tablist" aria-label={text("PR 详情视图", "PR detail views")}>{tabs.map(([id, label]) => <button key={id} className={tab === id ? "tab-active" : ""} type="button" role="tab" aria-selected={tab === id} onClick={() => setTab(id)}>{label}</button>)}</div>
 
       {tab === "overview" ? <Overview current={current} runs={runs.data?.items ?? []} /> : null}
-      {tab === "files" ? <DiffPanel query={diff} selectedPath={selectedDiffPath} onSelectPath={selectDiffPath} /> : null}
+      {tab === "files" ? <DiffPanel query={diff} selectedPath={selectedDiffPath} onSelectPath={(path) => { selectDiffPath(path); setTargetLine(null); }} targetLine={targetLine} findings={findings.data ?? []} evidence={evidence.data ?? []} fileDetails={fileDetails.data ?? []} pullRequestUrl={current.url} workspace={repository?.local_path ?? null} host={host} /> : null}
       {tab === "map" ? <ReviewMapPanel query={reviewMap} onSelectPath={jumpToPath} /> : null}
       {tab === "tour" ? <TourPanel query={tour} onSelectPath={jumpToPath} /> : null}
       {tab === "findings" ? <FindingsPanel query={findings} onSelectPath={jumpToPath} /> : null}
       {tab === "evidence" ? <EvidencePanel query={evidence} onSelectPath={jumpToPath} /> : null}
       {tab === "trace" ? <TracePanel query={run} onOpenRun={() => effectiveRunId && selectRun(effectiveRunId)} /> : null}
-      {tab === "checks" ? <div className="honest-empty-state"><div className="empty-mark">CI</div><div><h2>{text("Check Run 快照尚未持久化", "Check Run snapshots are not persisted yet")}</h2><p>{text("GitHub Provider 已实现真实 Check Runs 读取，但当前 PR 同步表尚未保存该响应，因此这里不会伪造绿色检查。", "GitHubProvider can read real Check Runs, but PR synchronization does not yet persist that response, so this view never fabricates green checks.")}</p></div></div> : null}
-      {tab === "history" ? <HistoryPanel pullRequest={current} runs={runs.data?.items ?? []} /> : null}
+      {tab === "checks" ? <ChecksPanel query={checks} syncPending={syncRepository.isPending} syncError={syncRepository.error} onRefresh={() => syncRepository.mutate(current.repository_id)} /> : null}
+      {tab === "history" ? <HistoryPanel pullRequest={current} runs={runs.data?.items ?? []} commits={commits.data ?? []} /> : null}
     </div>
   );
 }
@@ -100,15 +114,105 @@ export function PullRequestDetailPage() {
 function Overview({ current, runs }: { current: ReturnType<typeof usePullRequest>["data"] & {}; runs: NonNullable<ReturnType<typeof useRuns>["data"]>["items"] }) {
   const { text } = useI18n();
   const latest = runs[0];
-  return <section className="panel"><div className="metric-cards"><div><span>{text("分析状态", "Analysis status")}</span><strong>{current.analysis_status}</strong></div><div><span>{text("风险", "Risk")}</span><strong>{latest?.status === "completed" ? text("查看 Findings", "View Findings") : text("尚无结论", "No conclusion")}</strong></div><div><span>Head SHA</span><strong className="mono">{current.head_sha?.slice(0, 12) ?? text("未记录", "Not recorded")}</strong></div><div><span>Base SHA</span><strong className="mono">{current.base_sha?.slice(0, 12) ?? text("未记录", "Not recorded")}</strong></div><div><span>{text("最近模型", "Latest model")}</span><strong>{latest?.model_profile ?? text("尚未运行", "Not run")}</strong></div><div><span>{text("耗时 / Token", "Duration / tokens")}</span><strong>{latest ? `${latest.latency_ms} ms · ${latest.input_tokens + latest.output_tokens}` : text("尚未运行", "Not run")}</strong></div></div>{latest?.error_message ? <p className="inline-error">{latest.error_code}: {latest.error_message}</p> : null}<p className="field-note">{text("结论摘要和推荐顺序只在真实 Agent Run 成功持久化后显示；静态 Change Tour 位于独立标签。", "Conclusions and recommendations appear only after a real Agent Run is persisted successfully; the static Change Tour has its own tab.")}</p></section>;
+  return (
+    <section className="panel">
+      <div className="metric-cards">
+        <div><span>{text("分析状态", "Analysis status")}</span><strong>{current.analysis_status}</strong></div>
+        <div><span>Checks</span><strong>{current.checks_status}</strong></div>
+        <div><span>{text("风险", "Risk")}</span><strong>{current.risk_level ? `${current.risk_level} · ${current.risk_score ?? 0}` : text("尚无结论", "No conclusion")}</strong></div>
+        <div><span>{text("分支", "Branches")}</span><strong className="mono">{current.head_ref ?? text("未记录", "not recorded")} → {current.base_ref ?? text("未记录", "not recorded")}</strong></div>
+        <div><span>Head SHA</span><strong className="mono">{current.head_sha?.slice(0, 12) ?? text("未记录", "Not recorded")}</strong></div>
+        <div><span>Base SHA</span><strong className="mono">{current.base_sha?.slice(0, 12) ?? text("未记录", "Not recorded")}</strong></div>
+        <div><span>{text("最近模型", "Latest model")}</span><strong>{current.latest_model_profile ?? latest?.model_profile ?? text("尚未运行", "Not run")}</strong></div>
+        <div><span>{text("索引版本", "Index version")}</span><strong className="mono">{latest?.index_version?.slice(0, 12) ?? text("未记录", "Not recorded")}</strong></div>
+        <div><span>{text("模型上下文", "Model context")}</span><strong>{latest?.context_scope ?? text("尚未运行", "Not run")}</strong></div>
+        <div><span>{text("耗时 / Token", "Duration / tokens")}</span><strong>{latest ? `${latest.latency_ms} ms · ${latest.input_tokens + latest.output_tokens}` : text("尚未运行", "Not run")}</strong></div>
+      </div>
+      {latest?.error_message ? <p className="inline-error">{latest.error_code}: {latest.error_message}</p> : null}
+      {current.conclusion_summary ? (
+        <div className="review-summary">
+          <h3>{text("结论摘要", "Review summary")}</h3>
+          <p>{current.conclusion_summary}</p>
+          <dl className="metadata-grid">
+            <div><dt>{text("影响范围", "Impact scope")}</dt><dd>{current.impact_paths_json.length ? current.impact_paths_json.join(" · ") : text("未识别到有证据支持的影响路径", "No evidence-backed impact paths identified")}</dd></div>
+            <div><dt>{text("推荐审查顺序", "Recommended review order")}</dt><dd>{current.recommended_review_order_json.length ? current.recommended_review_order_json.join(" → ") : text("没有可验证的推荐顺序", "No verifiable review order")}</dd></div>
+          </dl>
+        </div>
+      ) : null}
+      <p className="field-note">{text("结论摘要和推荐顺序只在真实 Agent Run 成功持久化后显示；静态 Change Tour 位于独立标签。", "Conclusions and recommendations appear only after a real Agent Run is persisted successfully; the static Change Tour has its own tab.")}</p>
+    </section>
+  );
 }
 
-function DiffPanel({ query, selectedPath, onSelectPath }: { query: ReturnType<typeof usePullRequestDiff>; selectedPath: string | null; onSelectPath: (path: string) => void }) {
+function ChecksPanel({ query, syncPending, syncError, onRefresh }: { query: ReturnType<typeof usePullRequestChecks>; syncPending: boolean; syncError: unknown; onRefresh: () => void }) {
+  const { locale, text } = useI18n();
+  if (query.isPending) return <LoadingState label={text("正在读取 Check Run 快照…", "Reading Check Run snapshots…")} />;
+  if (query.isError) return <ErrorState title={text("Checks 不可用", "Checks unavailable")} message={errorMessage(query.error)} onRetry={() => void query.refetch()} />;
+  return <section className="panel"><div className="section-heading"><div><span className="eyebrow">GITHUB CHECK RUNS · {query.data.aggregate_status}</span><h2>Checks</h2></div><button className="button button-secondary button-small" type="button" disabled={syncPending} onClick={onRefresh}>{syncPending ? text("刷新中…", "Refreshing…") : text("从 GitHub 刷新", "Refresh from GitHub")}</button></div>{syncError ? <p className="inline-error">{text("刷新失败", "Refresh failed")}: {errorMessage(syncError)}</p> : null}{query.data.items.length === 0 ? <div className="honest-empty-state"><div className="empty-mark">CI</div><div><h2>{text("当前 Head 没有 Check Run", "No Check Runs for this head")}</h2><p>{text("这是 GitHub 返回并持久化的空结果，不代表检查自动通过。", "This is the empty result returned by GitHub and persisted by TraceGate; it does not mean checks passed.")}</p></div></div> : <div className="check-list">{query.data.items.map((check) => <article className="check-card" key={check.id}><div><span className={`pill pill-${check.conclusion ?? check.status}`}>{check.status}</span><strong>{check.name}</strong></div><p>{check.app_name ?? "GitHub"} · {check.conclusion ?? text("尚无结论", "No conclusion")}</p><small>{check.completed_at ? new Date(check.completed_at).toLocaleString(locale) : text("仍在运行或未记录完成时间", "Still running or completion time unavailable")}</small>{check.details_url ? <a className="text-button" href={check.details_url} target="_blank" rel="noreferrer">{text("打开检查详情", "Open check details")}</a> : null}</article>)}</div>}<p className="field-note">{text("快照时间", "Snapshot time")}: {query.data.synced_at ? new Date(query.data.synced_at).toLocaleString(locale) : text("尚未同步", "Not synchronized")}</p></section>;
+}
+
+function DiffPanel({ query, selectedPath, onSelectPath, targetLine, findings, evidence, fileDetails, pullRequestUrl, workspace, host }: {
+  query: ReturnType<typeof usePullRequestDiff>;
+  selectedPath: string | null;
+  onSelectPath: (path: string) => void;
+  targetLine: number | null;
+  findings: NonNullable<ReturnType<typeof useFindings>["data"]>;
+  evidence: NonNullable<ReturnType<typeof useEvidence>["data"]>;
+  fileDetails: NonNullable<ReturnType<typeof usePullRequestFiles>["data"]>;
+  pullRequestUrl: string;
+  workspace: string | null;
+  host: HostBridge;
+}) {
   const { text } = useI18n();
-  if (query.isPending) return <LoadingState label={text("正在读取真实 Git diff…", "Reading real Git diff…")} />;
+  const [version, setVersion] = useState<"diff" | "base" | "head">("diff");
+  const [editor, setEditor] = useState<monaco.editor.IStandaloneDiffEditor | null>(null);
+  const data = query.data;
+  const path = data?.selected_path ?? selectedPath;
+  const pathFindings = findings.filter((item) => item.file_path === path && item.line_start !== null);
+  const pathEvidence = evidence.filter((item) => item.file_path === path);
+
+  useEffect(() => {
+    if (!editor || version !== "diff") return;
+    const modified = editor.getModifiedEditor();
+    const decorations = [
+      ...pathFindings.map((finding) => ({
+        range: new monaco.Range(finding.line_start ?? 1, 1, finding.line_end ?? finding.line_start ?? 1, 1),
+        options: {
+          isWholeLine: true,
+          className: `monaco-finding-line severity-${finding.severity}`,
+          glyphMarginClassName: "monaco-finding-glyph",
+          glyphMarginHoverMessage: { value: `**Finding · ${finding.severity}**\n\n${finding.title}` },
+          overviewRuler: { color: "#ef5b67", position: monaco.editor.OverviewRulerLane.Right },
+        },
+      })),
+      ...pathEvidence.map((item) => {
+        const rawLine = item.payload_json.line;
+        const line = typeof rawLine === "number" && Number.isInteger(rawLine) && rawLine > 0 ? rawLine : 1;
+        return {
+          range: new monaco.Range(line, 1, line, 1),
+          options: {
+            isWholeLine: true,
+            className: "monaco-evidence-line",
+            glyphMarginClassName: "monaco-evidence-glyph",
+            glyphMarginHoverMessage: { value: `**Evidence · ${item.source_type}**\n\n${item.content_hash}` },
+            overviewRuler: { color: "#4ea1ff", position: monaco.editor.OverviewRulerLane.Left },
+          },
+        };
+      }),
+    ];
+    const collection = modified.createDecorationsCollection(decorations);
+    if (targetLine && targetLine > 0) {
+      modified.revealLineInCenter(targetLine);
+      modified.setPosition({ lineNumber: targetLine, column: 1 });
+      modified.focus();
+    }
+    return () => collection.clear();
+  }, [editor, pathEvidence, pathFindings, targetLine, version]);
+
   if (query.isError) return <ErrorState title={text("Diff 不可用", "Diff unavailable")} message={errorMessage(query.error)} onRetry={() => void query.refetch()} />;
-  const path = query.data.selected_path ?? selectedPath;
-  return <section className="diff-layout"><aside className="file-tree"><span className="eyebrow">CHANGED FILES</span>{query.data.changed_files.map((file) => <button key={file.path} className={path === file.path ? "file-active" : ""} type="button" onClick={() => onSelectPath(file.path)}><span>{file.status}</span>{file.path}</button>)}</aside><div className="diff-workspace"><div className="diff-toolbar"><strong>{path ?? text("没有变更文件", "No changed files")}</strong>{path ? <button className="text-button" type="button" onClick={() => void navigator.clipboard.writeText(path)}>{text("复制路径", "Copy path")}</button> : null}</div><DiffEditor height="620px" language={languageFor(path)} original={query.data.original ?? ""} modified={query.data.modified ?? ""} theme="vs-dark" options={{ readOnly: true, renderSideBySide: true, minimap: { enabled: true }, automaticLayout: true, originalEditable: false }} /></div></section>;
+  if (query.isPending || !data) return <LoadingState label={text("正在读取真实 Git diff…", "Reading real Git diff…")} />;
+  const editorOptions: monaco.editor.IStandaloneEditorConstructionOptions = { readOnly: true, minimap: { enabled: true }, automaticLayout: true, glyphMargin: true };
+  return <section className="diff-layout"><aside className="file-tree"><span className="eyebrow">CHANGED FILES</span>{data.changed_files.map((file) => { const detail = fileDetails.find((item) => item.path === file.path); return <button key={file.path} className={path === file.path ? "file-active" : ""} type="button" onClick={() => onSelectPath(file.path)}><span>{file.status}</span><span>{file.path}{detail ? <small>+{detail.additions} / −{detail.deletions} · {detail.hunks.length} hunks</small> : null}</span></button>; })}</aside><div className="diff-workspace"><div className="diff-toolbar"><strong>{path ?? text("没有变更文件", "No changed files")}</strong><div className="action-row compact"><div className="segmented-control" aria-label={text("版本视图", "Version view")}>{(["diff", "base", "head"] as const).map((value) => <button className={version === value ? "segment-active" : ""} key={value} type="button" onClick={() => setVersion(value)}>{value === "diff" ? "Diff" : value === "base" ? "Base" : "Head"}</button>)}</div>{path ? <button className="text-button" type="button" onClick={() => void navigator.clipboard.writeText(path)}>{text("复制路径", "Copy path")}</button> : null}<a className="text-button" href={`${pullRequestUrl}/files`} target="_blank" rel="noreferrer">GitHub</a><button className="text-button" type="button" disabled={!path || !workspace || !host.openWorkspaceFile} onClick={() => path && workspace && void host.openWorkspaceFile?.(workspace, path, targetLine ?? undefined)}>VS Code</button></div></div>{version === "diff" ? <DiffEditor height="620px" language={languageFor(path)} original={data.original ?? ""} modified={data.modified ?? ""} theme="vs-dark" onMount={setEditor} options={{ ...editorOptions, renderSideBySide: true, originalEditable: false }} /> : <Editor height="620px" language={languageFor(path)} value={version === "base" ? data.original ?? "" : data.modified ?? ""} theme="vs-dark" options={editorOptions} /> }<div className="diff-marker-legend"><span className="finding-marker">Finding {pathFindings.length}</span><span className="evidence-marker">Evidence {pathEvidence.length}</span><span>{text("缺少精确行号的 Evidence 标在第 1 行，并在悬停中明确来源。", "Evidence without an exact line is marked on line 1 and identified by source on hover.")}</span></div></div></section>;
 }
 
 function ReviewMapPanel({ query, onSelectPath }: { query: ReturnType<typeof usePullRequestGraph>; onSelectPath: (path: string | null) => void }) {
@@ -126,23 +230,23 @@ function TourPanel({ query, onSelectPath }: { query: ReturnType<typeof usePullRe
   const { text } = useI18n();
   if (query.isPending) return <LoadingState label={text("正在生成静态审查顺序…", "Generating static review order…")} />;
   if (query.isError) return <ErrorState title={text("Change Tour 不可用", "Change Tour unavailable")} message={errorMessage(query.error)} onRetry={() => void query.refetch()} />;
-  return <section className="panel"><p className={query.data.complete ? "inline-success" : "blocker-note"}>{query.data.message}</p><ol className="tour-list">{query.data.steps.map((step) => <li key={step.sequence}><button type="button" onClick={() => onSelectPath(step.files[0] ?? null)}><span>{String(step.sequence).padStart(2, "0")}</span><div><strong>{step.title}</strong><small>{step.files.join(", ")} · confidence {step.confidence}</small><p>{step.purpose}</p>{step.risk ? <em>{text("风险", "Risk")}: {step.risk}</em> : null}</div></button></li>)}</ol></section>;
+  return <section className="panel"><p className={query.data.complete ? "inline-success" : "blocker-note"}>{query.data.message}</p><ol className="tour-list">{query.data.steps.map((step) => <li key={step.sequence}><button type="button" onClick={() => onSelectPath(step.files[0] ?? null)}><span>{String(step.sequence).padStart(2, "0")}</span><div><strong>{step.title}</strong><small>{step.files.join(", ")} · confidence {step.confidence}{step.prerequisite_step ? ` · after ${step.prerequisite_step}` : ""}</small><p>{step.purpose}</p>{step.risk ? <em>{text("风险", "Risk")}: {step.risk}</em> : null}<dl className="tour-metadata"><div><dt>{text("相关符号", "Symbols")}</dt><dd>{step.symbols.length ? step.symbols.join(" · ") : text("静态索引未解析出相关符号", "No related symbol resolved by the static index")}</dd></div><div><dt>Evidence</dt><dd>{step.evidence_ids.length ? step.evidence_ids.join(" · ") : text("尚无 Agent Evidence", "No Agent Evidence yet")}</dd></div><div><dt>{text("建议检查点", "Checkpoints")}</dt><dd><ul>{step.checkpoints.map((checkpoint) => <li key={checkpoint}>{checkpoint}</li>)}</ul></dd></div></dl></div></button></li>)}</ol></section>;
 }
 
-function FindingsPanel({ query, onSelectPath }: { query: ReturnType<typeof useFindings>; onSelectPath: (path: string | null) => void }) {
+function FindingsPanel({ query, onSelectPath }: { query: ReturnType<typeof useFindings>; onSelectPath: (path: string | null, line?: number | null) => void }) {
   const { text } = useI18n();
   if (query.isPending) return <LoadingState label={text("正在读取 Findings…", "Reading Findings…")} />;
   if (query.isError) return <ErrorState title={text("Findings 不可用", "Findings unavailable")} message={errorMessage(query.error)} />;
   if (!query.data.length) return <div className="honest-empty-state"><div className="empty-mark">F</div><div><h2>{text("当前 Run 没有 Finding", "This run has no Findings")}</h2><p>{text("这表示后端未持久化 Finding，不代表代码自动安全。", "This means the backend persisted no Finding; it does not mean the code is automatically safe.")}</p></div></div>;
-  return <div className="finding-list">{query.data.map((finding) => <article key={finding.id} className={`finding-card severity-${finding.severity}`}><div><span className="pill">{finding.severity} · {Math.round(finding.confidence * 100)}%</span><span className="mono">{finding.verifier_status}</span></div><h3>{finding.title}</h3><p>{finding.message}</p><button className="text-button" type="button" disabled={!finding.file_path} onClick={() => onSelectPath(finding.file_path)}>{finding.file_path ? `${finding.file_path}:${finding.line_start ?? "?"}` : text("没有可跳转的源码位置", "No source location to open")}</button><small>commit {finding.commit_sha?.slice(0, 12) ?? text("未记录", "not recorded")} · evidence {finding.evidence_ids_json.length}</small></article>)}</div>;
+  return <div className="finding-list">{query.data.map((finding) => <article key={finding.id} className={`finding-card severity-${finding.severity}`}><div><span className="pill">{finding.severity} · {Math.round(finding.confidence * 100)}%</span><span className="mono">{finding.verifier_status}</span></div><h3>{finding.title}</h3><p>{finding.message}</p><button className="text-button" type="button" disabled={!finding.file_path} onClick={() => onSelectPath(finding.file_path, finding.line_start)}>{finding.file_path ? `${finding.file_path}:${finding.line_start ?? "?"}` : text("没有可跳转的源码位置", "No source location to open")}</button><small>commit {finding.commit_sha?.slice(0, 12) ?? text("未记录", "not recorded")} · evidence {finding.evidence_ids_json.length}</small></article>)}</div>;
 }
 
-function EvidencePanel({ query, onSelectPath }: { query: ReturnType<typeof useEvidence>; onSelectPath: (path: string | null) => void }) {
+function EvidencePanel({ query, onSelectPath }: { query: ReturnType<typeof useEvidence>; onSelectPath: (path: string | null, line?: number | null) => void }) {
   const { text } = useI18n();
   if (query.isPending) return <LoadingState label={text("正在读取 Evidence…", "Reading Evidence…")} />;
   if (query.isError) return <ErrorState title={text("Evidence 不可用", "Evidence unavailable")} message={errorMessage(query.error)} />;
   if (!query.data.length) return <div className="honest-empty-state"><div className="empty-mark">E</div><div><h2>{text("当前 Run 没有 Evidence", "This run has no Evidence")}</h2><p>{text("TraceGate 不会补造文件、行号或搜索结果。", "TraceGate never invents files, line numbers, or search results.")}</p></div></div>;
-  return <div className="evidence-list">{query.data.map((item) => <article className="evidence-card" key={item.id}><span className="eyebrow">{item.source_type}</span><h3>{item.file_path ?? item.source_uri}</h3><p className="mono">{item.content_hash}</p><button className="text-button" type="button" disabled={!item.file_path} onClick={() => onSelectPath(item.file_path)}>{text("打开 Diff", "Open Diff")}</button><details><summary>{text("结构化载荷", "Structured payload")}</summary><pre>{JSON.stringify(item.payload_json, null, 2)}</pre></details></article>)}</div>;
+  return <div className="evidence-list">{query.data.map((item) => <article className="evidence-card" key={item.id}><span className="eyebrow">{item.source_type}</span><h3>{item.file_path ?? item.source_uri}</h3><p className="mono">{item.content_hash}</p><button className="text-button" type="button" disabled={!item.file_path} onClick={() => onSelectPath(item.file_path, typeof item.payload_json.line === "number" ? item.payload_json.line : null)}>{text("打开 Diff", "Open Diff")}</button><details><summary>{text("结构化载荷", "Structured payload")}</summary><pre>{JSON.stringify(item.payload_json, null, 2)}</pre></details></article>)}</div>;
 }
 
 function TracePanel({ query, onOpenRun }: { query: ReturnType<typeof useRun>; onOpenRun: () => void }) {
@@ -153,7 +257,7 @@ function TracePanel({ query, onOpenRun }: { query: ReturnType<typeof useRun>; on
   return <section className="panel"><div className="section-heading"><div><span className="eyebrow">{query.data.status}</span><h2>{query.data.workflow_version}</h2></div><button className="button button-secondary button-small" type="button" onClick={onOpenRun}>{text("打开完整 Run", "Open full run")}</button></div><ol className="trace-timeline">{query.data.steps.map((step) => <li key={step.id} className={`trace-${step.status}`}><span>{step.sequence}</span><div><strong>{step.node}</strong><small>{step.duration_ms ?? 0} ms · {step.status}</small><p>{step.output_summary ?? step.error_message ?? text("尚无输出摘要", "No output summary")}</p>{query.data.tool_calls.filter((tool) => tool.agent_step_id === step.id).map((tool) => <details key={tool.id}><summary>{tool.tool_name} · {tool.status} · {tool.duration_ms ?? 0} ms</summary><pre>{tool.arguments_summary}\n{tool.output_summary}</pre></details>)}</div></li>)}</ol></section>;
 }
 
-function HistoryPanel({ pullRequest, runs }: { pullRequest: NonNullable<ReturnType<typeof usePullRequest>["data"]>; runs: NonNullable<ReturnType<typeof useRuns>["data"]>["items"] }) {
+function HistoryPanel({ pullRequest, runs, commits }: { pullRequest: NonNullable<ReturnType<typeof usePullRequest>["data"]>; runs: NonNullable<ReturnType<typeof useRuns>["data"]>["items"]; commits: NonNullable<ReturnType<typeof usePullRequestCommits>["data"]> }) {
   const { locale, text } = useI18n();
-  return <section className="panel"><h3>{text("同步与分析历史", "Synchronization and analysis history")}</h3><ol className="trace-timeline"><li><span>PR</span><div><strong>{text("GitHub 快照", "GitHub snapshot")}</strong><small>{pullRequest.updated_at_github ? new Date(pullRequest.updated_at_github).toLocaleString(locale) : text("未记录", "Not recorded")}</small><p>Head {pullRequest.head_sha ?? text("未记录", "not recorded")}</p></div></li>{runs.map((run) => <li key={run.id}><span>AI</span><div><strong>{run.status} · {run.model_profile ?? text("模型未记录", "model not recorded")}</strong><small>{new Date(run.created_at).toLocaleString(locale)}</small><p>{run.error_message ?? `${run.input_tokens + run.output_tokens} tokens · ${run.latency_ms} ms`}</p></div></li>)}</ol></section>;
+  return <section className="panel"><h3>{text("提交、同步与分析历史", "Commit, synchronization, and analysis history")}</h3><ol className="trace-timeline"><li><span>PR</span><div><strong>{text("GitHub 快照", "GitHub snapshot")}</strong><small>{pullRequest.updated_at_github ? new Date(pullRequest.updated_at_github).toLocaleString(locale) : text("未记录", "Not recorded")}</small><p>Head {pullRequest.head_sha ?? text("未记录", "not recorded")}</p></div></li>{commits.map((commit) => <li key={commit.id}><span>Git</span><div><strong>{commit.message.split("\n", 1)[0]}</strong><small>{commit.authored_at ? new Date(commit.authored_at).toLocaleString(locale) : text("时间未记录", "Time not recorded")} · {commit.author_login ?? commit.author_name ?? text("作者未记录", "Author not recorded")}</small><p className="mono">{commit.sha}</p>{commit.html_url ? <a className="text-button" href={commit.html_url} target="_blank" rel="noreferrer">GitHub</a> : null}</div></li>)}{runs.map((run) => <li key={run.id}><span>AI</span><div><strong>{run.status} · {run.model_profile ?? text("模型未记录", "model not recorded")}</strong><small>{new Date(run.created_at).toLocaleString(locale)}</small><p>{run.error_message ?? `${run.input_tokens + run.output_tokens} tokens · ${run.latency_ms} ms`}</p></div></li>)}</ol></section>;
 }

@@ -1,8 +1,8 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { act, render, screen } from "@testing-library/react";
+import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { ApiConnection } from "@tracegate/shared-types";
+import type { ApiConnection, CredentialKind } from "@tracegate/shared-types";
 
 import { App } from "./App";
 import { HostBridgeError, type HostBridge } from "./host/hostBridge";
@@ -83,6 +83,7 @@ describe("App startup and system state", () => {
             database: { state: "ready", configured: true, message: "SQLite 正常" },
             github: { state: "not_configured", configured: false, message: "GitHub 尚未连接" },
             model: { state: "not_configured", configured: false, message: "模型尚未配置" },
+            webhook_relay: { state: "not_configured", configured: false, message: "Webhook Relay 未配置" },
             eval: { state: "ready", configured: true, message: "TraceGate Eval 可用" },
           },
           checked_at: "2026-07-10T10:00:00+08:00",
@@ -94,9 +95,28 @@ describe("App startup and system state", () => {
           language: "zh-CN",
           background_monitoring: false,
           launch_at_startup: false,
+          close_notice_dismissed: false,
+          notifications_enabled: true,
           model_provider: null,
           model_base_url: null,
           model_name: null,
+          model_temperature: 0,
+          model_max_output_tokens: 4096,
+          model_timeout_seconds: 60,
+          model_max_retries: 2,
+          model_native_structured_output: false,
+          model_streaming_enabled: false,
+          model_native_tool_calling: false,
+          model_context_scope: "changed_files",
+          model_input_cost_per_million: 0,
+          model_output_cost_per_million: 0,
+          github_poll_interval_seconds: 60,
+          automatic_analysis_enabled: false,
+          automatic_analysis_include_drafts: false,
+          automatic_analysis_require_checks_success: false,
+          analysis_paused: false,
+          webhook_relay_url: null,
+          webhook_relay_device_id: null,
           updated_at: "2026-07-10T10:00:00+08:00",
         });
       }
@@ -112,7 +132,7 @@ describe("App startup and system state", () => {
     expect(await screen.findByText("GitHub 尚未连接")).toBeInTheDocument();
     expect(screen.getByText("模型尚未配置")).toBeInTheDocument();
     expect(screen.getByText("工作区活动")).toBeInTheDocument();
-    expect(screen.getByText("模型成本尚无已配置价格，因此不显示估算值。", { exact: false })).toBeInTheDocument();
+    expect(screen.getByText("配置输入/输出 Token 单价后才显示成本估算。", { exact: false })).toBeInTheDocument();
   });
 
   it("uses the desktop secure-store bridge without returning credential values", async () => {
@@ -127,6 +147,7 @@ describe("App startup and system state", () => {
             database: { state: "ready", configured: true, message: "SQLite ready" },
             github: { state: "not_configured", configured: false, message: "GitHub 尚未连接" },
             model: { state: "not_configured", configured: false, message: "模型尚未配置" },
+            webhook_relay: { state: "not_configured", configured: false, message: "Webhook Relay 未配置" },
             eval: { state: "ready", configured: true, message: "Eval ready" },
           },
           checked_at: "2026-07-10T10:00:00+08:00",
@@ -138,16 +159,35 @@ describe("App startup and system state", () => {
           language: "zh-CN",
           background_monitoring: false,
           launch_at_startup: false,
+          close_notice_dismissed: false,
+          notifications_enabled: true,
           model_provider: null,
           model_base_url: null,
           model_name: null,
+          model_temperature: 0,
+          model_max_output_tokens: 4096,
+          model_timeout_seconds: 60,
+          model_max_retries: 2,
+          model_native_structured_output: false,
+          model_streaming_enabled: false,
+          model_native_tool_calling: false,
+          model_context_scope: "changed_files",
+          model_input_cost_per_million: 0,
+          model_output_cost_per_million: 0,
+          github_poll_interval_seconds: 60,
+          automatic_analysis_enabled: false,
+          automatic_analysis_include_drafts: false,
+          automatic_analysis_require_checks_success: false,
+          analysis_paused: false,
+          webhook_relay_url: null,
+          webhook_relay_device_id: null,
           updated_at: "2026-07-10T10:00:00+08:00",
         });
       }
       return jsonResponse({ error: { code: "not_found", message: "Unknown test path" } }, 404);
     }));
 
-    const storeCredential = vi.fn(async (kind: "github" | "model") => ({
+    const storeCredential = vi.fn(async (kind: CredentialKind) => ({
       kind,
       configured: true,
       storage: "macOS Keychain",
@@ -186,6 +226,8 @@ describe("App startup and system state", () => {
 
   it("routes real Tauri tray actions into Studio views", async () => {
     let trayHandler: ((action: "settings") => void) | undefined;
+    let closeHandler: (() => void) | undefined;
+    const hideMainWindow = vi.fn(async () => undefined);
     vi.stubGlobal("fetch", vi.fn<typeof fetch>(async (input) => {
       const url = String(input);
       if (url.endsWith("/system/status")) {
@@ -196,13 +238,14 @@ describe("App startup and system state", () => {
             database: { state: "ready", configured: true, message: "DB ready" },
             github: { state: "not_configured", configured: false, message: "GitHub 尚未连接" },
             model: { state: "not_configured", configured: false, message: "模型尚未配置" },
+            webhook_relay: { state: "not_configured", configured: false, message: "Webhook Relay 未配置" },
             eval: { state: "ready", configured: true, message: "Eval ready" },
           },
           checked_at: "2026-07-10T10:00:00Z",
         });
       }
       if (url.endsWith("/settings")) {
-        return jsonResponse({ theme: "system", language: "zh-CN", background_monitoring: false, launch_at_startup: false, model_provider: null, model_base_url: null, model_name: null, updated_at: "2026-07-10T10:00:00Z" });
+        return jsonResponse({ theme: "system", language: "zh-CN", background_monitoring: false, launch_at_startup: false, close_notice_dismissed: false, notifications_enabled: true, model_provider: null, model_base_url: null, model_name: null, model_temperature: 0, model_max_output_tokens: 4096, model_timeout_seconds: 60, model_max_retries: 2, model_native_structured_output: false, model_streaming_enabled: false, model_native_tool_calling: false, model_context_scope: "changed_files", model_input_cost_per_million: 0, model_output_cost_per_million: 0, github_poll_interval_seconds: 60, automatic_analysis_enabled: false, automatic_analysis_include_drafts: false, automatic_analysis_require_checks_success: false, analysis_paused: false, webhook_relay_url: null, webhook_relay_device_id: null, updated_at: "2026-07-10T10:00:00Z" });
       }
       if (url.endsWith("/repositories") || url.endsWith("/pull-requests") || url.endsWith("/runs")) {
         return jsonResponse({ items: [], total: 0, limit: 50, offset: 0 });
@@ -217,11 +260,22 @@ describe("App startup and system state", () => {
         trayHandler = handler as (action: "settings") => void;
         return () => undefined;
       },
+      onCloseRequested: async (handler) => {
+        closeHandler = handler;
+        return () => undefined;
+      },
+      hideMainWindow,
     };
     renderApp(host);
     await screen.findByRole("heading", { name: "概览" });
+    await waitFor(() => expect(trayHandler).toBeDefined());
     await act(async () => trayHandler?.("settings"));
     expect(await screen.findByRole("heading", { name: "设置", level: 2 })).toBeInTheDocument();
+    await act(async () => closeHandler?.());
+    expect(screen.getByRole("heading", { name: "TraceGate 将继续在后台监控 PR。" })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("checkbox", { name: /不再提示/ }));
+    await userEvent.click(screen.getByRole("button", { name: "继续在后台运行" }));
+    expect(hideMainWindow).toHaveBeenCalledOnce();
   });
 
   it("renders the persisted English shell without claiming an unfinished locale", async () => {
@@ -235,16 +289,17 @@ describe("App startup and system state", () => {
             database: { state: "ready", configured: true, message: "DB ready" },
             github: { state: "not_configured", configured: false, message: "GitHub not connected" },
             model: { state: "not_configured", configured: false, message: "Model not configured" },
+            webhook_relay: { state: "not_configured", configured: false, message: "Webhook Relay is not configured" },
             eval: { state: "ready", configured: true, message: "Eval ready" },
           },
           checked_at: "2026-07-10T10:00:00Z",
         });
       }
       if (url.endsWith("/settings")) {
-        return jsonResponse({ theme: "system", language: "en-US", background_monitoring: false, launch_at_startup: false, model_provider: null, model_base_url: null, model_name: null, updated_at: "2026-07-10T10:00:00Z" });
+        return jsonResponse({ theme: "system", language: "en-US", background_monitoring: false, launch_at_startup: false, close_notice_dismissed: false, notifications_enabled: true, model_provider: null, model_base_url: null, model_name: null, model_temperature: 0, model_max_output_tokens: 4096, model_timeout_seconds: 60, model_max_retries: 2, model_native_structured_output: false, model_streaming_enabled: false, model_native_tool_calling: false, model_context_scope: "changed_files", model_input_cost_per_million: 0, model_output_cost_per_million: 0, github_poll_interval_seconds: 60, automatic_analysis_enabled: false, automatic_analysis_include_drafts: false, automatic_analysis_require_checks_success: false, analysis_paused: false, webhook_relay_url: null, webhook_relay_device_id: null, updated_at: "2026-07-10T10:00:00Z" });
       }
       if (url.endsWith("/onboarding")) {
-        return jsonResponse({ completed: false, current_step: "welcome", background_monitoring: false, launch_at_startup: false, repository_added: false, github: { state: "not_configured", configured: false, message: "GitHub 尚未连接" }, model: { state: "not_configured", configured: false, message: "模型尚未配置" }, completed_at: null, updated_at: "2026-07-10T10:00:00Z" });
+        return jsonResponse({ completed: false, current_step: "welcome", background_monitoring: false, launch_at_startup: false, repository_added: false, github: { state: "not_configured", configured: false, message: "GitHub 尚未连接" }, model: { state: "not_configured", configured: false, message: "模型尚未配置" }, webhook_relay: { state: "not_configured", configured: false, message: "Webhook Relay 尚未配置" }, completed_at: null, updated_at: "2026-07-10T10:00:00Z" });
       }
       if (url.endsWith("/repositories") || url.endsWith("/pull-requests") || url.endsWith("/runs")) {
         return jsonResponse({ items: [], total: 0, limit: 50, offset: 0 });
@@ -256,8 +311,12 @@ describe("App startup and system state", () => {
     expect(screen.getByRole("navigation", { name: "Primary navigation" })).toHaveTextContent("Repositories");
     expect(screen.getByRole("heading", { name: "Some capabilities are not configured" })).toBeInTheDocument();
     expect(document.documentElement.lang).toBe("en-US");
+    act(() => window.dispatchEvent(new KeyboardEvent("keydown", { key: "k", metaKey: true })));
+    const paletteSearch = await screen.findByPlaceholderText("Search views, repositories, PRs, or runs…");
+    await userEvent.type(paletteSearch, "Diagnostics{Enter}");
+    expect(await screen.findByRole("heading", { name: "Diagnostics", level: 1 })).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: /Onboarding.*Complete initial setup/ }));
     expect(await screen.findByRole("heading", { name: "Welcome to TraceGate Studio" })).toBeInTheDocument();
-    expect(screen.getByRole("checkbox", { name: /Launch at startup/ })).toBeDisabled();
+    expect(screen.getByText("Real PR evidence")).toBeInTheDocument();
   });
 });

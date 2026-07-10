@@ -22,6 +22,24 @@ export type DeepLinkRoute =
   | { kind: "pull_request"; owner: string; repository: string; number: number }
   | { kind: "run"; run_id: string };
 
+export interface GitHubDeviceAuthorization {
+  userCode: string;
+  verificationUri: "https://github.com/login/device";
+  expiresAtEpochMs: number;
+  intervalSeconds: number;
+}
+
+export interface GitHubDevicePollResult {
+  status: "pending" | "authorized";
+  intervalSeconds: number;
+  credential: CredentialStatus | null;
+}
+
+export interface RelayPairingResult {
+  repositories: string[];
+  credential: CredentialStatus;
+}
+
 export interface HostBridge {
   readonly kind: HostKind;
   readonly displayName: string;
@@ -31,9 +49,16 @@ export interface HostBridge {
   deleteCredential?(kind: CredentialKind): Promise<CredentialStatus>;
   getAutostartEnabled?(): Promise<boolean>;
   setAutostartEnabled?(enabled: boolean): Promise<boolean>;
-  showReviewNotification?(title: string, body: string): Promise<void>;
+  showReviewNotification?(title: string, body: string, deepLink?: string): Promise<void>;
+  hideMainWindow?(): Promise<void>;
+  openWorkspace?(path: string, editor?: boolean): Promise<void>;
+  openWorkspaceFile?(workspace: string, path: string, line?: number): Promise<void>;
+  beginGithubDeviceFlow?(clientId: string): Promise<GitHubDeviceAuthorization>;
+  pollGithubDeviceFlow?(): Promise<GitHubDevicePollResult>;
+  pairWebhookRelay?(baseUrl: string, pairingCode: string, deviceId: string): Promise<RelayPairingResult>;
   onTrayAction?(handler: (action: TrayAction) => void): Promise<() => void>;
   onDeepLink?(handler: (route: DeepLinkRoute) => void): Promise<() => void>;
+  onCloseRequested?(handler: () => void): Promise<() => void>;
 }
 
 export class HostBridgeError extends Error {
@@ -115,9 +140,52 @@ export class TauriHost implements HostBridge {
     return invoke<boolean>("set_autostart_enabled", { enabled });
   }
 
-  async showReviewNotification(title: string, body: string): Promise<void> {
+  async showReviewNotification(title: string, body: string, deepLink?: string): Promise<void> {
     const { invoke } = await import("@tauri-apps/api/core");
-    await invoke("show_review_notification", { title, body });
+    await invoke("show_review_notification", { title, body, deepLink });
+  }
+
+  async hideMainWindow(): Promise<void> {
+    const { invoke } = await import("@tauri-apps/api/core");
+    await invoke("hide_main_window");
+  }
+
+  async openWorkspace(path: string, editor = false): Promise<void> {
+    const { invoke } = await import("@tauri-apps/api/core");
+    await invoke("open_workspace", { path, editor });
+  }
+
+  async openWorkspaceFile(workspace: string, path: string, line?: number): Promise<void> {
+    const { invoke } = await import("@tauri-apps/api/core");
+    await invoke("open_workspace_file", { workspace, path, line });
+  }
+
+  async beginGithubDeviceFlow(clientId: string): Promise<GitHubDeviceAuthorization> {
+    const { invoke } = await import("@tauri-apps/api/core");
+    const value = await invoke<GitHubDeviceAuthorization>("begin_github_device_flow", { clientId });
+    if (value.verificationUri !== "https://github.com/login/device" || !value.userCode || value.intervalSeconds < 1) {
+      throw new HostBridgeError("host_command_failed", "GitHub Device Flow 返回了无效的公开授权信息。");
+    }
+    return value;
+  }
+
+  async pollGithubDeviceFlow(): Promise<GitHubDevicePollResult> {
+    const { invoke } = await import("@tauri-apps/api/core");
+    const value = await invoke<GitHubDevicePollResult>("poll_github_device_flow");
+    if (!(["pending", "authorized"] as const).includes(value.status) || value.intervalSeconds < 1) {
+      throw new HostBridgeError("host_command_failed", "GitHub Device Flow 返回了无效的轮询结果。");
+    }
+    if (value.credential) credentialStatusSchema.parse(value.credential);
+    return value;
+  }
+
+  async pairWebhookRelay(baseUrl: string, pairingCode: string, deviceId: string): Promise<RelayPairingResult> {
+    const { invoke } = await import("@tauri-apps/api/core");
+    const value = await invoke<RelayPairingResult>("pair_webhook_relay", { baseUrl, pairingCode, deviceId });
+    return {
+      repositories: value.repositories.filter((item) => /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(item)),
+      credential: credentialStatusSchema.parse(value.credential),
+    };
   }
 
   async onTrayAction(handler: (action: TrayAction) => void): Promise<() => void> {
@@ -132,6 +200,11 @@ export class TauriHost implements HostBridge {
     const pending = await invoke<DeepLinkRoute | null>("take_pending_deep_link");
     if (pending) handler(pending);
     return stop;
+  }
+
+  async onCloseRequested(handler: () => void): Promise<() => void> {
+    const { listen } = await import("@tauri-apps/api/event");
+    return listen("tracegate-close-requested", handler);
   }
 }
 

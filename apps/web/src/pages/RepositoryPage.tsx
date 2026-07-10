@@ -3,9 +3,11 @@ import type { Repository } from "@tracegate/shared-types";
 
 import {
   useCreateRepository,
+  useClearRepositoryCache,
   useDeleteRepository,
   useIndexRepository,
   useRepositories,
+  useRepositorySummary,
   useSyncRepository,
   useUpdateRepository,
 } from "../api/queries";
@@ -13,6 +15,7 @@ import { ErrorState, LoadingState } from "../components/RequestState";
 import { errorMessage } from "../lib/errors";
 import { useUiStore } from "../store/uiStore";
 import { useI18n } from "../i18n";
+import type { HostBridge } from "../host/hostBridge";
 
 function shortSha(value: string | null, empty: string): string {
   return value ? value.slice(0, 10) : empty;
@@ -24,7 +27,7 @@ function formatDate(value: string | null, locale: string, empty: string): string
   return Number.isNaN(parsed.getTime()) ? value : parsed.toLocaleString(locale);
 }
 
-export function RepositoryPage() {
+export function RepositoryPage({ host }: { host: HostBridge }) {
   const { text } = useI18n();
   const repositories = useRepositories();
   const createRepository = useCreateRepository();
@@ -106,7 +109,7 @@ export function RepositoryPage() {
         ) : null}
         <div className="repository-grid">
           {repositories.data?.items.map((repository) => (
-            <RepositoryCard key={repository.id} repository={repository} />
+            <RepositoryCard key={repository.id} repository={repository} host={host} />
           ))}
         </div>
       </section>
@@ -114,19 +117,28 @@ export function RepositoryPage() {
   );
 }
 
-function RepositoryCard({ repository }: { repository: Repository }) {
+function RepositoryCard({ repository, host }: { repository: Repository; host: HostBridge }) {
   const { locale, text } = useI18n();
   const syncRepository = useSyncRepository();
   const indexRepository = useIndexRepository();
   const updateRepository = useUpdateRepository();
   const deleteRepository = useDeleteRepository();
+  const clearCache = useClearRepositoryCache();
+  const summary = useRepositorySummary(repository.id);
   const selectRepository = useUiStore((state) => state.selectRepository);
-  const operationError = syncRepository.error ?? indexRepository.error ?? updateRepository.error ?? deleteRepository.error;
-  const busy = syncRepository.isPending || indexRepository.isPending || updateRepository.isPending || deleteRepository.isPending;
+  const operationError = syncRepository.error ?? indexRepository.error ?? updateRepository.error ?? deleteRepository.error ?? clearCache.error ?? summary.error;
+  const busy = syncRepository.isPending || indexRepository.isPending || updateRepository.isPending || deleteRepository.isPending || clearCache.isPending;
+  const localPath = repository.local_path;
 
   function remove() {
     if (window.confirm(text(`从 TraceGate 删除 ${repository.full_name}？本地仓库文件不会被删除。`, `Remove ${repository.full_name} from TraceGate? Local repository files will not be deleted.`))) {
       deleteRepository.mutate(repository.id);
+    }
+  }
+
+  function removeCache() {
+    if (window.confirm(text(`清理 ${repository.full_name} 的本地索引缓存？仓库源码与历史分析不会被删除。`, `Clear the local index cache for ${repository.full_name}? Source files and analysis history are preserved.`))) {
+      clearCache.mutate(repository.id);
     }
   }
 
@@ -145,6 +157,10 @@ function RepositoryCard({ repository }: { repository: Repository }) {
         <div><dt>{text("索引版本", "Index version")}</dt><dd className="mono">{shortSha(repository.current_index_version, text("尚未索引", "Not indexed"))}</dd></div>
         <div><dt>{text("最近同步", "Last synchronized")}</dt><dd>{formatDate(repository.last_synced_at, locale, text("尚未同步", "Never synchronized"))}</dd></div>
         <div><dt>Rate Limit</dt><dd>{repository.github_rate_remaining ?? text("未知", "Unknown")}</dd></div>
+        <div><dt>{text("文件 / 目录", "Files / directories")}</dt><dd>{summary.data ? `${summary.data.file_count} / ${summary.data.directory_count}` : "…"}</dd></div>
+        <div><dt>{text("符号 / 关系边", "Symbols / relation edges")}</dt><dd>{summary.data ? `${summary.data.symbol_count} / ${summary.data.dependency_edge_count}` : "…"}</dd></div>
+        <div><dt>{text("语言构成", "Languages")}</dt><dd>{summary.data ? Object.entries(summary.data.language_counts).map(([language, count]) => `${language} ${count}`).join(" · ") || text("尚未索引", "Not indexed") : "…"}</dd></div>
+        <div><dt>{text("活跃 PR", "Active PRs")}</dt><dd>{summary.data?.active_pull_requests ?? "…"}</dd></div>
       </dl>
       {repository.last_error ? <p className="inline-error" role="alert">{repository.last_error}</p> : null}
       {operationError ? <p className="inline-error" role="alert">{text("操作失败", "Operation failed")}: {errorMessage(operationError)}</p> : null}
@@ -156,7 +172,9 @@ function RepositoryCard({ repository }: { repository: Repository }) {
         </button>
         <button className="button button-secondary button-small" type="button" disabled={!repository.current_index_version} onClick={() => selectRepository(repository.id, "repository-map")}>Repository Map</button>
         <a className="button button-secondary button-small" href={`https://github.com/${repository.full_name}`} target="_blank" rel="noreferrer">GitHub</a>
-        {repository.local_path ? <a className="button button-secondary button-small" href={`vscode://file/${encodeURI(repository.local_path)}`}>VS Code</a> : null}
+        {localPath ? <button className="button button-secondary button-small" type="button" disabled={!host.openWorkspace} onClick={() => void host.openWorkspace?.(localPath, false)}>{text("打开本地目录", "Open local directory")}</button> : null}
+        {localPath ? <button className="button button-secondary button-small" type="button" disabled={!host.openWorkspace} onClick={() => void host.openWorkspace?.(localPath, true)}>VS Code</button> : null}
+        <button className="button button-secondary button-small" type="button" disabled={busy || !repository.current_index_version} onClick={removeCache}>{text("清理缓存", "Clear cache")}</button>
         <button className="button button-danger button-small" type="button" disabled={busy} onClick={remove}>{text("删除", "Delete")}</button>
       </div>
     </article>

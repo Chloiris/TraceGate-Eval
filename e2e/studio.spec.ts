@@ -9,10 +9,17 @@ test("loads authenticated real service and benchmark state", async ({ page }) =>
   await expect(page.getByText("工作区活动")).toBeVisible();
   await expect(page.getByText("1", { exact: true }).first()).toBeVisible();
 
+  await page.keyboard.press("Meta+k");
+  await page.getByPlaceholder("搜索页面、仓库、PR 或 Run…").fill("诊断");
+  await page.keyboard.press("Enter");
+  await expect(page.getByRole("heading", { name: "诊断", level: 1 })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "最近持久化指标" })).toBeVisible();
+  await expect(page.getByText("not configured", { exact: true })).toBeVisible();
+
   await page.getByRole("button", { name: /Eval Center/ }).click();
   await expect(page.getByRole("heading", { name: "TraceGate v0.2-alpha hard real-data mini benchmark" })).toBeVisible();
   await expect(page.getByText("160 ClaimBench runs")).toBeVisible();
-  await expect(page.getByText("dataset sha256", { exact: false })).toBeVisible();
+  await expect(page.getByText("dataset version / sha256", { exact: false })).toBeVisible();
   await page.screenshot({ path: "docs/screenshots/p1-eval-center-macos.png", fullPage: true });
 });
 
@@ -67,6 +74,11 @@ test("navigates PR diff, Review Map, Finding and Agent Trace", async ({ page }) 
   await expect(page.locator(".review-flow .react-flow")).toBeVisible();
   await page.screenshot({ path: "docs/screenshots/p1-review-map-macos.png", fullPage: true });
 
+  await page.getByRole("tab", { name: "Change Tour" }).click();
+  await expect(page.getByText("Single changed indexed code file", { exact: false })).toBeVisible();
+  await expect(page.getByText("相关符号", { exact: true })).toBeVisible();
+  await expect(page.getByText("建议检查点", { exact: true })).toBeVisible();
+
   await page.getByRole("tab", { name: "Findings" }).click();
   await expect(page.getByRole("heading", { name: "Return value semantics changed" })).toBeVisible();
   await page.getByRole("button", { name: "service.py:2" }).click();
@@ -88,9 +100,15 @@ test("shows explicit retry failure and actual registry permissions", async ({ pa
 
   await page.getByRole("button", { name: /Registry/ }).click();
   await expect(page.getByRole("heading", { name: "Planner" })).toBeVisible();
+  const plannerCard = page.locator(".registry-card", { hasText: "Planner" });
+  await plannerCard.getByRole("button", { name: "停用 Agent" }).click();
+  await expect(plannerCard.getByRole("button", { name: "启用 Agent" })).toBeVisible();
+  await plannerCard.getByRole("button", { name: "启用 Agent" }).click();
+  await expect(plannerCard.getByRole("button", { name: "停用 Agent" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "apply_patch" })).toBeVisible();
   const patchCard = page.locator(".registry-card", { hasText: "apply_patch" });
-  await expect(patchCard.getByText("disabled", { exact: true })).toBeVisible();
+  await expect(patchCard.getByText("confirmation only", { exact: true })).toBeVisible();
+  await expect(patchCard.getByRole("button", { name: "必须逐次确认" })).toBeDisabled();
   await expect(page.getByText("WRITE_CONFIRMATION", { exact: true })).toBeVisible();
   await page.screenshot({ path: "docs/screenshots/p1-registry-macos.png", fullPage: true });
 });

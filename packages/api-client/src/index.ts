@@ -5,6 +5,7 @@ import {
   agentEvidenceGraphSchema,
   agentRunSchema,
   agentDescriptorListSchema,
+  agentDescriptorSchema,
   agentStepSchema,
   analyzeResponseSchema,
   evidenceSchema,
@@ -14,23 +15,31 @@ import {
   healthResponseSchema,
   onboardingStateSchema,
   onboardingUpdateSchema,
+  notificationRecordSchema,
   indexVersionSchema,
   pullRequestDiffSchema,
   pullRequestListSchema,
   pullRequestSchema,
   reviewMapSchema,
   changeTourSchema,
+  checkRunListSchema,
+  changedFileDetailListSchema,
+  pullRequestCommitListSchema,
+  connectionComponentSchema,
+  connectionTestResponseSchema,
   diagnosticsSchema,
   repositoryCreateSchema,
   repositoryGraphSchema,
   repositoryListSchema,
   repositorySchema,
   repositorySyncSchema,
+  repositorySummarySchema,
   repositoryUpdateSchema,
   settingsSchema,
   settingsUpdateSchema,
   systemStatusSchema,
   toolDescriptorListSchema,
+  toolDescriptorSchema,
   updateStatusSchema,
   type ApiConnection,
   type AgentRun,
@@ -46,18 +55,26 @@ import {
   type HealthResponse,
   type OnboardingState,
   type OnboardingUpdate,
+  type NotificationCreate,
+  type NotificationRecord,
   type IndexVersion,
   type PullRequest,
   type PullRequestDiff,
   type PullRequestList,
   type ReviewMap,
   type ChangeTour,
+  type CheckRunList,
+  type ChangedFileDetail,
+  type PullRequestCommit,
+  type ConnectionComponent,
+  type ConnectionTestResponse,
   type Diagnostics,
   type Repository,
   type RepositoryCreate,
   type RepositoryGraph,
   type RepositoryList,
   type RepositorySync,
+  type RepositorySummary,
   type RepositoryUpdate,
   type Settings,
   type SettingsUpdate,
@@ -134,6 +151,17 @@ export class TraceGateApiClient {
     return this.#request("/system/status", systemStatusSchema, requestSignal(signal));
   }
 
+  async testConnection(
+    component: ConnectionComponent,
+    signal?: AbortSignal,
+  ): Promise<ConnectionTestResponse> {
+    return this.#request("/connections/test", connectionTestResponseSchema, {
+      method: "POST",
+      body: JSON.stringify({ component: connectionComponentSchema.parse(component) }),
+      ...requestSignal(signal),
+    });
+  }
+
   async getSettings(signal?: AbortSignal): Promise<Settings> {
     return this.#request("/settings", settingsSchema, requestSignal(signal));
   }
@@ -178,6 +206,21 @@ export class TraceGateApiClient {
       method: "DELETE",
       ...requestSignal(signal),
     });
+  }
+
+  async clearRepositoryCache(repositoryId: string, signal?: AbortSignal): Promise<void> {
+    await this.#requestVoid(`/repositories/${encodeURIComponent(repositoryId)}/cache`, {
+      method: "DELETE",
+      ...requestSignal(signal),
+    });
+  }
+
+  async getRepositorySummary(repositoryId: string, signal?: AbortSignal): Promise<RepositorySummary> {
+    return this.#request(
+      `/repositories/${encodeURIComponent(repositoryId)}/summary`,
+      repositorySummarySchema,
+      requestSignal(signal),
+    );
   }
 
   async updateRepository(
@@ -226,6 +269,36 @@ export class TraceGateApiClient {
     return this.#request(
       `/pull-requests/${encodeURIComponent(pullRequestId)}`,
       pullRequestSchema,
+      requestSignal(signal),
+    );
+  }
+
+  async listCheckRuns(pullRequestId: string, signal?: AbortSignal): Promise<CheckRunList> {
+    return this.#request(
+      `/pull-requests/${encodeURIComponent(pullRequestId)}/checks`,
+      checkRunListSchema,
+      requestSignal(signal),
+    );
+  }
+
+  async listPullRequestCommits(
+    pullRequestId: string,
+    signal?: AbortSignal,
+  ): Promise<PullRequestCommit[]> {
+    return this.#request(
+      `/pull-requests/${encodeURIComponent(pullRequestId)}/commits`,
+      pullRequestCommitListSchema,
+      requestSignal(signal),
+    );
+  }
+
+  async listPullRequestFiles(
+    pullRequestId: string,
+    signal?: AbortSignal,
+  ): Promise<ChangedFileDetail[]> {
+    return this.#request(
+      `/pull-requests/${encodeURIComponent(pullRequestId)}/files`,
+      changedFileDetailListSchema,
       requestSignal(signal),
     );
   }
@@ -312,6 +385,15 @@ export class TraceGateApiClient {
     return this.#request(`/evidence${query}`, evidenceSchema.array(), requestSignal(signal));
   }
 
+  async recordNotification(input: NotificationCreate, signal?: AbortSignal): Promise<NotificationRecord> {
+    return this.#request("/notifications", notificationRecordSchema, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(input),
+      ...requestSignal(signal),
+    });
+  }
+
   async getEvaluations(signal?: AbortSignal): Promise<EvaluationSummary> {
     return this.#request("/evaluations", evaluationSummarySchema, requestSignal(signal));
   }
@@ -320,8 +402,26 @@ export class TraceGateApiClient {
     return this.#request("/agents", agentDescriptorListSchema, requestSignal(signal));
   }
 
+  async setAgentEnabled(name: string, enabled: boolean, signal?: AbortSignal): Promise<AgentDescriptor> {
+    return this.#request(`/agents/${encodeURIComponent(name)}`, agentDescriptorSchema, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ enabled }),
+      ...requestSignal(signal),
+    });
+  }
+
   async listTools(signal?: AbortSignal): Promise<ToolDescriptor[]> {
     return this.#request("/tools", toolDescriptorListSchema, requestSignal(signal));
+  }
+
+  async setToolEnabled(name: string, enabled: boolean, signal?: AbortSignal): Promise<ToolDescriptor> {
+    return this.#request(`/tools/${encodeURIComponent(name)}`, toolDescriptorSchema, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ enabled }),
+      ...requestSignal(signal),
+    });
   }
 
   async getDiagnostics(signal?: AbortSignal): Promise<Diagnostics> {
