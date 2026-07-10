@@ -220,7 +220,7 @@ def upgrade() -> None:
         sa.Column("pull_request_id", sa.String(length=36), nullable=False),
         sa.Column("head_sha", sa.String(length=64), nullable=False),
         sa.Column("blob_sha", sa.String(length=64), nullable=False),
-        sa.Column("path", sa.String(length=2048), nullable=False),
+        sa.Column("path", sa.String(length=512), nullable=False),
         sa.Column("previous_path", sa.String(length=2048), nullable=True),
         sa.Column("status", sa.String(length=32), nullable=False),
         sa.Column("additions", sa.Integer(), server_default="0", nullable=False),

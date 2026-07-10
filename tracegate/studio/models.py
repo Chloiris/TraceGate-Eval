@@ -368,7 +368,7 @@ class IndexedFile(Base):
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
     index_version_id: Mapped[str] = mapped_column(ForeignKey("index_versions.id", ondelete="CASCADE"), nullable=False)
-    path: Mapped[str] = mapped_column(String(2048), nullable=False)
+    path: Mapped[str] = mapped_column(String(512), nullable=False)
     language: Mapped[str] = mapped_column(String(32), nullable=False)
     content_hash: Mapped[str] = mapped_column(String(64), nullable=False)
     size_bytes: Mapped[int] = mapped_column(Integer, nullable=False)
