@@ -2,6 +2,49 @@
 
 # TraceGate Eval
 
+## TraceGate Studio
+
+This development branch adds **TraceGate Studio**, a local-first Pull Request
+review workspace built from the existing TraceGate evidence, verifier,
+ClaimBench, and real-data evaluation modules. It is a real React + FastAPI +
+SQLite + LangGraph + Tauri product path, not a replacement benchmark or a
+fixture-backed demo.
+
+The verified macOS browser path can enroll a local Git repository, persist an
+incremental commit-bound index, show a Repository Map, synchronize Pull
+Requests, render a local Monaco Diff, build a Review Map and Change Tour, run
+the controlled Agent workflow, inspect Findings/Evidence/Trace, and browse the
+checked-in 19-case/160-run evaluation artifacts. Missing GitHub and model
+credentials are shown explicitly; a semantic report is never fabricated.
+
+![TraceGate Studio Review Map](docs/screenshots/p1-review-map-macos.png)
+
+Start the browser development mode on macOS/Linux:
+
+```bash
+./scripts/bootstrap.sh
+./scripts/dev.sh
+```
+
+Run the local verification suite:
+
+```bash
+./scripts/test.sh
+pnpm test:e2e
+```
+
+The browser uses an authenticated loopback API. Tauri obtains its ephemeral API
+token through a native command and keeps GitHub/model credentials in the
+operating-system credential store. See
+[ADR-001](docs/architecture/ADR-001-tracegate-studio.md),
+[implementation status](docs/implementation-status.md), and the
+[macOS P1 evidence](docs/verification/p1-macos.md).
+
+Windows x86_64 workflows build a native PyInstaller Sidecar, health-check it,
+and package unsigned NSIS/portable artifacts. No current Windows runner result
+or Windows GUI acceptance is claimed. The draft PR/workflow must be inspected
+again only with repository-owner approval.
+
 TraceGate Eval is a research benchmark for evaluating whether AI coding agents
 use historical engineering context safely.
 
@@ -41,8 +84,8 @@ This repository contains:
 - Guardrails that prevent mock, synthetic, or fallback data from being counted
   as real evaluation.
 
-It is not an online service, not a general code review bot, and not a model
-leaderboard.
+The benchmark tracks are not an online service or model leaderboard. Studio is
+the local product layer and preserves those research boundaries.
 
 ## Current Status
 

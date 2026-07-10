@@ -57,8 +57,11 @@ flowchart LR
     API --> DB["SQLite by default"]
     API --> GIT["local Git workspace"]
     API --> GH["GitHub REST API"]
+    GH -->|"optional HMAC webhook"| RELAY["paired webhook relay"]
+    RELAY -->|"authenticated SSE"| API
     API --> AGENT["LangGraph workflow"]
     AGENT --> TOOLS["controlled tool registry"]
+    TOOLS -. "allowlisted stdio" .-> MCP["MCP server"]
     AGENT --> EVIDENCE["TraceGate evidence + verifier"]
     API -. "optional profile" .-> MYSQL["MySQL 8"]
 ```
@@ -72,7 +75,8 @@ configured development token and origin.
 ### Frontend
 
 - React, strict TypeScript, Vite, pnpm, TanStack Query, Zustand, Zod, React
-  Flow, ELK, and Monaco are the initial stack.
+  Flow, a bounded deterministic layered layout, and Monaco are the initial
+  stack. ADR-002 records why ELK was removed after bundle measurement.
 - The UI talks only to the versioned API client; it never receives a GitHub or
   model provider secret.
 - `HostBridge` isolates browser and Tauri capabilities. UE and Maya adapters
@@ -89,6 +93,10 @@ configured development token and origin.
   configuration desktop default. Alembic owns every schema change.
 - A MySQL 8 profile is optional and must pass a migration/integration smoke test
   before being advertised as verified.
+- SQLite uses FTS5/bm25; MySQL uses an explicit `FULLTEXT(path, content)` index
+  and `MATCH ... AGAINST`. Dialect-specific migration SQL is compiled in CI and a
+  MySQL 8.4 service runs the same smoke path before the profile can advance to
+  Windows/server verification.
 - Long-running work is outside request handlers. API handlers enqueue or query
   application services, and SSE streams durable run events.
 - Core searchable fields are columns. JSON is limited to provider payloads,
@@ -110,6 +118,10 @@ configured development token and origin.
   bounded output and timeouts. `apply_patch` is disabled unless the user has
   enabled write mode; commit, review comment and push remain separately
   confirmed operations.
+- The optional MCP adapter is sequential JSON-RPC over a controlled stdio
+  executable. It negotiates a supported protocol version, exposes only an
+  explicit tool allowlist, filters the child environment, bounds messages and
+  time, and never launches through a shell.
 
 ### Existing capability reuse
 
@@ -153,6 +165,18 @@ Sidecar names are platform-specific:
 
 PyInstaller runs natively on each target OS. macOS output is never renamed or
 reported as a Windows executable.
+
+Official Tauri v2 notification and autostart plugins are called behind native
+commands exposed by `TauriHost`. BrowserHost intentionally has neither
+capability. Notification text is bounded before crossing the native boundary;
+autostart remains opt-in and defaults off. Compiling this code on macOS is not
+evidence that Windows notification or login behavior passed manual acceptance.
+
+The optional relay is a separate failure domain. It validates the exact GitHub
+body with HMAC-SHA256, deduplicates delivery IDs, pairs a device once to an
+explicit repository allowlist, stores only device-token digests, and exposes an
+authenticated bounded-metadata SSE stream. Internet deployment requires TLS;
+loopback compose execution is not presented as a public production relay.
 
 ## Security decisions
 

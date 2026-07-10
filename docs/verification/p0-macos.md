@@ -122,23 +122,22 @@ Desktop screenshot:
 
 ```text
 artifacts/macos/TraceGate-Studio-macos-arm64.zip
-SHA-256: 808ff6dc29cbedb457ed66a6dd0cbcf42d8fe4e1d9d4f244157684b81882f4d6
+SHA-256: d77ff3520d143392d25736a890a47ce15d5da627ae3e757ae57fd11ed8e0aa39
 ```
+
+The artifact was rebuilt from the current worktree after adding the official
+Tauri notification/autostart plugins and the P1/P2 frontend. `file` again
+reported native arm64 Mach-O executables for both the app and Sidecar.
 
 `artifacts/` is intentionally ignored because these are local build outputs.
 The generated `SHA256SUMS.txt` is not used to imply code signing.
 
 ## Distribution/signing limitation
 
-The application launches locally, but strict signature verification fails:
-
-```text
-code has no resources but signature indicates they must be present
-```
-
-There is no Apple distribution identity, notarization credential, or release
-signature in this environment. Therefore this is an unsigned development
-artifact, not a signed/notarized macOS release.
+`codesign -dv` reports only an ad-hoc/linker signature and no `Authority=`
+chain. There is no Apple distribution identity, notarization credential, or
+release signature in this environment. Therefore this is an unsigned
+development artifact, not a signed/notarized macOS release.
 
 ## Platform boundary
 

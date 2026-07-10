@@ -22,7 +22,7 @@
 
 | Feature | Status | Evidence / note |
 | --- | --- | --- |
-| Existing suite plus Studio tests | VERIFIED_MACOS | `./scripts/test.sh`: 78 Python tests passed; the original 61 remain intact |
+| Existing suite plus Studio tests | VERIFIED_MACOS | 110 Python tests plus 20 Vitest tests and 4 Chrome Playwright flows; original Eval coverage remains intact |
 | ClaimBench controlled benchmark | VERIFIED_MACOS | Existing tests and checked-in 160-run reports; metric definitions unchanged |
 | Real-PR hard benchmark | VERIFIED_MACOS | Existing tests and checked-in 19 scored cases |
 | EvidencePacket and redaction | VERIFIED_MACOS | Existing `tests/test_pr_advisor.py` |
@@ -38,8 +38,8 @@
 | Development branch | VERIFIED_MACOS | `feat/tracegate-studio-fullstack` created from `76a23ab` |
 | Monorepo workspace and locked Node dependencies | VERIFIED_MACOS | pnpm workspace, `pnpm-lock.yaml`, frozen install and 14 tests |
 | Locked Python environment | VERIFIED_MACOS | `uv.lock`; frozen uv environment used for tests and packaging |
-| React + strict TypeScript browser client | VERIFIED_MACOS | Real Dashboard/onboarding/settings browser run and screenshots |
-| Typed API client and shared types | VERIFIED_MACOS | Zod-validated client; 9 package tests plus 5 web integration tests |
+| React + strict TypeScript browser client | VERIFIED_MACOS | Dashboard plus P1 product pages exercised by Chrome Playwright; see `docs/verification/p1-macos.md` |
+| Typed API client and shared types | VERIFIED_MACOS | Zod-validated client; 12 package tests plus 8 web/unit integration tests |
 | FastAPI `/api/v1` service | VERIFIED_MACOS | Authenticated API tests and real browser/desktop process |
 | Local API authentication and CORS | VERIFIED_MACOS | Auth/CORS tests plus Tauri-origin runtime verification |
 | SQLAlchemy 2 persistence | VERIFIED_MACOS | Studio models and API persistence tests |
@@ -47,7 +47,7 @@
 | Alembic migration and SQLite migration test | VERIFIED_MACOS | `20260710_0001`; fresh/idempotent migration tests |
 | Structured/redacted rotating logs | VERIFIED_MACOS | Packaged Sidecar wrote redacted JSONL with 5 MiB/3-backup limits and clean shutdown events |
 | System status API | VERIFIED_MACOS | Explicit ready/not-configured/unavailable states tested and rendered |
-| Diagnostics API/page | NOT_STARTED | P0 status is present; full diagnostics remains separate work |
+| Diagnostics API/page | VERIFIED_MACOS | Redacted runtime/storage/queue/update state is API-tested and rendered in the React client |
 | Non-secret settings persistence | VERIFIED_MACOS | Theme/language/background choices persist; API never accepts a secret |
 | Platform secure credential storage | VERIFIED_MACOS | Native Keychain round-trip passed and deleted its verification entry; Windows code awaits CI |
 | Python Sidecar entry and health check | VERIFIED_MACOS | Independent and packaged authenticated health checks passed |
@@ -68,51 +68,51 @@
 
 | Feature | Status | Evidence / next gate |
 | --- | --- | --- |
-| Real LangGraph workflow | NOT_STARTED | Dependency is not installed and no graph exists |
-| Structured observable Agent state | NOT_STARTED | Must persist run/node state |
-| Cancellation and bounded retry | NOT_STARTED | Must cover node and tool boundaries |
-| Pydantic Tool Registry | NOT_STARTED | Existing functions are not a unified registry |
-| Safe repository path boundary | NOT_STARTED | Canonical path/symlink tests required |
-| Restricted command tool | NOT_STARTED | Allowlist/environment/output/timeout tests required |
-| Write-mode gated patch tool | NOT_STARTED | Must default disabled; no auto commit/push |
-| GitHubProvider abstraction | IN_PROGRESS | Existing public PR collector is a reusable seed, not a complete provider |
-| GitHub connection state | NOT_STARTED | Must report “GitHub 尚未连接” without a token |
-| ETag-aware PR polling | NOT_STARTED | Durable ETag/rate-limit tests required |
-| PR snapshots and Head-SHA deduplication | NOT_STARTED | Requires database schema and monitor |
-| PR Inbox | NOT_STARTED | No React client |
-| PR details and typed tabs | NOT_STARTED | No React client |
-| Monaco Diff with finding/evidence jumps | NOT_STARTED | No React client |
-| Unified CodeParser interface | NOT_STARTED | Capability matrix must be explicit |
-| Incremental commit-bound index | NOT_STARTED | Requires file hash/deletion tests |
-| ripgrep/symbol/FTS5 hybrid retrieval | NOT_STARTED | Embeddings remain optional and explicit |
-| Repository Map backend | NOT_STARTED | Must use parsed/indexed relationships |
-| Repository Map React Flow UI | NOT_STARTED | Must lazy-load/aggregate large graphs |
-| Review Map backend | NOT_STARTED | Must derive from real diff and graph data |
-| Review Map UI and Diff bidirectional jump | NOT_STARTED | No React client |
-| Finding schema/storage foundation | IMPLEMENTED_UNVERIFIED | Initial tables exist; required traceability fields and production API remain incomplete |
-| Evidence storage foundation | IMPLEMENTED_UNVERIFIED | Evidence table exists; commit-bound workflow persistence remains incomplete |
-| Agent Trace API/SSE/UI | NOT_STARTED | No durable run event stream |
-| Eval Center / ClaimBench integration | IN_PROGRESS | System status reads real checked-in artifacts; run/list/detail UI remains absent |
-| Desktop notifications implementation | NOT_STARTED | Windows requires CI plus separate manual gate |
-| Complete tray menu and monitoring controls | IN_PROGRESS | Full menu structure exists; monitor actions and direct tray verification remain |
+| Real LangGraph workflow | VERIFIED_MACOS | LangGraph 1.2.8 runs seven real persisted nodes; `tests/test_agent_workflow.py` |
+| Structured observable Agent state | VERIFIED_MACOS | Run, Step and ToolCall rows plus typed detail/SSE APIs verified locally |
+| Cancellation and bounded retry | VERIFIED_MACOS | RunManager, workflow cancellation and explicit retry behavior are tested; Playwright proves missing-model retry failure |
+| Pydantic Tool Registry | VERIFIED_MACOS | 19 schema-validated registered tools; registry API/UI and unit tests |
+| Safe repository path boundary | VERIFIED_MACOS | Canonical, traversal, symlink and credential-path tests in `tests/test_repository_security.py` |
+| Restricted command tool | VERIFIED_MACOS | Argument allowlist, filtered environment, timeout and output limits; forbidden command test |
+| Write-mode gated patch tool | VERIFIED_MACOS | Defaults disabled, exact confirmation required, real temp-repo patch test, never commits/pushes |
+| GitHubProvider abstraction | VERIFIED_MACOS | Bounded async REST provider with PR/files/commits/comments/checks tests |
+| GitHub connection state | VERIFIED_MACOS | API and Chrome show “GitHub 尚未连接” without substituting data |
+| ETag-aware PR polling | VERIFIED_MACOS | Durable ETag/rate-limit sync plus background monitor and unit tests |
+| PR snapshots and Head-SHA deduplication | VERIFIED_MACOS | Snapshot uniqueness, ETag and analysis dedup are database/API tested |
+| PR Inbox | VERIFIED_MACOS | Real persisted inbox exercised in Chrome Playwright |
+| PR details and typed tabs | VERIFIED_MACOS | Nine real-data tabs exercised in Chrome; unavailable Checks remain explicit |
+| Monaco Diff with finding/evidence jumps | VERIFIED_MACOS | Local/offline Monaco and Finding→Diff flow verified by Playwright screenshot/test |
+| Unified CodeParser interface | VERIFIED_MACOS | Python precise and JS/TS/Java partial capability levels tested and persisted |
+| Incremental commit-bound index | VERIFIED_MACOS | Content hash/change/deletion and Head SHA binding tests |
+| ripgrep/symbol/FTS5 hybrid retrieval | VERIFIED_MACOS | Sources remain labeled; vector retrieval explicitly disabled |
+| Repository Map backend | VERIFIED_MACOS | Persisted parsed/indexed relationships and commit/index binding tests |
+| Repository Map React Flow UI | VERIFIED_MACOS | Lazy React Flow, 800-node cap, filters, MiniMap and measured layout ADR-002 |
+| Review Map backend | VERIFIED_MACOS | Real Git diff + static graph + persisted Agent Evidence API test |
+| Review Map UI and Diff bidirectional jump | VERIFIED_MACOS | Chrome Playwright and `p1-review-map-macos.png` |
+| Finding schema/storage foundation | VERIFIED_MACOS | Required traceability fields, filters and UI are persisted/API-tested |
+| Evidence storage foundation | VERIFIED_MACOS | Commit/hash/source payload and Finding linkage verified |
+| Agent Trace API/SSE/UI | VERIFIED_MACOS | Authenticated SSE parser, run detail, steps/tools and UI tests |
+| Eval Center / ClaimBench integration | VERIFIED_MACOS | Real 19-case/160-run artifacts, hashes, drill-down and export rendered in Chrome |
+| Desktop notifications implementation | IMPLEMENTED_UNVERIFIED | Official Tauri notification plugin, bounded native command, HostBridge and settings test action compile/test on macOS; actual OS display/click and Windows remain manual gates |
+| Complete tray menu and monitoring controls | IMPLEMENTED_UNVERIFIED | All required Rust menu actions dispatch to real frontend sync/pause/navigation operations; direct status-item acceptance is still unavailable |
 
 ## P2: product enhancements
 
 | Feature | Status | Evidence / next gate |
 | --- | --- | --- |
-| Change Tour | NOT_STARTED | Must derive ordering from static relationships/evidence |
-| Agent Evidence Graph | NOT_STARTED | Depends on durable run events |
-| Webhook relay with HMAC/deduplication | NOT_STARTED | Local polling remains default |
-| Optional MySQL 8 profile | NOT_STARTED | Requires compose, migration and integration smoke |
-| Agent and Tool Registry screens | NOT_STARTED | Depends on registries and UI |
-| MCP client adapter | NOT_STARTED | No provider selected |
-| Deep links | IMPLEMENTED_UNVERIFIED | Scheme/parser/plugin code and Rust tests exist; end-to-end navigation is not verified |
-| Autostart toggle | NOT_STARTED | Must default off and be verified by platform |
-| Update interface reservation | NOT_STARTED | Signing/update service out of current verified scope |
-| English localization | NOT_STARTED | Chinese-first UI planned |
-| Graph JSON export | NOT_STARTED | Depends on graph API |
-| Graph PNG/SVG export | NOT_STARTED | Feasibility to be tested after graph UI |
-| GitHub OAuth Device Flow / App | NOT_STARTED | Fine-grained PAT/public-read can ship first |
+| Change Tour | VERIFIED_MACOS | Static relationship/evidence ordering API with low-confidence incomplete state tests |
+| Agent Evidence Graph | VERIFIED_MACOS | Dedicated run-owned task→step→tool→evidence→finding API/React Flow graph is covered by API and Chrome E2E |
+| Webhook relay with HMAC/deduplication | VERIFIED_MACOS | Separate FastAPI relay has one-use repository-scoped pairing, authenticated SSE, HMAC/replay tests and hardened compose; container/TLS deployment is unverified |
+| Optional MySQL 8 profile | IMPLEMENTED_UNVERIFIED | PyMySQL profile, dialect-aware migrations/retrieval, MySQL 8.4 CI service and smoke script exist; offline SQL compiles but Docker is unavailable locally |
+| Agent and Tool Registry screens | VERIFIED_MACOS | Seven workflow nodes and 19 actual tools rendered from API; Chrome screenshot/test |
+| MCP client adapter | VERIFIED_MACOS | MCP 2025-11-25 stdio negotiation/list/call with executable/tool allowlists, filtered env and bounded fixture tests |
+| Deep links | IMPLEMENTED_UNVERIFIED | Scheme/parser/single-instance delivery and real frontend repo/PR/run routing tests exist; OS URL invocation is not verified |
+| Autostart toggle | IMPLEMENTED_UNVERIFIED | Official Tauri autostart manager and native settings bridge compile/test; defaults off and real login behavior remains manual by platform |
+| Update interface reservation | VERIFIED_MACOS | Authenticated typed API reports an explicitly unconfigured signed-update channel; it never offers an unsigned payload |
+| English localization | IN_PROGRESS | Persisted locale switches the shell, status primitives, Dashboard, Settings and Repository Map; remaining detailed pages are still Chinese-first |
+| Graph JSON export | VERIFIED_MACOS | Repository Map downloads the current typed API payload in the browser flow |
+| Graph PNG/SVG export | VERIFIED_MACOS | Standalone deterministic SVG is unit-tested; Chrome E2E downloads PNG and verifies its binary signature |
+| GitHub OAuth Device Flow / App | VERIFIED_MACOS | GitHub Device Flow adapter enforces official URI/polling semantics and passes tokens only to a secure `SecretStr` sink; desktop UI still ships PAT first |
 
 ## P3: explicitly deferred interfaces
 
