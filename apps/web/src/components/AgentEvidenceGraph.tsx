@@ -4,6 +4,7 @@ import "@xyflow/react/dist/style.css";
 import { useRunEvidenceGraph } from "../api/queries";
 import { ErrorState, LoadingState } from "./RequestState";
 import { errorMessage } from "../lib/errors";
+import { useI18n } from "../i18n";
 
 const kindColumn: Record<string, number> = {
   user_task: 0,
@@ -14,9 +15,10 @@ const kindColumn: Record<string, number> = {
 };
 
 export function AgentEvidenceGraph({ runId }: { runId: string }) {
+  const { text } = useI18n();
   const graph = useRunEvidenceGraph(runId);
-  if (graph.isPending) return <LoadingState label="正在读取 Agent Evidence Graph…" />;
-  if (graph.isError) return <ErrorState title="Agent Evidence Graph 不可用" message={errorMessage(graph.error)} />;
+  if (graph.isPending) return <LoadingState label={text("正在读取 Agent Evidence Graph…", "Reading Agent Evidence Graph…")} />;
+  if (graph.isError) return <ErrorState title={text("Agent Evidence Graph 不可用", "Agent Evidence Graph unavailable")} message={errorMessage(graph.error)} />;
   const counters = new Map<number, number>();
   const nodes: Node[] = graph.data.nodes.map((node) => {
     const column = kindColumn[node.kind] ?? 2;

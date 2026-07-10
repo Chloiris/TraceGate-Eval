@@ -84,7 +84,7 @@ test("shows explicit retry failure and actual registry permissions", async ({ pa
   await expect(page.getByRole("heading", { name: "Agent Evidence Graph" })).toBeVisible();
   await expect(page.locator(".evidence-flow .react-flow")).toBeVisible();
   await page.getByRole("button", { name: "重试" }).click();
-  await expect(page.getByText("操作失败：Model provider and model name are not configured", { exact: false })).toBeVisible();
+  await expect(page.getByText("操作失败: Model provider and model name are not configured", { exact: false })).toBeVisible();
 
   await page.getByRole("button", { name: /Registry/ }).click();
   await expect(page.getByRole("heading", { name: "Planner" })).toBeVisible();

@@ -243,6 +243,9 @@ describe("App startup and system state", () => {
       if (url.endsWith("/settings")) {
         return jsonResponse({ theme: "system", language: "en-US", background_monitoring: false, launch_at_startup: false, model_provider: null, model_base_url: null, model_name: null, updated_at: "2026-07-10T10:00:00Z" });
       }
+      if (url.endsWith("/onboarding")) {
+        return jsonResponse({ completed: false, current_step: "welcome", background_monitoring: false, launch_at_startup: false, repository_added: false, github: { state: "not_configured", configured: false, message: "GitHub 尚未连接" }, model: { state: "not_configured", configured: false, message: "模型尚未配置" }, completed_at: null, updated_at: "2026-07-10T10:00:00Z" });
+      }
       if (url.endsWith("/repositories") || url.endsWith("/pull-requests") || url.endsWith("/runs")) {
         return jsonResponse({ items: [], total: 0, limit: 50, offset: 0 });
       }
@@ -253,5 +256,8 @@ describe("App startup and system state", () => {
     expect(screen.getByRole("navigation", { name: "Primary navigation" })).toHaveTextContent("Repositories");
     expect(screen.getByRole("heading", { name: "Some capabilities are not configured" })).toBeInTheDocument();
     expect(document.documentElement.lang).toBe("en-US");
+    await userEvent.click(screen.getByRole("button", { name: /Onboarding.*Complete initial setup/ }));
+    expect(await screen.findByRole("heading", { name: "Welcome to TraceGate Studio" })).toBeInTheDocument();
+    expect(screen.getByRole("checkbox", { name: /Launch at startup/ })).toBeDisabled();
   });
 });

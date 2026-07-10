@@ -29,7 +29,7 @@ Command and result:
 
 ```text
 pnpm test:e2e
-4 passed (7.3s)
+4 passed (6.3s)
 ```
 
 Backend and package verification:

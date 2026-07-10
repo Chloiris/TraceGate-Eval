@@ -12,18 +12,20 @@ import {
 import { ErrorState, LoadingState } from "../components/RequestState";
 import { errorMessage } from "../lib/errors";
 import { useUiStore } from "../store/uiStore";
+import { useI18n } from "../i18n";
 
-function shortSha(value: string | null): string {
-  return value ? value.slice(0, 10) : "尚未索引";
+function shortSha(value: string | null, empty: string): string {
+  return value ? value.slice(0, 10) : empty;
 }
 
-function formatDate(value: string | null): string {
-  if (!value) return "尚未同步";
+function formatDate(value: string | null, locale: string, empty: string): string {
+  if (!value) return empty;
   const parsed = new Date(value);
-  return Number.isNaN(parsed.getTime()) ? value : parsed.toLocaleString("zh-CN");
+  return Number.isNaN(parsed.getTime()) ? value : parsed.toLocaleString(locale);
 }
 
 export function RepositoryPage() {
+  const { text } = useI18n();
   const repositories = useRepositories();
   const createRepository = useCreateRepository();
   const [fullName, setFullName] = useState("");
@@ -48,14 +50,14 @@ export function RepositoryPage() {
     <div className="page-stack">
       <header className="page-header">
         <span className="eyebrow">REPOSITORY CONTROL</span>
-        <h2>受控仓库</h2>
-        <p>只有显式添加的本地目录会被索引。路径越界、符号链接逃逸和敏感文件读取会被后端拒绝。</p>
+        <h2>{text("受控仓库", "Controlled repositories")}</h2>
+        <p>{text("只有显式添加的本地目录会被索引。路径越界、符号链接逃逸和敏感文件读取会被后端拒绝。", "Only explicitly enrolled local directories are indexed. The backend rejects path escapes, symlink escapes, and sensitive-file reads.")}</p>
       </header>
 
       <form className="settings-panel repository-form" onSubmit={submit}>
         <div className="form-grid">
           <label className="field">
-            <span>GitHub 仓库（owner/name）</span>
+            <span>{text("GitHub 仓库（owner/name）", "GitHub repository (owner/name)")}</span>
             <input
               required
               pattern="[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+"
@@ -65,7 +67,7 @@ export function RepositoryPage() {
             />
           </label>
           <label className="field">
-            <span>本地工作区绝对路径（可选）</span>
+            <span>{text("本地工作区绝对路径（可选）", "Absolute local workspace path (optional)")}</span>
             <input
               value={localPath}
               onChange={(event) => setLocalPath(event.target.value)}
@@ -74,32 +76,32 @@ export function RepositoryPage() {
           </label>
         </div>
         <label className="switch-row">
-          <span><strong>后台监控</strong><small>启用后仓库会进入真实 PR 轮询范围。</small></span>
+          <span><strong>{text("后台监控", "Background monitoring")}</strong><small>{text("启用后仓库会进入真实 PR 轮询范围。", "When enabled, the repository enters the real PR polling scope.")}</small></span>
           <input type="checkbox" checked={monitoring} onChange={(event) => setMonitoring(event.target.checked)} />
         </label>
         {createRepository.isError ? (
-          <p className="inline-error" role="alert">添加失败：{errorMessage(createRepository.error)}</p>
+          <p className="inline-error" role="alert">{text("添加失败", "Add failed")}: {errorMessage(createRepository.error)}</p>
         ) : null}
         <div className="form-actions">
           <button className="button button-primary" type="submit" disabled={createRepository.isPending}>
-            {createRepository.isPending ? "添加中…" : "添加仓库"}
+            {createRepository.isPending ? text("添加中…", "Adding…") : text("添加仓库", "Add repository")}
           </button>
         </div>
       </form>
 
       <section aria-labelledby="repository-list-title">
         <div className="section-heading">
-          <div><span className="eyebrow">ENROLLED</span><h2 id="repository-list-title">仓库列表</h2></div>
-          <span className="count-label">{repositories.data?.total ?? 0} 个仓库</span>
+          <div><span className="eyebrow">ENROLLED</span><h2 id="repository-list-title">{text("仓库列表", "Repository list")}</h2></div>
+          <span className="count-label">{repositories.data?.total ?? 0} {text("个仓库", "repositories")}</span>
         </div>
-        {repositories.isPending ? <LoadingState label="正在读取仓库…" /> : null}
+        {repositories.isPending ? <LoadingState label={text("正在读取仓库…", "Reading repositories…")} /> : null}
         {repositories.isError ? (
-          <ErrorState title="仓库读取失败" message={errorMessage(repositories.error)} onRetry={() => void repositories.refetch()} />
+          <ErrorState title={text("仓库读取失败", "Unable to read repositories")} message={errorMessage(repositories.error)} onRetry={() => void repositories.refetch()} />
         ) : null}
         {repositories.data?.items.length === 0 ? (
           <div className="honest-empty-state">
             <div className="empty-mark">REPO</div>
-            <div><h2>还没有受控仓库</h2><p>填写真实 GitHub 仓库名；需要索引、Diff 和代码图时，同时提供本地 Git 工作区。</p></div>
+            <div><h2>{text("还没有受控仓库", "No controlled repositories")}</h2><p>{text("填写真实 GitHub 仓库名；需要索引、Diff 和代码图时，同时提供本地 Git 工作区。", "Enter a real GitHub repository name and provide a local Git workspace when indexing, diffs, and code maps are needed.")}</p></div>
           </div>
         ) : null}
         <div className="repository-grid">
@@ -113,6 +115,7 @@ export function RepositoryPage() {
 }
 
 function RepositoryCard({ repository }: { repository: Repository }) {
+  const { locale, text } = useI18n();
   const syncRepository = useSyncRepository();
   const indexRepository = useIndexRepository();
   const updateRepository = useUpdateRepository();
@@ -122,7 +125,7 @@ function RepositoryCard({ repository }: { repository: Repository }) {
   const busy = syncRepository.isPending || indexRepository.isPending || updateRepository.isPending || deleteRepository.isPending;
 
   function remove() {
-    if (window.confirm(`从 TraceGate 删除 ${repository.full_name}？本地仓库文件不会被删除。`)) {
+    if (window.confirm(text(`从 TraceGate 删除 ${repository.full_name}？本地仓库文件不会被删除。`, `Remove ${repository.full_name} from TraceGate? Local repository files will not be deleted.`))) {
       deleteRepository.mutate(repository.id);
     }
   }
@@ -132,29 +135,29 @@ function RepositoryCard({ repository }: { repository: Repository }) {
       <div className="repository-card-heading">
         <div><span className="eyebrow">{repository.connection_status}</span><h3>{repository.full_name}</h3></div>
         <span className={`pill pill-${repository.monitoring_enabled ? "active" : "muted"}`}>
-          {repository.monitoring_enabled ? "监控中" : "已暂停"}
+          {repository.monitoring_enabled ? text("监控中", "Monitoring") : text("已暂停", "Paused")}
         </span>
       </div>
       <dl className="metadata-grid">
-        <div><dt>本地目录</dt><dd title={repository.local_path ?? undefined}>{repository.local_path ?? "未绑定"}</dd></div>
-        <div><dt>默认分支</dt><dd>{repository.default_branch ?? "未同步"}</dd></div>
-        <div><dt>HEAD</dt><dd className="mono">{shortSha(repository.current_commit_sha)}</dd></div>
-        <div><dt>索引版本</dt><dd className="mono">{shortSha(repository.current_index_version)}</dd></div>
-        <div><dt>最近同步</dt><dd>{formatDate(repository.last_synced_at)}</dd></div>
-        <div><dt>Rate Limit</dt><dd>{repository.github_rate_remaining ?? "未知"}</dd></div>
+        <div><dt>{text("本地目录", "Local directory")}</dt><dd title={repository.local_path ?? undefined}>{repository.local_path ?? text("未绑定", "Not bound")}</dd></div>
+        <div><dt>{text("默认分支", "Default branch")}</dt><dd>{repository.default_branch ?? text("未同步", "Not synchronized")}</dd></div>
+        <div><dt>HEAD</dt><dd className="mono">{shortSha(repository.current_commit_sha, text("尚未索引", "Not indexed"))}</dd></div>
+        <div><dt>{text("索引版本", "Index version")}</dt><dd className="mono">{shortSha(repository.current_index_version, text("尚未索引", "Not indexed"))}</dd></div>
+        <div><dt>{text("最近同步", "Last synchronized")}</dt><dd>{formatDate(repository.last_synced_at, locale, text("尚未同步", "Never synchronized"))}</dd></div>
+        <div><dt>Rate Limit</dt><dd>{repository.github_rate_remaining ?? text("未知", "Unknown")}</dd></div>
       </dl>
       {repository.last_error ? <p className="inline-error" role="alert">{repository.last_error}</p> : null}
-      {operationError ? <p className="inline-error" role="alert">操作失败：{errorMessage(operationError)}</p> : null}
+      {operationError ? <p className="inline-error" role="alert">{text("操作失败", "Operation failed")}: {errorMessage(operationError)}</p> : null}
       <div className="action-row">
-        <button className="button button-primary button-small" type="button" disabled={busy} onClick={() => syncRepository.mutate(repository.id)}>立即同步</button>
-        <button className="button button-secondary button-small" type="button" disabled={busy || !repository.local_path} onClick={() => indexRepository.mutate(repository.id)}>重新索引</button>
+        <button className="button button-primary button-small" type="button" disabled={busy} onClick={() => syncRepository.mutate(repository.id)}>{text("立即同步", "Synchronize now")}</button>
+        <button className="button button-secondary button-small" type="button" disabled={busy || !repository.local_path} onClick={() => indexRepository.mutate(repository.id)}>{text("重新索引", "Reindex")}</button>
         <button className="button button-secondary button-small" type="button" disabled={busy} onClick={() => updateRepository.mutate({ repositoryId: repository.id, update: { monitoring_enabled: !repository.monitoring_enabled } })}>
-          {repository.monitoring_enabled ? "暂停监控" : "恢复监控"}
+          {repository.monitoring_enabled ? text("暂停监控", "Pause monitoring") : text("恢复监控", "Resume monitoring")}
         </button>
         <button className="button button-secondary button-small" type="button" disabled={!repository.current_index_version} onClick={() => selectRepository(repository.id, "repository-map")}>Repository Map</button>
         <a className="button button-secondary button-small" href={`https://github.com/${repository.full_name}`} target="_blank" rel="noreferrer">GitHub</a>
         {repository.local_path ? <a className="button button-secondary button-small" href={`vscode://file/${encodeURI(repository.local_path)}`}>VS Code</a> : null}
-        <button className="button button-danger button-small" type="button" disabled={busy} onClick={remove}>删除</button>
+        <button className="button button-danger button-small" type="button" disabled={busy} onClick={remove}>{text("删除", "Delete")}</button>
       </div>
     </article>
   );

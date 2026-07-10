@@ -109,7 +109,7 @@
 | Deep links | IMPLEMENTED_UNVERIFIED | Scheme/parser/single-instance delivery and real frontend repo/PR/run routing tests exist; OS URL invocation is not verified |
 | Autostart toggle | IMPLEMENTED_UNVERIFIED | Official Tauri autostart manager and native settings bridge compile/test; defaults off and real login behavior remains manual by platform |
 | Update interface reservation | VERIFIED_MACOS | Authenticated typed API reports an explicitly unconfigured signed-update channel; it never offers an unsigned payload |
-| English localization | IN_PROGRESS | Persisted locale switches the shell, status primitives, Dashboard, Settings and Repository Map; remaining detailed pages are still Chinese-first |
+| English localization | VERIFIED_MACOS | Persisted locale switches the shell, status primitives, Dashboard, Onboarding, repositories, PR Inbox/detail, maps, runs, Eval, Registry, Diagnostics and Settings; English render has a Vitest integration check |
 | Graph JSON export | VERIFIED_MACOS | Repository Map downloads the current typed API payload in the browser flow |
 | Graph PNG/SVG export | VERIFIED_MACOS | Standalone deterministic SVG is unit-tested; Chrome E2E downloads PNG and verifies its binary signature |
 | GitHub OAuth Device Flow / App | VERIFIED_MACOS | GitHub Device Flow adapter enforces official URI/polling semantics and passes tokens only to a secure `SecretStr` sink; desktop UI still ships PAT first |

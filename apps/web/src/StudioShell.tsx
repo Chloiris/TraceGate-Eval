@@ -63,6 +63,7 @@ export function StudioShell({ host }: { host: HostBridge }) {
   useEffect(() => {
     let active = true;
     const unregister: (() => void)[] = [];
+    const localized = (zh: string, en: string) => locale === "en-US" ? en : zh;
     const report = (kind: "success" | "error", message: string) => {
       if (active) setNativeNotice({ kind, message });
     };
@@ -73,12 +74,12 @@ export function StudioShell({ host }: { host: HostBridge }) {
           for (const repository of repositories.items) await client.syncRepository(repository.id);
           await queryClient.invalidateQueries({ queryKey: ["repositories"] });
           await queryClient.invalidateQueries({ queryKey: ["pull-requests"] });
-          report("success", `托盘扫描完成：${repositories.items.length} 个仓库。`);
+          report("success", localized(`托盘扫描完成：${repositories.items.length} 个仓库。`, `Tray scan completed for ${repositories.items.length} repositories.`));
         } else if (action === "pause_monitoring" || action === "resume_monitoring") {
           const enabled = action === "resume_monitoring";
           await client.updateSettings({ background_monitoring: enabled });
           await queryClient.invalidateQueries({ queryKey: ["settings"] });
-          report("success", enabled ? "后台监控已恢复。" : "后台监控已暂停。若有当前轮询，会安全完成当前请求。" );
+          report("success", enabled ? localized("后台监控已恢复。", "Background monitoring resumed.") : localized("后台监控已暂停。若有当前轮询，会安全完成当前请求。", "Background monitoring paused; an active poll will finish safely."));
         } else if (action === "recent_pull_requests") {
           useUiStore.getState().setActiveView("pull-requests");
         } else if (action === "high_risk_pull_requests") {
@@ -96,7 +97,7 @@ export function StudioShell({ host }: { host: HostBridge }) {
           if (selected) useUiStore.getState().selectPullRequest(selected.id, selected.repository_id);
           else {
             useUiStore.getState().setActiveView("pull-requests");
-            report("success", "当前持久化 Findings 中没有高风险 Pull Request。" );
+            report("success", localized("当前持久化 Findings 中没有高风险 Pull Request。", "No high-risk Pull Request exists in persisted Findings."));
           }
         } else if (action === "settings") {
           useUiStore.getState().setActiveView("settings");
@@ -104,7 +105,7 @@ export function StudioShell({ host }: { host: HostBridge }) {
           useUiStore.getState().setActiveView("diagnostics");
         }
       } catch (error) {
-        report("error", `托盘操作失败：${errorMessage(error)}`);
+        report("error", `${localized("托盘操作失败", "Tray operation failed")}: ${errorMessage(error)}`);
       }
     };
     const handleDeepLink = async (route: DeepLinkRoute) => {
@@ -116,34 +117,34 @@ export function StudioShell({ host }: { host: HostBridge }) {
         }
         const repositories = await client.listRepositories();
         const repository = repositories.items.find((item) => item.full_name === `${route.owner}/${route.repository}`);
-        if (!repository) throw new Error("深链仓库尚未添加到 TraceGate。" );
+        if (!repository) throw new Error(localized("深链仓库尚未添加到 TraceGate。", "The deep-linked repository is not enrolled in TraceGate."));
         if (route.kind === "repository") {
           useUiStore.getState().selectRepository(repository.id);
           return;
         }
         const pullRequests = await client.listPullRequests(repository.id);
         const pullRequest = pullRequests.items.find((item) => item.number === route.number);
-        if (!pullRequest) throw new Error("深链 Pull Request 尚未同步。" );
+        if (!pullRequest) throw new Error(localized("深链 Pull Request 尚未同步。", "The deep-linked Pull Request is not synchronized."));
         useUiStore.getState().selectPullRequest(pullRequest.id, repository.id);
       } catch (error) {
-        report("error", `深链打开失败：${errorMessage(error)}`);
+        report("error", `${localized("深链打开失败", "Deep link failed")}: ${errorMessage(error)}`);
       }
     };
     if (host.onTrayAction) {
       void host.onTrayAction((action) => void handleTrayAction(action)).then((stop) => {
         if (active) unregister.push(stop); else stop();
-      }).catch((error: unknown) => report("error", `托盘监听失败：${errorMessage(error)}`));
+      }).catch((error: unknown) => report("error", `${localized("托盘监听失败", "Tray listener failed")}: ${errorMessage(error)}`));
     }
     if (host.onDeepLink) {
       void host.onDeepLink((route) => void handleDeepLink(route)).then((stop) => {
         if (active) unregister.push(stop); else stop();
-      }).catch((error: unknown) => report("error", `深链监听失败：${errorMessage(error)}`));
+      }).catch((error: unknown) => report("error", `${localized("深链监听失败", "Deep-link listener failed")}: ${errorMessage(error)}`));
     }
     return () => {
       active = false;
       unregister.forEach((stop) => stop());
     };
-  }, [client, host, queryClient]);
+  }, [client, host, locale, queryClient]);
 
   const activeLabel = activeView === "pull-request-detail"
     ? text("PR 详情", "PR Details")
@@ -231,7 +232,7 @@ export function StudioShell({ host }: { host: HostBridge }) {
 
         {nativeNotice ? <div className={nativeNotice.kind === "error" ? "global-error inline-error" : "global-error inline-success"} role={nativeNotice.kind === "error" ? "alert" : "status"}>{nativeNotice.message}<button className="text-button" type="button" onClick={() => setNativeNotice(null)}>{text("关闭", "Close")}</button></div> : null}
 
-        <div className="workspace-content"><Suspense fallback={<LoadingState label="正在加载代码视图…" />}>
+        <div className="workspace-content"><Suspense fallback={<LoadingState label={text("正在加载代码视图…", "Loading code view…")} />}>
           {activeView === "dashboard" ? <DashboardPage /> : null}
           {activeView === "repositories" ? <RepositoryPage /> : null}
           {activeView === "pull-requests" ? <PullRequestInboxPage /> : null}
@@ -241,7 +242,7 @@ export function StudioShell({ host }: { host: HostBridge }) {
           {activeView === "eval" ? <EvalCenterPage /> : null}
           {activeView === "registry" ? <RegistryPage /> : null}
           {activeView === "diagnostics" ? <DiagnosticsPage /> : null}
-          {activeView === "onboarding" ? <OnboardingPage /> : null}
+          {activeView === "onboarding" ? <OnboardingPage host={host} /> : null}
           {activeView === "settings" ? <SettingsPage host={host} /> : null}
         </Suspense></div>
       </main>

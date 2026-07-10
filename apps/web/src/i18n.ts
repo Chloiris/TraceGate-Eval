@@ -1,4 +1,4 @@
-import { createContext, createElement, useContext, type ReactNode } from "react";
+import { createContext, createElement, useCallback, useContext, type ReactNode } from "react";
 
 export type StudioLocale = "zh-CN" | "en-US";
 
@@ -10,10 +10,11 @@ export function I18nProvider({ locale, children }: { locale: StudioLocale; child
 
 export function useI18n() {
   const locale = useContext(LocaleContext);
+  const text = useCallback((zhCN: string, enUS: string): string => (
+    locale === "en-US" ? enUS : zhCN
+  ), [locale]);
   return {
     locale,
-    text(zhCN: string, enUS: string): string {
-      return locale === "en-US" ? enUS : zhCN;
-    },
+    text,
   };
 }

@@ -77,9 +77,9 @@ export function SettingsPage({ host }: SettingsPageProps) {
   );
 }
 
-const credentialLabels: Record<CredentialKind, { title: string; placeholder: string }> = {
-  github: { title: "GitHub Fine-grained PAT", placeholder: "输入 GitHub Token" },
-  model: { title: "模型 API Key", placeholder: "输入模型 Provider 密钥" },
+const credentialLabels: Record<CredentialKind, { titleZh: string; titleEn: string; placeholderZh: string; placeholderEn: string }> = {
+  github: { titleZh: "GitHub Fine-grained PAT", titleEn: "GitHub fine-grained PAT", placeholderZh: "输入 GitHub Token", placeholderEn: "Enter GitHub token" },
+  model: { titleZh: "模型 API Key", titleEn: "Model API key", placeholderZh: "输入模型 Provider 密钥", placeholderEn: "Enter model provider key" },
 };
 
 function CredentialPanel({ host }: { host: HostBridge }) {
@@ -115,7 +115,7 @@ function CredentialPanel({ host }: { host: HostBridge }) {
 
   async function save(kind: CredentialKind) {
     if (!storeCredential) {
-      setFailure("当前宿主不支持系统安全凭据存储。");
+      setFailure(text("当前宿主不支持系统安全凭据存储。", "The current host does not support secure credential storage."));
       return;
     }
     setBusy(kind);
@@ -125,7 +125,7 @@ function CredentialPanel({ host }: { host: HostBridge }) {
       const status = await storeCredential(kind, values[kind]);
       setStatuses((current) => ({ ...current, [kind]: status }));
       setValues((current) => ({ ...current, [kind]: "" }));
-      setMessage(`${credentialLabels[kind].title} 已写入 ${status.storage}。重启 TraceGate 后后端连接状态生效。`);
+      setMessage(text(`${credentialLabels[kind].titleZh} 已写入 ${status.storage}。重启 TraceGate 后后端连接状态生效。`, `${credentialLabels[kind].titleEn} was written to ${status.storage}. Restart TraceGate to apply the backend connection.`));
     } catch (error) {
       setFailure(errorMessage(error));
     } finally {
@@ -135,7 +135,7 @@ function CredentialPanel({ host }: { host: HostBridge }) {
 
   async function remove(kind: CredentialKind) {
     if (!deleteCredential) {
-      setFailure("当前宿主不支持系统安全凭据存储。");
+      setFailure(text("当前宿主不支持系统安全凭据存储。", "The current host does not support secure credential storage."));
       return;
     }
     setBusy(kind);
@@ -144,7 +144,7 @@ function CredentialPanel({ host }: { host: HostBridge }) {
     try {
       const status = await deleteCredential(kind);
       setStatuses((current) => ({ ...current, [kind]: status }));
-      setMessage(`${credentialLabels[kind].title} 已从 ${status.storage} 删除。重启 TraceGate 后后端连接状态生效。`);
+      setMessage(text(`${credentialLabels[kind].titleZh} 已从 ${status.storage} 删除。重启 TraceGate 后后端连接状态生效。`, `${credentialLabels[kind].titleEn} was removed from ${status.storage}. Restart TraceGate to apply the backend connection.`));
     } catch (error) {
       setFailure(errorMessage(error));
     } finally {
@@ -159,17 +159,17 @@ function CredentialPanel({ host }: { host: HostBridge }) {
         return (
           <div className="credential-card" key={kind}>
             <label className="field">
-              <span>{credentialLabels[kind].title}</span>
+              <span>{text(credentialLabels[kind].titleZh, credentialLabels[kind].titleEn)}</span>
               <input
                 type="password"
                 autoComplete="new-password"
                 value={values[kind]}
-                placeholder={credentialLabels[kind].placeholder}
+                placeholder={text(credentialLabels[kind].placeholderZh, credentialLabels[kind].placeholderEn)}
                 onChange={(event) => setValues((current) => ({ ...current, [kind]: event.target.value }))}
               />
             </label>
             <p className="field-note">
-              {status ? `${status.configured ? "已配置" : "未配置"} · ${status.storage}` : "正在读取安全存储状态…"}
+              {status ? `${status.configured ? text("已配置", "Configured") : text("未配置", "Not configured")} · ${status.storage}` : text("正在读取安全存储状态…", "Reading secure storage status…")}
             </p>
             <div className="form-actions">
               <button
@@ -178,7 +178,7 @@ function CredentialPanel({ host }: { host: HostBridge }) {
                 disabled={busy !== null || values[kind].length < 20}
                 onClick={() => void save(kind)}
               >
-                保存到系统凭据库
+                {text("保存到系统凭据库", "Save to system credential store")}
               </button>
               <button
                 className="button button-secondary"
@@ -186,14 +186,14 @@ function CredentialPanel({ host }: { host: HostBridge }) {
                 disabled={busy !== null || !status?.configured}
                 onClick={() => void remove(kind)}
               >
-                删除
+                {text("删除", "Delete")}
               </button>
             </div>
           </div>
         );
       })}
       {message ? <p className="inline-success" role="status">{message}</p> : null}
-      {failure ? <p className="inline-error" role="alert">安全凭据操作失败：{failure}</p> : null}
+      {failure ? <p className="inline-error" role="alert">{text("安全凭据操作失败", "Secure credential operation failed")}: {failure}</p> : null}
     </div>
   );
 }
@@ -224,13 +224,13 @@ function SettingsEditor({ settings, host }: { settings: Settings; host: HostBrid
       .catch((error: unknown) => {
         if (active) {
           setNativeAutostartAvailable(false);
-          setNativeFailure(`无法读取系统开机启动状态：${errorMessage(error)}`);
+          setNativeFailure(`${text("无法读取系统开机启动状态", "Unable to read system autostart state")}: ${errorMessage(error)}`);
         }
       });
     return () => {
       active = false;
     };
-  }, [host]);
+  }, [host, text]);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -261,8 +261,8 @@ function SettingsEditor({ settings, host }: { settings: Settings; host: HostBrid
     setNativeFailure(null);
     setNativeMessage(null);
     try {
-      await host.showReviewNotification("TraceGate Studio", "原生审查通知已连接。");
-      setNativeMessage("通知已交给操作系统；是否展示取决于系统通知权限与勿扰设置。");
+      await host.showReviewNotification("TraceGate Studio", text("原生审查通知已连接。", "Native review notifications are connected."));
+      setNativeMessage(text("通知已交给操作系统；是否展示取决于系统通知权限与勿扰设置。", "The notification was handed to the operating system; display depends on notification permission and focus settings."));
     } catch (error) {
       setNativeFailure(errorMessage(error));
     } finally {
