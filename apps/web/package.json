@@ -11,10 +11,13 @@
     "build": "vite build"
   },
   "dependencies": {
+    "@monaco-editor/react": "4.7.0",
     "@tanstack/react-query": "^5.90.0",
     "@tauri-apps/api": "^2.0.0",
     "@tracegate/api-client": "workspace:*",
     "@tracegate/shared-types": "workspace:*",
+    "@xyflow/react": "12.11.2",
+    "monaco-editor": "0.55.1",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "zod": "^4.3.0",

@@ -5,6 +5,7 @@ import {
   credentialStatusSchema,
   isComponentReady,
   systemStatusSchema,
+  evaluationSummarySchema,
 } from "../src/index";
 
 describe("shared API schemas", () => {
@@ -48,5 +49,9 @@ describe("shared API schemas", () => {
     });
     expect(status.configured).toBe(true);
     expect("secret" in status).toBe(false);
+  });
+
+  it("rejects evaluation summaries that are not marked as real", () => {
+    expect(() => evaluationSummarySchema.parse({ is_real_dataset: false })).toThrow();
   });
 });

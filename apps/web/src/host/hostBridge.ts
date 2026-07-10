@@ -7,6 +7,20 @@ import {
 } from "@tracegate/shared-types";
 
 export type HostKind = "browser" | "tauri" | "ue-webview" | "maya-webview";
+export type TrayAction =
+  | "scan_all"
+  | "pause_monitoring"
+  | "resume_monitoring"
+  | "recent_pull_requests"
+  | "high_risk_pull_requests"
+  | "settings"
+  | "logs"
+  | "diagnostics";
+
+export type DeepLinkRoute =
+  | { kind: "repository"; owner: string; repository: string }
+  | { kind: "pull_request"; owner: string; repository: string; number: number }
+  | { kind: "run"; run_id: string };
 
 export interface HostBridge {
   readonly kind: HostKind;
@@ -15,6 +29,11 @@ export interface HostBridge {
   getCredentialStatus?(kind: CredentialKind): Promise<CredentialStatus>;
   storeCredential?(kind: CredentialKind, secret: string): Promise<CredentialStatus>;
   deleteCredential?(kind: CredentialKind): Promise<CredentialStatus>;
+  getAutostartEnabled?(): Promise<boolean>;
+  setAutostartEnabled?(enabled: boolean): Promise<boolean>;
+  showReviewNotification?(title: string, body: string): Promise<void>;
+  onTrayAction?(handler: (action: TrayAction) => void): Promise<() => void>;
+  onDeepLink?(handler: (route: DeepLinkRoute) => void): Promise<() => void>;
 }
 
 export class HostBridgeError extends Error {
@@ -84,6 +103,35 @@ export class TauriHost implements HostBridge {
   async deleteCredential(kind: CredentialKind): Promise<CredentialStatus> {
     const { invoke } = await import("@tauri-apps/api/core");
     return credentialStatusSchema.parse(await invoke<unknown>("delete_credential", { kind }));
+  }
+
+  async getAutostartEnabled(): Promise<boolean> {
+    const { invoke } = await import("@tauri-apps/api/core");
+    return invoke<boolean>("get_autostart_enabled");
+  }
+
+  async setAutostartEnabled(enabled: boolean): Promise<boolean> {
+    const { invoke } = await import("@tauri-apps/api/core");
+    return invoke<boolean>("set_autostart_enabled", { enabled });
+  }
+
+  async showReviewNotification(title: string, body: string): Promise<void> {
+    const { invoke } = await import("@tauri-apps/api/core");
+    await invoke("show_review_notification", { title, body });
+  }
+
+  async onTrayAction(handler: (action: TrayAction) => void): Promise<() => void> {
+    const { listen } = await import("@tauri-apps/api/event");
+    return listen<TrayAction>("tracegate-tray-action", (event) => handler(event.payload));
+  }
+
+  async onDeepLink(handler: (route: DeepLinkRoute) => void): Promise<() => void> {
+    const { listen } = await import("@tauri-apps/api/event");
+    const stop = await listen<{ route: DeepLinkRoute }>("tracegate-deep-link", (event) => handler(event.payload.route));
+    const { invoke } = await import("@tauri-apps/api/core");
+    const pending = await invoke<DeepLinkRoute | null>("take_pending_deep_link");
+    if (pending) handler(pending);
+    return stop;
   }
 }
 

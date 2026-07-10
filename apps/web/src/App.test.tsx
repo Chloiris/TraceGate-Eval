@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen } from "@testing-library/react";
+import { act, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ApiConnection } from "@tracegate/shared-types";
@@ -100,6 +100,9 @@ describe("App startup and system state", () => {
           updated_at: "2026-07-10T10:00:00+08:00",
         });
       }
+      if (url.endsWith("/repositories") || url.endsWith("/pull-requests") || url.endsWith("/runs")) {
+        return jsonResponse({ items: [], total: 0, limit: 50, offset: 0 });
+      }
       return jsonResponse({ error: { code: "not_found", message: "Unknown test path" } }, 404);
     });
     vi.stubGlobal("fetch", fetchMock);
@@ -108,7 +111,8 @@ describe("App startup and system state", () => {
 
     expect(await screen.findByText("GitHub 尚未连接")).toBeInTheDocument();
     expect(screen.getByText("模型尚未配置")).toBeInTheDocument();
-    expect(screen.getByText("仓库与 PR 数据尚未接入此页面")).toBeInTheDocument();
+    expect(screen.getByText("工作区活动")).toBeInTheDocument();
+    expect(screen.getByText("模型成本尚无已配置价格，因此不显示估算值。", { exact: false })).toBeInTheDocument();
   });
 
   it("uses the desktop secure-store bridge without returning credential values", async () => {
@@ -178,5 +182,76 @@ describe("App startup and system state", () => {
     expect(storeCredential).toHaveBeenCalledWith("github", "test-credential-material-12345");
     expect(await screen.findByText(/已写入 macOS Keychain/)).toBeInTheDocument();
     expect(field).toHaveValue("");
+  });
+
+  it("routes real Tauri tray actions into Studio views", async () => {
+    let trayHandler: ((action: "settings") => void) | undefined;
+    vi.stubGlobal("fetch", vi.fn<typeof fetch>(async (input) => {
+      const url = String(input);
+      if (url.endsWith("/system/status")) {
+        return jsonResponse({
+          status: "degraded",
+          components: {
+            api: { state: "ready", configured: true, message: "API ready" },
+            database: { state: "ready", configured: true, message: "DB ready" },
+            github: { state: "not_configured", configured: false, message: "GitHub 尚未连接" },
+            model: { state: "not_configured", configured: false, message: "模型尚未配置" },
+            eval: { state: "ready", configured: true, message: "Eval ready" },
+          },
+          checked_at: "2026-07-10T10:00:00Z",
+        });
+      }
+      if (url.endsWith("/settings")) {
+        return jsonResponse({ theme: "system", language: "zh-CN", background_monitoring: false, launch_at_startup: false, model_provider: null, model_base_url: null, model_name: null, updated_at: "2026-07-10T10:00:00Z" });
+      }
+      if (url.endsWith("/repositories") || url.endsWith("/pull-requests") || url.endsWith("/runs")) {
+        return jsonResponse({ items: [], total: 0, limit: 50, offset: 0 });
+      }
+      return jsonResponse({ error: { code: "not_found", message: "Unknown test path" } }, 404);
+    }));
+    const host: HostBridge = {
+      kind: "tauri",
+      displayName: "Tauri 测试宿主",
+      getApiConnection: async () => connection,
+      onTrayAction: async (handler) => {
+        trayHandler = handler as (action: "settings") => void;
+        return () => undefined;
+      },
+    };
+    renderApp(host);
+    await screen.findByRole("heading", { name: "概览" });
+    await act(async () => trayHandler?.("settings"));
+    expect(await screen.findByRole("heading", { name: "设置", level: 2 })).toBeInTheDocument();
+  });
+
+  it("renders the persisted English shell without claiming an unfinished locale", async () => {
+    vi.stubGlobal("fetch", vi.fn<typeof fetch>(async (input) => {
+      const url = String(input);
+      if (url.endsWith("/system/status")) {
+        return jsonResponse({
+          status: "degraded",
+          components: {
+            api: { state: "ready", configured: true, message: "API ready" },
+            database: { state: "ready", configured: true, message: "DB ready" },
+            github: { state: "not_configured", configured: false, message: "GitHub not connected" },
+            model: { state: "not_configured", configured: false, message: "Model not configured" },
+            eval: { state: "ready", configured: true, message: "Eval ready" },
+          },
+          checked_at: "2026-07-10T10:00:00Z",
+        });
+      }
+      if (url.endsWith("/settings")) {
+        return jsonResponse({ theme: "system", language: "en-US", background_monitoring: false, launch_at_startup: false, model_provider: null, model_base_url: null, model_name: null, updated_at: "2026-07-10T10:00:00Z" });
+      }
+      if (url.endsWith("/repositories") || url.endsWith("/pull-requests") || url.endsWith("/runs")) {
+        return jsonResponse({ items: [], total: 0, limit: 50, offset: 0 });
+      }
+      return jsonResponse({ error: { code: "not_found", message: "Unknown test path" } }, 404);
+    }));
+    renderApp(createHost(async () => connection));
+    expect(await screen.findByRole("heading", { name: "Overview" })).toBeInTheDocument();
+    expect(screen.getByRole("navigation", { name: "Primary navigation" })).toHaveTextContent("Repositories");
+    expect(screen.getByRole("heading", { name: "Some capabilities are not configured" })).toBeInTheDocument();
+    expect(document.documentElement.lang).toBe("en-US");
   });
 });
