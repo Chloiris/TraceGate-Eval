@@ -17,6 +17,7 @@ from .config import StudioSettings
 from .database import StudioDatabase
 from .errors import StudioAPIError
 from .migration_runner import require_current_revision, upgrade_database
+from .run_manager import RunManager
 
 
 SECURITY_HEADERS = {
@@ -38,6 +39,7 @@ def _error_response(status_code: int, code: str, message: str) -> JSONResponse:
 
 def create_app(settings: StudioSettings) -> FastAPI:
     database = StudioDatabase(settings.database_url)
+    run_manager = RunManager(database.session_factory)
     logger = logging.getLogger("tracegate.studio.api")
 
     @asynccontextmanager
@@ -50,6 +52,7 @@ def create_app(settings: StudioSettings) -> FastAPI:
             logger.info("api_ready database_migrated=true")
             yield
         finally:
+            await run_manager.shutdown()
             database.dispose()
             logger.info("api_stopped database_disposed=true")
 
@@ -63,6 +66,7 @@ def create_app(settings: StudioSettings) -> FastAPI:
     )
     app.state.settings = settings
     app.state.database = database
+    app.state.run_manager = run_manager
 
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=list(settings.allowed_hosts))
     app.add_middleware(

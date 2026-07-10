@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Iterator
 from pathlib import Path
+import subprocess
 
 import pytest
 from fastapi.testclient import TestClient
@@ -10,6 +11,8 @@ from pydantic import SecretStr
 from tracegate.config import PROJECT_ROOT
 from tracegate.studio.app import SECURITY_HEADERS, create_app
 from tracegate.studio.config import StudioSettings
+from tracegate.github import GitHubRateLimit, PullRequestData
+from tracegate.studio.models import PullRequest
 
 
 TOKEN = "test-local-token-0123456789-abcdef"
@@ -224,6 +227,115 @@ def test_repository_crud_is_persisted_and_reports_unsynced_state(client: TestCli
     missing = client.get(f"/api/v1/repositories/{repository['id']}", headers=auth_headers())
     assert missing.status_code == 404
     assert missing.json()["error"]["code"] == "repository_not_found"
+
+
+def test_repository_index_and_graph_use_real_local_git_content(client: TestClient, tmp_path: Path) -> None:
+    repository_path = tmp_path / "workspace"
+    repository_path.mkdir()
+    subprocess.run(["git", "init", "-q"], cwd=repository_path, check=True)
+    subprocess.run(["git", "config", "user.email", "tracegate@example.invalid"], cwd=repository_path, check=True)
+    subprocess.run(["git", "config", "user.name", "TraceGate Test"], cwd=repository_path, check=True)
+    (repository_path / "main.py").write_text("def indexed_function():\n    return 1\n", encoding="utf-8")
+    subprocess.run(["git", "add", "."], cwd=repository_path, check=True)
+    subprocess.run(["git", "commit", "-qm", "index fixture"], cwd=repository_path, check=True)
+
+    created = client.post(
+        "/api/v1/repositories",
+        headers=auth_headers(),
+        json={"full_name": "acme/indexed", "local_path": str(repository_path)},
+    ).json()
+    indexed = client.post(f"/api/v1/repositories/{created['id']}/index", headers=auth_headers())
+    assert indexed.status_code == 200
+    assert indexed.json()["file_count"] == 1
+    assert indexed.json()["symbol_count"] == 1
+    assert indexed.json()["commit_sha"]
+
+    graph = client.get(f"/api/v1/repositories/{created['id']}/graph", headers=auth_headers())
+    assert graph.status_code == 200
+    assert graph.json()["index_version"] == indexed.json()["id"]
+    assert any(node["label"] == "indexed_function" for node in graph.json()["nodes"])
+    assert graph.json()["vector_search_enabled"] is False
+
+    retrieval = client.get(
+        f"/api/v1/repositories/{created['id']}/search",
+        headers=auth_headers(),
+        params={"query": "indexed_function"},
+    )
+    assert retrieval.status_code == 200
+    assert retrieval.json()["hits"][0]["path"] == "main.py"
+    assert {hit["source"] for hit in retrieval.json()["hits"]} & {"symbol", "fts5"}
+    assert retrieval.json()["vector_search_enabled"] is False
+    assert "no keyword result is labelled as vector" in retrieval.json()["vector_search_message"]
+
+    with client.app.state.database.session_factory() as session:
+        pull_request = PullRequest(
+            repository_id=created["id"],
+            number=3,
+            title="Indexed PR",
+            state="open",
+            url="https://github.com/acme/indexed/pull/3",
+            base_sha="a" * 40,
+            head_sha=indexed.json()["commit_sha"],
+        )
+        session.add(pull_request)
+        session.commit()
+        session.refresh(pull_request)
+        pull_request_id = pull_request.id
+    blocked = client.post(f"/api/v1/pull-requests/{pull_request_id}/analyze", headers=auth_headers())
+    assert blocked.status_code == 409
+    assert blocked.json()["error"]["code"] == "model_not_configured"
+    assert client.get("/api/v1/runs", headers=auth_headers()).json()["total"] == 0
+
+
+def test_public_github_sync_persists_real_provider_shape(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class FakeProvider:
+        def __init__(self, token: str | None = None) -> None:
+            assert token is None
+
+        async def list_pull_requests(self, *_args: object, **_kwargs: object):  # type: ignore[no-untyped-def]
+            pull = PullRequestData.model_validate(
+                {
+                    "number": 7,
+                    "title": "Parser boundary",
+                    "state": "open",
+                    "html_url": "https://github.com/acme/synced/pull/7",
+                    "updated_at": "2026-07-10T07:00:00Z",
+                    "created_at": "2026-07-09T07:00:00Z",
+                    "user": {"login": "octocat"},
+                    "base": {"sha": "a" * 40},
+                    "head": {"sha": "b" * 40},
+                    "additions": 4,
+                    "deletions": 1,
+                    "changed_files": 1,
+                }
+            )
+            return [pull], '"etag-7"', GitHubRateLimit(60, 59, None)
+
+        async def close(self) -> None:
+            return None
+
+    monkeypatch.delenv("GITHUB_TOKEN", raising=False)
+    monkeypatch.delenv("GH_TOKEN", raising=False)
+    monkeypatch.setattr("tracegate.studio.github_sync.GitHubProvider", FakeProvider)
+    created = client.post(
+        "/api/v1/repositories",
+        headers=auth_headers(),
+        json={"full_name": "acme/synced"},
+    ).json()
+
+    synced = client.post(f"/api/v1/repositories/{created['id']}/sync", headers=auth_headers())
+    assert synced.status_code == 200
+    assert synced.json()["changed_pull_requests"] == 1
+    assert synced.json()["github_rate_remaining"] == 59
+
+    inbox = client.get("/api/v1/pull-requests", headers=auth_headers())
+    assert inbox.status_code == 200
+    assert inbox.json()["total"] == 1
+    assert inbox.json()["items"][0]["head_sha"] == "b" * 40
+    assert inbox.json()["items"][0]["analysis_status"] == "not_analyzed"
 
 
 def test_docs_and_unknown_routes_are_not_exposed(client: TestClient) -> None:

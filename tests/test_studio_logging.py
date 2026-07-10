@@ -14,11 +14,12 @@ from tracegate.studio.logging_config import (
 
 
 def test_redaction_removes_bearer_and_provider_credentials() -> None:
-    token = "ghp_ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
-    message = f"Authorization: Bearer {token} api_key=sk-proj-ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+    token = "ghp_" + "A" * 36
+    project_key = "sk-" + "proj-" + "B" * 28
+    message = f"Authorization: Bearer {token} api_key={project_key}"
     redacted = redact_text(message)
     assert token not in redacted
-    assert "sk-proj-ABCDEFGHIJKLMNOPQRSTUVWXYZ" not in redacted
+    assert project_key not in redacted
     assert redacted.count("<redacted>") == 2
 
 

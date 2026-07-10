@@ -38,11 +38,22 @@ def test_initial_migration_creates_core_tables_and_singletons(tmp_path: Path) ->
             "eval_runs",
             "evidence_records",
             "findings",
+            "index_versions",
+            "indexed_files",
+            "indexed_symbols",
+            "indexed_content_fts",
+            "agent_steps",
+            "tool_calls",
+            "graph_nodes",
+            "graph_edges",
+            "memory_claims",
             "onboarding_state",
+            "pull_request_snapshots",
             "pull_requests",
+            "repository_syncs",
             "repositories",
         } <= tables
-        assert current_revision(database.engine) == "20260710_0001"
+        assert current_revision(database.engine) == "20260710_0002"
         with database.session_factory() as session:
             settings = session.scalar(select(AppSettings))
             onboarding = session.scalar(select(OnboardingState))
@@ -60,9 +71,36 @@ def test_migration_is_idempotent(tmp_path: Path) -> None:
     upgrade_database(url)
     database = StudioDatabase(url)
     try:
-        assert current_revision(database.engine) == "20260710_0001"
+        assert current_revision(database.engine) == "20260710_0002"
     finally:
         database.dispose()
+
+
+def test_agent_index_migration_upgrades_existing_p0_database_without_data_loss(tmp_path: Path) -> None:
+    url = database_url(tmp_path)
+    upgrade_database(url, "20260710_0001")
+    database = StudioDatabase(url)
+    try:
+        with database.engine.begin() as connection:
+            connection.exec_driver_sql(
+                "INSERT INTO repositories "
+                "(id, owner, name, full_name, monitoring_enabled, connection_status) "
+                "VALUES ('repo-1', 'acme', 'widget', 'acme/widget', 0, 'not_connected')"
+            )
+    finally:
+        database.dispose()
+
+    upgrade_database(url)
+    upgraded = StudioDatabase(url)
+    try:
+        assert current_revision(upgraded.engine) == "20260710_0002"
+        with upgraded.engine.connect() as connection:
+            assert connection.exec_driver_sql(
+                "SELECT full_name FROM repositories WHERE id = 'repo-1'"
+            ).scalar_one() == "acme/widget"
+            assert "indexed_content_fts" in inspect(upgraded.engine).get_table_names()
+    finally:
+        upgraded.dispose()
 
 
 def test_app_without_migration_fails_instead_of_creating_fallback_schema(tmp_path: Path) -> None:
