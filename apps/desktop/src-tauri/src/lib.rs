@@ -23,6 +23,11 @@ pub fn run() {
             },
         ))
         .plugin(tauri_plugin_deep_link::init())
+        .plugin(tauri_plugin_autostart::init(
+            tauri_plugin_autostart::MacosLauncher::LaunchAgent,
+            None,
+        ))
+        .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_shell::init())
         .manage(DesktopState::default())
         .invoke_handler(tauri::generate_handler![
@@ -33,6 +38,9 @@ pub fn run() {
             commands::delete_credential,
             commands::take_pending_deep_link,
             commands::show_main_window,
+            commands::get_autostart_enabled,
+            commands::set_autostart_enabled,
+            commands::show_review_notification,
             commands::quit_tracegate,
         ])
         .on_window_event(window::handle_window_event)
