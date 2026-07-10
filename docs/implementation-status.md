@@ -22,7 +22,7 @@
 
 | Feature | Status | Evidence / note |
 | --- | --- | --- |
-| Existing 61-test Python suite | VERIFIED_MACOS | `./.venv/bin/python -m pytest -q`: 61 passed |
+| Existing suite plus Studio tests | VERIFIED_MACOS | `./scripts/test.sh`: 78 Python tests passed; the original 61 remain intact |
 | ClaimBench controlled benchmark | VERIFIED_MACOS | Existing tests and checked-in 160-run reports; metric definitions unchanged |
 | Real-PR hard benchmark | VERIFIED_MACOS | Existing tests and checked-in 19 scored cases |
 | EvidencePacket and redaction | VERIFIED_MACOS | Existing `tests/test_pr_advisor.py` |
@@ -34,32 +34,34 @@
 | Feature | Status | Evidence / next gate |
 | --- | --- | --- |
 | Repository audit and baseline | VERIFIED_MACOS | `docs/current-baseline.md` plus recorded commands |
-| Architecture decision | IMPLEMENTED_UNVERIFIED | `docs/architecture/ADR-001-tracegate-studio.md`; implementation must validate it |
+| Architecture decision | VERIFIED_MACOS | ADR boundaries were exercised by the packaged macOS app; see `docs/verification/p0-macos.md` |
 | Development branch | VERIFIED_MACOS | `feat/tracegate-studio-fullstack` created from `76a23ab` |
-| Monorepo workspace and locked Node dependencies | NOT_STARTED | Need pnpm workspace and lock file |
-| Locked Python environment | NOT_STARTED | Existing environment is healthy; no `uv.lock` yet |
-| React + strict TypeScript browser client | NOT_STARTED | No frontend at baseline |
-| Typed API client and shared types | NOT_STARTED | No TS packages at baseline |
-| FastAPI `/api/v1` service | NOT_STARTED | Legacy unversioned benchmark API exists only |
-| Local API authentication and CORS | NOT_STARTED | Per-launch token design accepted in ADR |
-| SQLAlchemy 2 persistence | NOT_STARTED | No application database models at baseline |
-| SQLite default database | NOT_STARTED | No application database at baseline |
-| Alembic migration and SQLite migration test | NOT_STARTED | No Alembic tree at baseline |
+| Monorepo workspace and locked Node dependencies | VERIFIED_MACOS | pnpm workspace, `pnpm-lock.yaml`, frozen install and 12 tests |
+| Locked Python environment | VERIFIED_MACOS | `uv.lock`; frozen uv environment used for tests and packaging |
+| React + strict TypeScript browser client | VERIFIED_MACOS | Real Dashboard/onboarding/settings browser run and screenshots |
+| Typed API client and shared types | VERIFIED_MACOS | Zod-validated client; 8 package tests plus web integration tests |
+| FastAPI `/api/v1` service | VERIFIED_MACOS | Authenticated API tests and real browser/desktop process |
+| Local API authentication and CORS | VERIFIED_MACOS | Auth/CORS tests plus Tauri-origin runtime verification |
+| SQLAlchemy 2 persistence | VERIFIED_MACOS | Studio models and API persistence tests |
+| SQLite default database | VERIFIED_MACOS | Real onboarding/settings persistence and database tests |
+| Alembic migration and SQLite migration test | VERIFIED_MACOS | `20260710_0001`; fresh/idempotent migration tests |
 | Structured/redacted rotating logs | NOT_STARTED | Existing redaction can be reused |
-| System status and diagnostics API | NOT_STARTED | Must expose explicit unconfigured/error states |
-| Settings persistence without secret leakage | NOT_STARTED | Secure-store bridge not implemented |
-| Python Sidecar entry and health check | NOT_STARTED | Legacy Uvicorn app is not a packaged sidecar |
-| macOS arm64 PyInstaller Sidecar | NOT_STARTED | Must be built natively on this Mac |
-| Tauri 2 shell | NOT_STARTED | Rust toolchain not yet confirmed |
-| macOS menu-bar tray | NOT_STARTED | Requires real Tauri runtime verification |
-| Close-to-hide and tray restore | NOT_STARTED | Requires real Tauri runtime verification |
-| True quit stops Sidecar | NOT_STARTED | Requires process-lifecycle tests and runtime evidence |
-| Single-instance foundation | NOT_STARTED | Requires Tauri implementation |
-| Browser development mode | NOT_STARTED | No React client at baseline |
-| Windows x86_64 build workflow | NOT_STARTED | Existing CI covers Python on Linux/macOS only |
-| Windows Sidecar health check in CI | NOT_STARTED | Must execute on `windows-latest` |
-| Windows NSIS Setup.exe artifact | NOT_STARTED | No Windows artifact exists |
-| Windows portable archive | NOT_STARTED | Feasibility to be validated in Windows CI |
+| System status API | VERIFIED_MACOS | Explicit ready/not-configured/unavailable states tested and rendered |
+| Diagnostics API/page | NOT_STARTED | P0 status is present; full diagnostics remains separate work |
+| Non-secret settings persistence | VERIFIED_MACOS | Theme/language/background choices persist; API never accepts a secret |
+| Platform secure credential storage | NOT_STARTED | Keychain/Credential Manager bridge is not implemented |
+| Python Sidecar entry and health check | VERIFIED_MACOS | Independent and packaged authenticated health checks passed |
+| macOS arm64 PyInstaller Sidecar | VERIFIED_MACOS | Native Mach-O artifact built and bundled |
+| Tauri 2 shell | VERIFIED_MACOS | Packaged `.app` launched with real Sidecar/WebView |
+| macOS menu-bar tray and restore | IMPLEMENTED_UNVERIFIED | Rust construction/dispatch tests pass; direct status-item clicking was unavailable |
+| Close-to-hide | VERIFIED_MACOS | Window closed while desktop and Sidecar processes remained alive |
+| True quit stops Sidecar | VERIFIED_MACOS | Desktop plus PyInstaller bootloader/worker all disappeared after Quit |
+| Single-instance foundation | VERIFIED_MACOS | Repeated native launch retained one application/Sidecar owner |
+| Browser development mode | VERIFIED_MACOS | Browser UI exercised against real authenticated API |
+| Windows x86_64 build workflow | IMPLEMENTED_UNVERIFIED | `build-windows.yml` is actionlint-clean; no runner execution yet |
+| Windows Sidecar health check in CI | IMPLEMENTED_UNVERIFIED | Authenticated loopback check is in workflow/script; no CI run yet |
+| Windows NSIS Setup.exe artifact | IMPLEMENTED_UNVERIFIED | Native Windows build/package gate exists; no artifact exists yet |
+| Windows portable archive | IMPLEMENTED_UNVERIFIED | Workflow packages executable plus Sidecar; no CI artifact exists yet |
 | Windows desktop manual acceptance | BLOCKED | No real Windows graphical environment/evidence is available |
 
 ## P1: coding-agent product loop
@@ -87,12 +89,12 @@
 | Repository Map React Flow UI | NOT_STARTED | Must lazy-load/aggregate large graphs |
 | Review Map backend | NOT_STARTED | Must derive from real diff and graph data |
 | Review Map UI and Diff bidirectional jump | NOT_STARTED | No React client |
-| Finding schema and storage | NOT_STARTED | Must include commit/evidence/verifier/run fields |
-| Evidence storage and traceability | IN_PROGRESS | Existing EvidencePacket semantics reusable; persistence absent |
+| Finding schema/storage foundation | IMPLEMENTED_UNVERIFIED | Initial tables exist; required traceability fields and production API remain incomplete |
+| Evidence storage foundation | IMPLEMENTED_UNVERIFIED | Evidence table exists; commit-bound workflow persistence remains incomplete |
 | Agent Trace API/SSE/UI | NOT_STARTED | No durable run event stream |
-| Eval Center / ClaimBench integration | IN_PROGRESS | Real loaders/results exist; typed Studio API and UI absent |
+| Eval Center / ClaimBench integration | IN_PROGRESS | System status reads real checked-in artifacts; run/list/detail UI remains absent |
 | Desktop notifications implementation | NOT_STARTED | Windows requires CI plus separate manual gate |
-| Complete tray menu and monitoring controls | NOT_STARTED | Requires Tauri and monitor service |
+| Complete tray menu and monitoring controls | IN_PROGRESS | Full menu structure exists; monitor actions and direct tray verification remain |
 
 ## P2: product enhancements
 
@@ -104,7 +106,7 @@
 | Optional MySQL 8 profile | NOT_STARTED | Requires compose, migration and integration smoke |
 | Agent and Tool Registry screens | NOT_STARTED | Depends on registries and UI |
 | MCP client adapter | NOT_STARTED | No provider selected |
-| Deep links | NOT_STARTED | Requires Tauri command/route integration |
+| Deep links | IMPLEMENTED_UNVERIFIED | Scheme/parser/plugin code and Rust tests exist; end-to-end navigation is not verified |
 | Autostart toggle | NOT_STARTED | Must default off and be verified by platform |
 | Update interface reservation | NOT_STARTED | Signing/update service out of current verified scope |
 | English localization | NOT_STARTED | Chinese-first UI planned |
@@ -126,14 +128,16 @@
 
 ### macOS arm64
 
-Only the preserved Python baseline is currently `VERIFIED_MACOS`. React,
-Sidecar packaging, Tauri, tray and `.app` evidence will be added with exact
-commands and artifact paths when they exist.
+P0 browser, API, SQLite/Alembic, packaged Sidecar, Tauri shell, close-hide,
+single-instance and true-quit behavior are `VERIFIED_MACOS`. Exact commands,
+artifact hash, limitations and screenshots are recorded in
+`docs/verification/p0-macos.md`. Direct tray restore remains
+`IMPLEMENTED_UNVERIFIED`.
 
 ### Windows x86_64 CI
 
-No Studio Windows workflow has run yet. Nothing is marked
-`VERIFIED_WINDOWS_CI`.
+Studio Windows workflow code exists and passes local YAML/actionlint checks,
+but no workflow run exists yet. Nothing is marked `VERIFIED_WINDOWS_CI`.
 
 ### Windows graphical manual acceptance
 
