@@ -1,0 +1,68 @@
+name: Release TraceGate Studio
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing tag to publish
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  build-macos:
+    uses: ./.github/workflows/build-macos.yml
+
+  build-windows:
+    uses: ./.github/workflows/build-windows.yml
+
+  publish:
+    name: Publish unsigned alpha artifacts
+    needs: [build-macos, build-windows]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      RELEASE_TAG: ${{ github.event_name == 'push' && github.ref_name || inputs.tag }}
+
+    steps:
+      - name: Check out release tag
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.RELEASE_TAG }}
+
+      - name: Download current-run build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: TraceGate-Studio-*-unsigned-*
+          path: release-artifacts
+          merge-multiple: true
+
+      - name: Verify release payload and publish GitHub Release
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f release-artifacts/TraceGate-Studio-Setup.exe
+          test -f release-artifacts/TraceGate-Studio-portable-x86_64.zip
+          test -f release-artifacts/TraceGate-Studio-macOS-arm64-unsigned.zip
+          find release-artifacts -maxdepth 1 -type f -print | sort
+          notes=$(mktemp)
+          cat > "$notes" <<'EOF'
+          TraceGate Studio alpha development artifacts.
+
+          - Windows packages are unsigned and may trigger SmartScreen.
+          - The macOS package is unsigned and not notarized.
+          - Automated CI evidence is not Windows graphical manual acceptance.
+          - Verify the included platform-specific SHA256SUMS files before testing.
+          EOF
+          gh release create "$RELEASE_TAG" \
+            release-artifacts/* \
+            --verify-tag \
+            --title "TraceGate Studio $RELEASE_TAG" \
+            --notes-file "$notes" \
+            --prerelease

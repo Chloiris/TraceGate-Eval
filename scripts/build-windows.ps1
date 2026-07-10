@@ -62,4 +62,4 @@ try {
 }
 
 & "apps\desktop\scripts\stage-sidecar.ps1" -SourceBinary $Sidecar
-pnpm --filter @tracegate/desktop build
+pnpm --filter @tracegate/desktop exec tauri build --bundles nsis,msi

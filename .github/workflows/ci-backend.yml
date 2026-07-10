@@ -1,0 +1,111 @@
+name: Backend CI
+
+on:
+  push:
+    branches: ["**"]
+    paths:
+      - "tracegate/**"
+      - "tests/**"
+      - "scripts/**"
+      - "pyproject.toml"
+      - "uv.lock"
+      - ".github/workflows/ci-backend.yml"
+  pull_request:
+    paths:
+      - "tracegate/**"
+      - "tests/**"
+      - "scripts/**"
+      - "pyproject.toml"
+      - "uv.lock"
+      - ".github/workflows/ci-backend.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: backend-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: Python tests and SQLite migrations
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      UV_FROZEN: "true"
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Set up uv 0.11.28
+        uses: astral-sh/setup-uv@v7
+        with:
+          version: "0.11.28"
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+
+      - name: Verify pinned tools and prepare logs
+        shell: bash
+        run: |
+          set -euo pipefail
+          python --version | grep -E '^Python 3\.12\.'
+          test "$(uv --version | awk '{print $2}')" = "0.11.28"
+          mkdir -p .ci-artifacts/backend
+
+      - name: Install frozen Python dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          uv sync --frozen --extra dev 2>&1 | tee .ci-artifacts/backend/uv-sync.log
+
+      - name: Compile production and test sources
+        shell: bash
+        run: |
+          set -euo pipefail
+          uv run python -m compileall -q tracegate tests scripts 2>&1 | tee .ci-artifacts/backend/compile.log
+
+      - name: Run Python tests including migration tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          uv run pytest -q 2>&1 | tee .ci-artifacts/backend/pytest.log
+
+      - name: Exercise a fresh SQLite Alembic upgrade
+        shell: bash
+        run: |
+          set -euo pipefail
+          database_path="$RUNNER_TEMP/tracegate-ci.db"
+          DATABASE_PATH="$database_path" uv run python - <<'PY' 2>&1 | tee .ci-artifacts/backend/migration.log
+          import os
+          from pathlib import Path
+          from sqlalchemy import create_engine, inspect
+          from tracegate.studio.migration_runner import current_revision, require_current_revision, upgrade_database
+
+          path = Path(os.environ["DATABASE_PATH"])
+          url = f"sqlite+pysqlite:///{path.as_posix()}"
+          upgrade_database(url)
+          engine = create_engine(url)
+          try:
+              require_current_revision(engine)
+              assert "app_settings" in inspect(engine).get_table_names()
+              print(current_revision(engine))
+          finally:
+              engine.dispose()
+          print(path)
+          PY
+
+      - name: Upload backend failure logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-failure-logs-${{ github.run_id }}
+          path: .ci-artifacts/backend
+          if-no-files-found: ignore
+          retention-days: 7

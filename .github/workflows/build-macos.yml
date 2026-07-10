@@ -1,0 +1,209 @@
+name: Build macOS arm64
+
+on:
+  workflow_call:
+  push:
+    branches: [main]
+    paths:
+      - "apps/desktop/**"
+      - "apps/web/**"
+      - "packages/**"
+      - "packaging/**"
+      - "scripts/build-macos.sh"
+      - "scripts/build-sidecar.sh"
+      - "scripts/tracegate_sidecar_entry.py"
+      - "tracegate/**"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - "pyproject.toml"
+      - "uv.lock"
+      - ".github/workflows/build-macos.yml"
+  pull_request:
+    paths:
+      - "apps/desktop/**"
+      - "apps/web/**"
+      - "packages/**"
+      - "packaging/**"
+      - "scripts/build-macos.sh"
+      - "scripts/build-sidecar.sh"
+      - "scripts/tracegate_sidecar_entry.py"
+      - "tracegate/**"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - "pyproject.toml"
+      - "uv.lock"
+      - ".github/workflows/build-macos.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: macos-arm64-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-macos-arm64:
+    name: Unsigned macOS arm64 application
+    runs-on: macos-14
+    timeout-minutes: 60
+    env:
+      UV_FROZEN: "true"
+      CARGO_TERM_COLOR: always
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up pnpm 11.7.0
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.7.0
+          run_install: false
+
+      - name: Set up Node.js 24.14.0
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24.14.0
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Set up uv 0.11.28
+        uses: astral-sh/setup-uv@v7
+        with:
+          version: "0.11.28"
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+
+      - name: Set up Rust 1.97.0 for Apple Silicon
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.97.0
+          targets: aarch64-apple-darwin
+
+      - name: Verify native architecture and pinned tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(uname -s)" = "Darwin"
+          test "$(uname -m)" = "arm64"
+          test "$(node --version)" = "v24.14.0"
+          test "$(pnpm --version)" = "11.7.0"
+          python --version | grep -E '^Python 3\.12\.'
+          test "$(uv --version | awk '{print $2}')" = "0.11.28"
+          test "$(rustc --version | awk '{print $2}')" = "1.97.0"
+          rustc -vV | grep '^host: aarch64-apple-darwin$'
+
+      - name: Prepare CI logs and artifacts
+        shell: bash
+        run: mkdir -p .ci-artifacts/macos artifacts/macos
+
+      - name: Install frozen JavaScript dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          pnpm install --frozen-lockfile 2>&1 | tee .ci-artifacts/macos/pnpm-install.log
+
+      - name: Install frozen Python dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          uv sync --frozen --extra dev --extra packaging 2>&1 | tee .ci-artifacts/macos/uv-sync.log
+
+      - name: Build, health-check, and stage native Sidecar and application
+        shell: bash
+        run: |
+          set -euo pipefail
+          ./scripts/build-macos.sh 2>&1 | tee .ci-artifacts/macos/build.log
+
+      - name: Verify native staged and bundled executables
+        shell: bash
+        run: |
+          set -euo pipefail
+          app_path="apps/desktop/src-tauri/target/release/bundle/macos/TraceGate Studio.app"
+          staged_sidecar="apps/desktop/src-tauri/binaries/tracegate-backend-aarch64-apple-darwin"
+          test -d "$app_path"
+          test -x "$staged_sidecar"
+          file "$staged_sidecar" | tee .ci-artifacts/macos/staged-sidecar-file.log
+          file "$staged_sidecar" | grep 'Mach-O 64-bit executable arm64'
+
+          app_executable=$(find "$app_path/Contents/MacOS" -maxdepth 1 -type f -perm -111 -name 'tracegate-studio' -print -quit)
+          bundled_sidecar=$(find "$app_path/Contents" -type f -name 'tracegate-backend*' -print -quit)
+          test -n "$app_executable"
+          test -n "$bundled_sidecar"
+          file "$app_executable" | tee .ci-artifacts/macos/app-executable-file.log
+          file "$bundled_sidecar" | tee .ci-artifacts/macos/bundled-sidecar-file.log
+          file "$app_executable" | grep 'Mach-O 64-bit executable arm64'
+          file "$bundled_sidecar" | grep 'Mach-O 64-bit executable arm64'
+
+      - name: Confirm no Developer ID signature was applied
+        shell: bash
+        run: |
+          set -euo pipefail
+          app_path="apps/desktop/src-tauri/target/release/bundle/macos/TraceGate Studio.app"
+          codesign -dv --verbose=4 "$app_path" 2> .ci-artifacts/macos/codesign.log || true
+          if grep -q '^Authority=' .ci-artifacts/macos/codesign.log; then
+            echo "Unexpected signing authority found; this workflow must produce an unsigned development artifact." >&2
+            cat .ci-artifacts/macos/codesign.log >&2
+            exit 1
+          fi
+          echo "No Developer ID authority was applied. Artifact is unsigned/not notarized and intended for development testing only."
+
+      - name: Package unsigned artifacts and SHA256
+        shell: bash
+        run: |
+          set -euo pipefail
+          app_path="apps/desktop/src-tauri/target/release/bundle/macos/TraceGate Studio.app"
+          artifact_dir="artifacts/macos"
+          cp build/sidecar/dist/tracegate-backend \
+            "$artifact_dir/tracegate-backend-aarch64-apple-darwin"
+          ditto -c -k --sequesterRsrc --keepParent \
+            "$app_path" \
+            "$artifact_dir/TraceGate-Studio-macOS-arm64-unsigned.zip"
+          cat > "$artifact_dir/build-info.json" <<EOF
+          {
+            "commit": "${{ github.sha }}",
+            "runner": "macos-14",
+            "architecture": "arm64",
+            "target_triple": "aarch64-apple-darwin",
+            "node": "24.14.0",
+            "pnpm": "11.7.0",
+            "python": "3.12",
+            "uv": "0.11.28",
+            "rust": "1.97.0",
+            "signing": "unsigned development artifact; no Developer ID; not notarized"
+          }
+          EOF
+          (
+            cd "$artifact_dir"
+            shasum -a 256 \
+              TraceGate-Studio-macOS-arm64-unsigned.zip \
+              tracegate-backend-aarch64-apple-darwin > SHA256SUMS-macos.txt
+          )
+          cat "$artifact_dir/SHA256SUMS-macos.txt"
+
+      - name: Upload unsigned macOS arm64 artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: TraceGate-Studio-macOS-arm64-unsigned-${{ github.sha }}
+          path: artifacts/macos
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload macOS failure logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-arm64-failure-logs-${{ github.run_id }}
+          path: |
+            .ci-artifacts/macos
+            build/sidecar/work/**/warn-*.txt
+          if-no-files-found: ignore
+          retention-days: 7
