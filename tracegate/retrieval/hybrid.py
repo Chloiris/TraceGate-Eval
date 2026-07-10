@@ -89,20 +89,39 @@ def hybrid_retrieve(
             symbol.start_line,
         )
 
-    rows = session.execute(
-        text(
-            "SELECT path, snippet(indexed_content_fts, 3, '[', ']', ' … ', 24) AS snippet, "
-            "bm25(indexed_content_fts) AS rank "
-            "FROM indexed_content_fts WHERE indexed_content_fts MATCH :query "
-            "AND index_version_id = :version ORDER BY rank LIMIT :limit"
-        ),
-        {"query": _fts_expression(query), "version": version.id, "limit": bounded_limit},
-    ).all()
+    dialect = session.get_bind().dialect.name
+    if dialect == "mysql":
+        rows = session.execute(
+            text(
+                "SELECT path, LEFT(content, 2000) AS snippet, "
+                "MATCH(path, content) AGAINST (:query IN NATURAL LANGUAGE MODE) AS rank "
+                "FROM indexed_content_fts WHERE index_version_id = :version "
+                "AND MATCH(path, content) AGAINST (:query IN NATURAL LANGUAGE MODE) "
+                "ORDER BY rank DESC LIMIT :limit"
+            ),
+            {"query": query, "version": version.id, "limit": bounded_limit},
+        ).all()
+    else:
+        rows = session.execute(
+            text(
+                "SELECT path, snippet(indexed_content_fts, 3, '[', ']', ' … ', 24) AS snippet, "
+                "bm25(indexed_content_fts) AS rank "
+                "FROM indexed_content_fts WHERE indexed_content_fts MATCH :query "
+                "AND index_version_id = :version ORDER BY rank LIMIT :limit"
+            ),
+            {"query": _fts_expression(query), "version": version.id, "limit": bounded_limit},
+        ).all()
     for path, snippet, rank in rows:
         key = ("file", path, None)
-        score = 70.0 + max(-20.0, min(20.0, -float(rank)))
+        score = 70.0 + max(-20.0, min(20.0, float(rank) if dialect == "mysql" else -float(rank)))
         current = hits.get(key)
-        candidate = RetrievalHit("file", path, score, "fts5", str(snippet)[:2000])
+        candidate = RetrievalHit(
+            "file",
+            path,
+            score,
+            "mysql_fulltext" if dialect == "mysql" else "fts5",
+            str(snippet)[:2000],
+        )
         if current is None or candidate.score > current.score:
             hits[key] = candidate
 

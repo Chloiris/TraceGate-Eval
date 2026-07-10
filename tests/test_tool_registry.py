@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -24,6 +25,18 @@ async def test_registry_descriptors_have_schema_permission_timeout_and_limits() 
         "search_code",
         "get_git_diff",
         "run_command",
+        "search_symbol",
+        "get_symbol_definition",
+        "get_symbol_references",
+        "get_dependency_neighbors",
+        "get_repository_map",
+        "get_pr_metadata",
+        "get_pr_files",
+        "get_pr_commits",
+        "get_pr_comments",
+        "get_check_runs",
+        "run_tests",
+        "apply_patch",
     }
     assert all(item.input_schema["type"] == "object" for item in descriptors)
     assert all(item.timeout_seconds > 0 and item.max_output_bytes > 0 for item in descriptors)
@@ -65,3 +78,54 @@ async def test_registry_honors_pre_execution_cancellation(tool_context: ToolCont
     with pytest.raises(ToolExecutionError) as caught:
         await create_read_only_registry().execute("list_directory", {}, cancelled)
     assert caught.value.code == "cancelled"
+
+
+@pytest.mark.asyncio
+async def test_apply_patch_is_disabled_until_exact_user_confirmation(
+    tool_context: ToolContext,
+) -> None:
+    subprocess.run(["git", "init", "-q"], cwd=tool_context.boundary.root, check=True)
+    subprocess.run(["git", "config", "user.email", "tracegate@example.invalid"], cwd=tool_context.boundary.root, check=True)
+    subprocess.run(["git", "config", "user.name", "TraceGate Test"], cwd=tool_context.boundary.root, check=True)
+    subprocess.run(["git", "add", "."], cwd=tool_context.boundary.root, check=True)
+    subprocess.run(["git", "commit", "-qm", "base"], cwd=tool_context.boundary.root, check=True)
+    patch = """--- a/src/main.py
++++ b/src/main.py
+@@ -1,2 +1,2 @@
+ def alpha():
+-    return 'needle'
++    return 'changed'
+"""
+    registry = create_read_only_registry()
+    with pytest.raises(ToolExecutionError) as disabled:
+        await registry.execute(
+            "apply_patch",
+            {"patch": patch, "confirmation_id": "confirmation-123456"},
+            tool_context,
+        )
+    assert disabled.value.code == "write_mode_disabled"
+
+    write_context = ToolContext(
+        tool_context.repository_id,
+        tool_context.boundary,
+        tool_context.caller_agent,
+        write_enabled=True,
+        patch_confirmation_id="confirmation-123456",
+    )
+    with pytest.raises(ToolExecutionError) as unconfirmed:
+        await registry.execute(
+            "apply_patch",
+            {"patch": patch, "confirmation_id": "wrong-confirmation"},
+            write_context,
+        )
+    assert unconfirmed.value.code == "write_confirmation_required"
+
+    result = await registry.execute(
+        "apply_patch",
+        {"patch": patch, "confirmation_id": "confirmation-123456"},
+        write_context,
+    )
+    assert result["applied"] is True
+    assert result["committed"] is False
+    assert result["pushed"] is False
+    assert "return 'changed'" in (tool_context.boundary.root / "src" / "main.py").read_text()

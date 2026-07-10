@@ -210,9 +210,27 @@ def upgrade() -> None:
     )
     op.create_index("ix_memory_claims_repository_status", "memory_claims", ["repository_id", "status"])
 
-    op.execute(
-        "CREATE VIRTUAL TABLE indexed_content_fts USING fts5(index_version_id UNINDEXED, file_id UNINDEXED, path, content, tokenize='unicode61')"
-    )
+    if op.get_bind().dialect.name == "sqlite":
+        op.execute(
+            "CREATE VIRTUAL TABLE indexed_content_fts USING fts5(index_version_id UNINDEXED, file_id UNINDEXED, path, content, tokenize='unicode61')"
+        )
+    else:
+        op.create_table(
+            "indexed_content_fts",
+            sa.Column("index_version_id", sa.String(36), nullable=False),
+            sa.Column("file_id", sa.String(36), nullable=False),
+            sa.Column("path", sa.String(2048), nullable=False),
+            sa.Column("content", sa.Text(), nullable=False),
+            sa.ForeignKeyConstraint(["index_version_id"], ["index_versions.id"], ondelete="CASCADE"),
+            sa.ForeignKeyConstraint(["file_id"], ["indexed_files.id"], ondelete="CASCADE"),
+            sa.PrimaryKeyConstraint("file_id"),
+        )
+        op.create_index(
+            "ix_indexed_content_fulltext",
+            "indexed_content_fts",
+            ["path", "content"],
+            mysql_prefix="FULLTEXT",
+        )
 
 
 def downgrade() -> None:

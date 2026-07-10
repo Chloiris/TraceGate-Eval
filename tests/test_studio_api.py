@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import hashlib
+import hmac
+import json
+import subprocess
 from collections.abc import Iterator
 from pathlib import Path
-import subprocess
 
 import pytest
 from fastapi.testclient import TestClient
@@ -108,7 +111,7 @@ def test_system_status_exposes_unconfigured_services_without_fallback(client: Te
     assert body["components"]["github"] == {
         "state": "not_configured",
         "configured": False,
-        "message": "GitHub is not connected.",
+        "message": "GitHub 尚未连接",
         "detail": "Configure a GitHub credential before accessing private repositories or monitoring PRs.",
     }
     assert body["components"]["model"]["state"] == "not_configured"
@@ -287,6 +290,156 @@ def test_repository_index_and_graph_use_real_local_git_content(client: TestClien
     assert client.get("/api/v1/runs", headers=auth_headers()).json()["total"] == 0
 
 
+def test_evaluation_and_registry_endpoints_are_derived_from_real_state(client: TestClient) -> None:
+    evaluation = client.get("/api/v1/evaluations", headers=auth_headers())
+    assert evaluation.status_code == 200
+    body = evaluation.json()
+    assert body["is_real_dataset"] is True
+    assert body["case_count"] == 19
+    assert body["claimbench_run_count"] == 160
+    assert body["status_distribution"] == {
+        "active": 12,
+        "conflicting": 2,
+        "stale": 2,
+        "unknown": 3,
+    }
+    assert body["metrics"]["unsafe_allow_rate"] == 0.0
+    assert len(body["cases"]) == 160
+    assert all(artifact["sha256"] for artifact in body["artifacts"])
+
+    agents = client.get("/api/v1/agents", headers=auth_headers())
+    assert agents.status_code == 200
+    assert [agent["name"] for agent in agents.json()] == [
+        "Planner",
+        "Repository Retriever",
+        "Context Resolver",
+        "Code Analyst",
+        "Risk Reviewer",
+        "Verifier",
+        "Report Composer",
+    ]
+
+    tools = client.get("/api/v1/tools", headers=auth_headers())
+    assert tools.status_code == 200
+    descriptors = {tool["name"]: tool for tool in tools.json()}
+    assert {"read_file", "search_code", "get_git_diff", "run_command"}.issubset(descriptors)
+    assert descriptors["run_command"]["permission"] == "COMMAND_RESTRICTED"
+    assert descriptors["run_command"]["input_schema"]["additionalProperties"] is False
+    assert descriptors["read_file"]["recent_call_count"] == 0
+    assert descriptors["apply_patch"]["enabled"] is False
+
+    diagnostics = client.get("/api/v1/diagnostics", headers=auth_headers())
+    assert diagnostics.status_code == 200
+    diagnostic_body = diagnostics.json()
+    assert diagnostic_body["operating_system"] in {"Darwin", "Linux", "Windows"}
+    assert diagnostic_body["architecture"]
+    assert diagnostic_body["database_type"] == "sqlite"
+    assert diagnostic_body["sidecar_pid"] > 0
+    assert diagnostic_body["telemetry_enabled"] is False
+    serialized = diagnostics.text
+    assert TOKEN not in serialized
+    assert "api_key" not in serialized.casefold()
+
+
+def test_pr_diff_review_map_and_tour_are_bound_to_real_git_and_index(
+    client: TestClient,
+    tmp_path: Path,
+) -> None:
+    repository_path = tmp_path / "review-workspace"
+    repository_path.mkdir()
+    subprocess.run(["git", "init", "-q"], cwd=repository_path, check=True)
+    subprocess.run(
+        ["git", "config", "user.email", "tracegate@example.invalid"],
+        cwd=repository_path,
+        check=True,
+    )
+    subprocess.run(
+        ["git", "config", "user.name", "TraceGate Test"],
+        cwd=repository_path,
+        check=True,
+    )
+    (repository_path / "main.py").write_text("def value():\n    return 1\n", encoding="utf-8")
+    subprocess.run(["git", "add", "."], cwd=repository_path, check=True)
+    subprocess.run(["git", "commit", "-qm", "base"], cwd=repository_path, check=True)
+    base_sha = subprocess.check_output(
+        ["git", "rev-parse", "HEAD"], cwd=repository_path, text=True
+    ).strip()
+
+    (repository_path / "helper.py").write_text(
+        "def doubled(number):\n    return number * 2\n",
+        encoding="utf-8",
+    )
+    (repository_path / "main.py").write_text(
+        "from helper import doubled\n\ndef value():\n    return doubled(2)\n",
+        encoding="utf-8",
+    )
+    subprocess.run(["git", "add", "."], cwd=repository_path, check=True)
+    subprocess.run(["git", "commit", "-qm", "head"], cwd=repository_path, check=True)
+    head_sha = subprocess.check_output(
+        ["git", "rev-parse", "HEAD"], cwd=repository_path, text=True
+    ).strip()
+
+    repository = client.post(
+        "/api/v1/repositories",
+        headers=auth_headers(),
+        json={"full_name": "acme/review", "local_path": str(repository_path)},
+    ).json()
+    indexed = client.post(
+        f"/api/v1/repositories/{repository['id']}/index",
+        headers=auth_headers(),
+    )
+    assert indexed.status_code == 200
+    assert indexed.json()["commit_sha"] == head_sha
+    with client.app.state.database.session_factory() as session:
+        pull_request = PullRequest(
+            repository_id=repository["id"],
+            number=4,
+            title="Review graph",
+            state="open",
+            url="https://github.com/acme/review/pull/4",
+            base_sha=base_sha,
+            head_sha=head_sha,
+            changed_files=2,
+        )
+        session.add(pull_request)
+        session.commit()
+        session.refresh(pull_request)
+        pull_request_id = pull_request.id
+
+    diff = client.get(
+        f"/api/v1/pull-requests/{pull_request_id}/diff",
+        headers=auth_headers(),
+        params={"path": "main.py"},
+    )
+    assert diff.status_code == 200
+    assert {item["path"] for item in diff.json()["changed_files"]} == {"helper.py", "main.py"}
+    assert "return 1" in diff.json()["original"]
+    assert "return doubled(2)" in diff.json()["modified"]
+
+    review_map = client.get(
+        f"/api/v1/pull-requests/{pull_request_id}/graph",
+        headers=auth_headers(),
+    )
+    assert review_map.status_code == 200
+    graph_body = review_map.json()
+    assert graph_body["head_sha"] == head_sha
+    assert graph_body["index_version"] == indexed.json()["id"]
+    assert graph_body["source"] == "git_diff+static_index+agent_evidence"
+    assert {node["path"] for node in graph_body["nodes"] if node["impact_depth"] == 0} >= {
+        "helper.py",
+        "main.py",
+    }
+    assert all(edge["confirmed"] for edge in graph_body["edges"])
+
+    tour = client.get(
+        f"/api/v1/pull-requests/{pull_request_id}/tour",
+        headers=auth_headers(),
+    )
+    assert tour.status_code == 200
+    assert {step["files"][0] for step in tour.json()["steps"]} == {"helper.py", "main.py"}
+    assert all(step["confidence"] in {"high", "low"} for step in tour.json()["steps"])
+
+
 def test_public_github_sync_persists_real_provider_shape(
     client: TestClient,
     monkeypatch: pytest.MonkeyPatch,
@@ -336,6 +489,75 @@ def test_public_github_sync_persists_real_provider_shape(
     assert inbox.json()["total"] == 1
     assert inbox.json()["items"][0]["head_sha"] == "b" * 40
     assert inbox.json()["items"][0]["analysis_status"] == "not_analyzed"
+
+
+def test_github_webhook_requires_hmac_deduplicates_and_updates_enrolled_repository(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repository = client.post(
+        "/api/v1/repositories",
+        headers=auth_headers(),
+        json={"full_name": "acme/webhook"},
+    ).json()
+    payload = {
+        "repository": {"full_name": "acme/webhook"},
+        "pull_request": {
+            "number": 9,
+            "title": "Webhook update",
+            "state": "open",
+            "html_url": "https://github.com/acme/webhook/pull/9",
+            "draft": False,
+            "updated_at": "2026-07-10T09:00:00Z",
+            "created_at": "2026-07-10T08:00:00Z",
+            "merged_at": None,
+            "closed_at": None,
+            "additions": 7,
+            "deletions": 2,
+            "changed_files": 1,
+            "user": {"login": "octocat"},
+            "base": {"sha": "a" * 40},
+            "head": {"sha": "b" * 40},
+        },
+    }
+    body = json.dumps(payload, separators=(",", ":")).encode()
+    headers = {
+        "X-GitHub-Delivery": "delivery-0001",
+        "X-GitHub-Event": "pull_request",
+        "X-Hub-Signature-256": "sha256=invalid",
+        "Content-Type": "application/json",
+    }
+    monkeypatch.delenv("TRACEGATE_GITHUB_WEBHOOK_SECRET", raising=False)
+    unavailable = client.post("/api/v1/webhooks/github", headers=headers, content=body)
+    assert unavailable.status_code == 503
+    assert unavailable.json()["error"]["message"] == "Webhook Relay 未配置"
+
+    secret = "test-webhook-secret-not-for-production"
+    monkeypatch.setenv("TRACEGATE_GITHUB_WEBHOOK_SECRET", secret)
+    headers["X-Hub-Signature-256"] = "sha256=" + hmac.new(
+        secret.encode(), body, hashlib.sha256
+    ).hexdigest()
+    accepted = client.post("/api/v1/webhooks/github", headers=headers, content=body)
+    assert accepted.status_code == 200
+    assert accepted.json() == {"accepted": True, "duplicate": False, "status": "processed"}
+    duplicate = client.post("/api/v1/webhooks/github", headers=headers, content=body)
+    assert duplicate.json() == {"accepted": True, "duplicate": True, "status": "processed"}
+
+    inbox = client.get(
+        "/api/v1/pull-requests",
+        headers=auth_headers(),
+        params={"repository_id": repository["id"]},
+    ).json()
+    assert inbox["total"] == 1
+    assert inbox["items"][0]["head_sha"] == "b" * 40
+
+    different = json.dumps({**payload, "action": "synchronize"}).encode()
+    headers["X-Hub-Signature-256"] = "sha256=" + hmac.new(
+        secret.encode(), different, hashlib.sha256
+    ).hexdigest()
+    mismatch = client.post("/api/v1/webhooks/github", headers=headers, content=different)
+    assert mismatch.status_code == 409
+    assert mismatch.json()["error"]["code"] == "webhook_delivery_mismatch"
 
 
 def test_docs_and_unknown_routes_are_not_exposed(client: TestClient) -> None:

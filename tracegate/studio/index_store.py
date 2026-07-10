@@ -31,7 +31,7 @@ from .models import (
 
 
 class RepositoryIndexError(RuntimeError):
-    pass
+    """Raised when no commit-bound repository index can be persisted or loaded."""
 
 
 def _latest_snapshot(session: Session, repository_id: str) -> IndexSnapshot | None:

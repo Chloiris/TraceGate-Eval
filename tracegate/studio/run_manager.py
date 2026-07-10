@@ -68,6 +68,9 @@ class RunManager:
             task.cancel()
         return True
 
+    def active_count(self) -> int:
+        return sum(1 for task in self._tasks.values() if not task.done())
+
     async def shutdown(self) -> None:
         tasks = [task for task in self._tasks.values() if not task.done()]
         for task in tasks:

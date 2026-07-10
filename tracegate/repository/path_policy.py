@@ -60,9 +60,13 @@ class RepositoryBoundary:
 
         candidate = self.root.joinpath(*pure.parts)
         if allow_missing and not candidate.exists():
-            resolved_parent = candidate.parent.resolve(strict=True)
-            self._require_contained(resolved_parent)
-            return resolved_parent / candidate.name
+            ancestor = candidate.parent
+            while ancestor != self.root and not ancestor.exists():
+                ancestor = ancestor.parent
+            resolved_ancestor = ancestor.resolve(strict=True)
+            self._require_contained(resolved_ancestor)
+            relative_tail = candidate.relative_to(ancestor)
+            return resolved_ancestor / relative_tail
         try:
             resolved = candidate.resolve(strict=True)
         except FileNotFoundError as exc:

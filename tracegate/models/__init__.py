@@ -1,4 +1,4 @@
-"""Explicit model providers; no mock or rule fallback exists in production."""
+"""Explicit model providers; production never substitutes generated output."""
 
 from .provider import (
     ModelConfigurationError,

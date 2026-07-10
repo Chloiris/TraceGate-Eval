@@ -71,6 +71,7 @@ class StudioSettings(BaseModel):
     eval_root: Path = PROJECT_ROOT
     github_token_configured: bool = False
     model_api_key_configured: bool = False
+    github_poll_seconds: int = Field(default=60, ge=15, le=3600)
     version: str = __version__
 
     @field_validator("host")
@@ -135,6 +136,7 @@ class StudioSettings(BaseModel):
             "model_api_key_configured": bool(
                 os.environ.get("DEEPSEEK_API_KEY") or os.environ.get("TRACEGATE_LLM_API_KEY")
             ),
+            "github_poll_seconds": int(os.environ.get("TRACEGATE_GITHUB_POLL_SECONDS", "60")),
         }
         values.update(overrides)
         try:

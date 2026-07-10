@@ -102,6 +102,19 @@ def classify(path: Path, keyword: str, line_text: str) -> str:
         return "allowed_demo_excluded"
     if posix == "tracegate/core/guardrails.py":
         return "allowed_documentation"
+    failure_boundaries = {
+        "tracegate/agent/workflow.py",
+        "tracegate/studio/api.py",
+        "tracegate/studio/run_manager.py",
+        "tracegate/tools/registry.py",
+    }
+    if keyword == "except Exception" and posix in failure_boundaries:
+        # These exact boundaries persist or log a failed state and then raise;
+        # they never return a normal result from an exception.
+        return "allowed_failure_boundary"
+    if posix == "tracegate/studio/eval_bridge.py" and keyword in {"fallback", "synthetic"}:
+        if "raise EvalArtifactError" in line_text:
+            return "allowed_reality_guard"
     if posix.startswith("tracegate/core/") or posix.startswith("tracegate/data/"):
         if any(
             marker in lowered

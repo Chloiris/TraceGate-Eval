@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import re
 import subprocess
 from dataclasses import dataclass
 
@@ -12,7 +13,7 @@ _GIT_ENV_ALLOWLIST = ("HOME", "LANG", "LC_ALL", "PATH", "SYSTEMROOT", "TMP", "TE
 
 
 class GitCommandError(RuntimeError):
-    pass
+    """Raised when a bounded read-only Git command does not complete successfully."""
 
 
 @dataclass(frozen=True)
@@ -75,8 +76,10 @@ class GitProvider:
         )
 
     def show(self, revision: str, relative_path: str) -> GitResult:
-        path = self.boundary.resolve(relative_path)
-        return self.run("show", f"{revision}:{self.boundary.relative(path)}")
+        if not re.fullmatch(r"[0-9A-Fa-f]{7,64}", revision):
+            raise GitCommandError("revision must be a hexadecimal commit identifier")
+        path = self.boundary.resolve(relative_path, allow_missing=True)
+        return self.run("show", f"{revision}:{path.relative_to(self.boundary.root).as_posix()}")
 
     def head_sha(self) -> str:
         return self.run("rev-parse", "HEAD").stdout.strip()

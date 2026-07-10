@@ -11,11 +11,11 @@ from pydantic import BaseModel, SecretStr
 
 
 class ModelConfigurationError(ValueError):
-    pass
+    """Raised when a real model provider is not explicitly configured."""
 
 
 class ModelProviderError(RuntimeError):
-    pass
+    """Raised when a configured model provider cannot produce valid output."""
 
 
 @dataclass(frozen=True)

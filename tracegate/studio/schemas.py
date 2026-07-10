@@ -293,6 +293,22 @@ class PullRequestListResponse(BaseModel):
     offset: int
 
 
+class ChangedFileResponse(BaseModel):
+    path: str
+    status: str
+
+
+class PullRequestDiffResponse(BaseModel):
+    pull_request_id: str
+    base_sha: str
+    head_sha: str
+    changed_files: list[ChangedFileResponse]
+    selected_path: str | None
+    original: str | None
+    modified: str | None
+    unified_diff: str
+
+
 class RetrievalHitResponse(BaseModel):
     kind: str
     path: str
@@ -368,6 +384,25 @@ class AgentStepResponse(BaseModel):
     duration_ms: int | None
 
 
+class ToolCallResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    agent_step_id: str
+    tool_name: str
+    permission: str
+    arguments_summary: str
+    output_summary: str | None
+    status: str
+    duration_ms: int | None
+    error_code: str | None
+
+
+class AgentRunDetailResponse(AgentRunResponse):
+    steps: list[AgentStepResponse]
+    tool_calls: list[ToolCallResponse]
+
+
 class FindingResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -402,6 +437,200 @@ class EvidenceResponse(BaseModel):
     content_hash: str
     payload_json: dict[str, object]
     created_at: datetime
+
+
+class EvaluationArtifactResponse(BaseModel):
+    path: str
+    sha256: str
+
+
+class EvaluationCaseResponse(BaseModel):
+    model: str
+    task_id: str
+    evidence_status: str
+    expected_decision: str
+    decision: str
+    context_group: str
+    claimbench_status: str
+    safe_success: bool
+    evidence_aware_decision: bool
+    context_tokens: int
+    run_dir: str
+
+
+class EvaluationSummaryResponse(BaseModel):
+    benchmark_name: str
+    benchmark_note: str
+    dataset_sha256: str
+    is_real_dataset: Literal[True]
+    case_count: int
+    claimbench_run_count: int
+    status_distribution: dict[str, int]
+    risk_distribution: dict[str, int]
+    decision_distribution: dict[str, int]
+    metrics: dict[str, float]
+    models: dict[str, int]
+    context_groups: dict[str, int]
+    claimbench_status_distribution: dict[str, int]
+    claimbench_decision_distribution: dict[str, int]
+    limitations: list[str]
+    artifacts: list[EvaluationArtifactResponse]
+    cases: list[EvaluationCaseResponse]
+
+
+class AgentDescriptorResponse(BaseModel):
+    name: str
+    version: str
+    responsibility: str
+    status: Literal["enabled"]
+    capabilities: list[str]
+    allowed_tools: list[str]
+
+
+class ToolDescriptorResponse(BaseModel):
+    name: str
+    description: str
+    permission: Literal[
+        "SAFE_READ",
+        "REPOSITORY_READ",
+        "COMMAND_RESTRICTED",
+        "WRITE_CONFIRMATION",
+        "NETWORK",
+        "DESTRUCTIVE_FORBIDDEN",
+    ]
+    timeout_seconds: float
+    max_output_bytes: int
+    input_schema: dict[str, object]
+    enabled: bool
+    recent_call_count: int
+    recent_error_count: int
+    most_recent_error: str | None
+
+
+class ReviewMapNodeResponse(BaseModel):
+    id: str
+    kind: str
+    label: str
+    path: str | None
+    symbol: str | None
+    language: str | None
+    impact_depth: int
+    change_status: Literal["added", "modified", "deleted", "renamed"] | None
+    risk: Literal["info", "low", "medium", "high", "critical"] | None
+    finding_ids: list[str]
+    evidence_ids: list[str]
+
+
+class ReviewMapEdgeResponse(BaseModel):
+    id: str
+    source: str
+    target: str
+    kind: str
+    confirmed: bool
+
+
+class ReviewMapResponse(BaseModel):
+    pull_request_id: str
+    base_sha: str
+    head_sha: str
+    index_version: str
+    source: Literal["git_diff+static_index+agent_evidence"]
+    nodes: list[ReviewMapNodeResponse]
+    edges: list[ReviewMapEdgeResponse]
+    truncated: bool
+    message: str
+
+
+class ChangeTourStepResponse(BaseModel):
+    sequence: int
+    title: str
+    files: list[str]
+    symbols: list[str]
+    purpose: str
+    prerequisite_step: int | None
+    risk: str | None
+    evidence_ids: list[str]
+    checkpoints: list[str]
+    confidence: Literal["high", "medium", "low"]
+
+
+class ChangeTourResponse(BaseModel):
+    pull_request_id: str
+    head_sha: str
+    source: Literal["git_diff+static_index+agent_evidence"]
+    complete: bool
+    message: str
+    steps: list[ChangeTourStepResponse]
+
+
+class MonitorDiagnosticResponse(BaseModel):
+    running: bool
+    polling: bool
+    queued_repositories: int
+    last_started_at: datetime | None
+    last_finished_at: datetime | None
+    last_error: str | None
+
+
+class DiagnosticsResponse(BaseModel):
+    software_version: str
+    git_commit: str | None
+    operating_system: str
+    architecture: str
+    python_version: str
+    frontend_version: str | None
+    desktop_version: str | None
+    database_type: str
+    database_path: str | None
+    log_path: str
+    workspace_paths: list[str]
+    sidecar_pid: int
+    api_port: int
+    github: ComponentStatus
+    model: ComponentStatus
+    monitor: MonitorDiagnosticResponse
+    agent_queue: int
+    index_queue: int
+    telemetry_enabled: Literal[False]
+
+
+class AgentEvidenceGraphNodeResponse(BaseModel):
+    id: str
+    kind: str
+    label: str
+    detail: str | None
+    status: str | None
+    path: str | None
+    line: int | None
+    commit_sha: str | None
+    confidence: float | None
+
+
+class AgentEvidenceGraphEdgeResponse(BaseModel):
+    id: str
+    source: str
+    target: str
+    kind: str
+    confirmed: bool
+
+
+class AgentEvidenceGraphResponse(BaseModel):
+    run_id: str
+    head_sha: str | None
+    nodes: list[AgentEvidenceGraphNodeResponse]
+    edges: list[AgentEvidenceGraphEdgeResponse]
+    message: str
+
+
+class UpdateStatusResponse(BaseModel):
+    current_version: str
+    channel: Literal["stable"]
+    configured: bool
+    update_available: bool
+    latest_version: str | None
+    manifest_url: str | None
+    signature_verification: bool
+    message: str
 
 
 class ErrorBody(BaseModel):

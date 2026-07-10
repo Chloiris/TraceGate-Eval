@@ -109,3 +109,47 @@ jobs:
           path: .ci-artifacts/backend
           if-no-files-found: ignore
           retention-days: 7
+
+  mysql-smoke:
+    name: MySQL 8.4 migration and retrieval smoke
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_DATABASE: tracegate
+          MYSQL_USER: tracegate
+          MYSQL_PASSWORD: tracegate-ci-test
+          MYSQL_ROOT_PASSWORD: tracegate-root-ci-test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -ptracegate-root-ci-test"
+          --health-interval=5s
+          --health-timeout=3s
+          --health-retries=20
+    env:
+      UV_FROZEN: "true"
+      TRACEGATE_MYSQL_TEST_URL: mysql+pymysql://tracegate:tracegate-ci-test@127.0.0.1:3306/tracegate?charset=utf8mb4
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Set up uv 0.11.28
+        uses: astral-sh/setup-uv@v7
+        with:
+          version: "0.11.28"
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+
+      - name: Install frozen Python dependencies
+        run: uv sync --frozen --extra dev
+
+      - name: Run MySQL migration and FULLTEXT smoke
+        run: uv run python scripts/mysql_smoke.py

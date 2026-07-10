@@ -17,7 +17,9 @@ from .config import StudioSettings
 from .database import StudioDatabase
 from .errors import StudioAPIError
 from .migration_runner import require_current_revision, upgrade_database
+from .monitor import RepositoryMonitor
 from .run_manager import RunManager
+from .webhooks import router as webhook_router
 
 
 SECURITY_HEADERS = {
@@ -40,6 +42,7 @@ def _error_response(status_code: int, code: str, message: str) -> JSONResponse:
 def create_app(settings: StudioSettings) -> FastAPI:
     database = StudioDatabase(settings.database_url)
     run_manager = RunManager(database.session_factory)
+    repository_monitor = RepositoryMonitor(database.session_factory, settings.github_poll_seconds)
     logger = logging.getLogger("tracegate.studio.api")
 
     @asynccontextmanager
@@ -49,9 +52,11 @@ def create_app(settings: StudioSettings) -> FastAPI:
                 upgrade_database(settings.database_url)
             require_current_revision(database.engine, settings.database_url)
             database.check_connection()
+            repository_monitor.start()
             logger.info("api_ready database_migrated=true")
             yield
         finally:
+            await repository_monitor.shutdown()
             await run_manager.shutdown()
             database.dispose()
             logger.info("api_stopped database_disposed=true")
@@ -67,6 +72,7 @@ def create_app(settings: StudioSettings) -> FastAPI:
     app.state.settings = settings
     app.state.database = database
     app.state.run_manager = run_manager
+    app.state.repository_monitor = repository_monitor
 
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=list(settings.allowed_hosts))
     app.add_middleware(
@@ -110,6 +116,7 @@ def create_app(settings: StudioSettings) -> FastAPI:
         return _error_response(exc.status_code, "http_error", str(exc.detail))
 
     app.include_router(router)
+    app.include_router(webhook_router)
     return app
 
 

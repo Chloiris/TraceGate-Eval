@@ -1,19 +1,24 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import os
+import re
 import subprocess
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
-from typing import Any, Generic, TypeVar
+from typing import TYPE_CHECKING, Any, Generic, TypeVar
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from tracegate.repository import RepositoryBoundary, RepositoryPathError
 from tracegate.vcs import GitCommandError, GitProvider
+
+if TYPE_CHECKING:
+    from sqlalchemy.orm import Session
 
 
 class PermissionLevel(StrEnum):
@@ -68,12 +73,54 @@ class RunCommandInput(BaseModel):
     timeout_seconds: float = Field(default=60.0, ge=1.0, le=300.0)
 
 
+class SearchSymbolInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    query: str = Field(min_length=1, max_length=500)
+    limit: int = Field(default=50, ge=1, le=200)
+
+
+class SymbolInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    symbol: str = Field(min_length=1, max_length=1024)
+    path: str | None = Field(default=None, max_length=2048)
+    limit: int = Field(default=100, ge=1, le=500)
+
+
+class DependencyInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    node_id: str = Field(min_length=1, max_length=256)
+    depth: int = Field(default=1, ge=1, le=2)
+    limit: int = Field(default=200, ge=1, le=800)
+
+
+class RepositoryMapInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    limit: int = Field(default=800, ge=1, le=2000)
+
+
+class RunTestsInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    target: str = Field(pattern="^(python|frontend|rust)$")
+    timeout_seconds: float = Field(default=180.0, ge=1.0, le=300.0)
+
+
+class ApplyPatchInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    patch: str = Field(min_length=1, max_length=1_000_000)
+    confirmation_id: str = Field(min_length=16, max_length=256)
+
+
 @dataclass(frozen=True)
 class ToolContext:
     repository_id: str
     boundary: RepositoryBoundary
     caller_agent: str
     cancellation_event: asyncio.Event | None = None
+    session_factory: Callable[[], "Session"] | None = None
+    pull_request_id: str | None = None
+    github_token: str | None = None
+    write_enabled: bool = False
+    patch_confirmation_id: str | None = None
 
 
 @dataclass(frozen=True)
@@ -311,6 +358,284 @@ def _git_log(arguments: GitLogInput, context: ToolContext) -> dict[str, Any]:
     return {"stdout": result.stdout, "return_code": result.return_code}
 
 
+def _session_factory(context: ToolContext) -> Callable[[], "Session"]:
+    if context.session_factory is None:
+        raise ToolExecutionError("index_context_missing", "This tool requires an indexed repository context")
+    return context.session_factory
+
+
+def _index_version(session: "Session", repository_id: str):  # type: ignore[no-untyped-def]
+    from sqlalchemy import select
+
+    from tracegate.studio.models import IndexVersion
+
+    version = session.scalar(
+        select(IndexVersion)
+        .where(IndexVersion.repository_id == repository_id, IndexVersion.status == "ready")
+        .order_by(IndexVersion.created_at.desc())
+        .limit(1)
+    )
+    if version is None:
+        raise ToolExecutionError("repository_not_indexed", "Repository has no ready index")
+    return version
+
+
+def _search_symbol(arguments: SearchSymbolInput, context: ToolContext) -> dict[str, Any]:
+    from sqlalchemy import select
+
+    from tracegate.studio.models import IndexedFile, IndexedSymbol
+
+    with _session_factory(context)() as session:
+        version = _index_version(session, context.repository_id)
+        rows = session.execute(
+            select(IndexedSymbol, IndexedFile)
+            .join(IndexedFile, IndexedFile.id == IndexedSymbol.indexed_file_id)
+            .where(
+                IndexedFile.index_version_id == version.id,
+                IndexedSymbol.name.contains(arguments.query),
+            )
+            .limit(arguments.limit)
+        ).all()
+        return {
+            "index_version": version.id,
+            "commit_sha": version.commit_sha,
+            "symbols": [
+                {
+                    "name": symbol.name,
+                    "qualified_name": symbol.qualified_name,
+                    "kind": symbol.kind,
+                    "signature": symbol.signature,
+                    "path": file.path,
+                    "start_line": symbol.start_line,
+                    "end_line": symbol.end_line,
+                }
+                for symbol, file in rows
+            ],
+        }
+
+
+def _get_symbol_definition(arguments: SymbolInput, context: ToolContext) -> dict[str, Any]:
+    from sqlalchemy import or_, select
+
+    from tracegate.studio.models import IndexedFile, IndexedSymbol
+
+    with _session_factory(context)() as session:
+        version = _index_version(session, context.repository_id)
+        statement = (
+            select(IndexedSymbol, IndexedFile)
+            .join(IndexedFile, IndexedFile.id == IndexedSymbol.indexed_file_id)
+            .where(
+                IndexedFile.index_version_id == version.id,
+                or_(
+                    IndexedSymbol.qualified_name == arguments.symbol,
+                    IndexedSymbol.name == arguments.symbol,
+                ),
+            )
+        )
+        if arguments.path:
+            statement = statement.where(IndexedFile.path == arguments.path)
+        rows = session.execute(statement.limit(arguments.limit)).all()
+        return {
+            "index_version": version.id,
+            "commit_sha": version.commit_sha,
+            "definitions": [
+                {
+                    "path": file.path,
+                    "name": symbol.name,
+                    "qualified_name": symbol.qualified_name,
+                    "kind": symbol.kind,
+                    "signature": symbol.signature,
+                    "start_line": symbol.start_line,
+                    "end_line": symbol.end_line,
+                }
+                for symbol, file in rows
+            ],
+        }
+
+
+def _get_symbol_references(arguments: SymbolInput, context: ToolContext) -> dict[str, Any]:
+    from sqlalchemy import select
+
+    from tracegate.studio.models import IndexedFile
+
+    with _session_factory(context)() as session:
+        version = _index_version(session, context.repository_id)
+        statement = select(IndexedFile).where(IndexedFile.index_version_id == version.id)
+        if arguments.path:
+            statement = statement.where(IndexedFile.path == arguments.path)
+        matches: list[dict[str, Any]] = []
+        for file in session.scalars(statement):
+            for reference in file.references_json:
+                target = str(reference.get("target", ""))
+                if target == arguments.symbol or target.rsplit(".", 1)[-1] == arguments.symbol:
+                    matches.append({"path": file.path, **reference})
+                    if len(matches) >= arguments.limit:
+                        break
+            if len(matches) >= arguments.limit:
+                break
+        return {
+            "index_version": version.id,
+            "commit_sha": version.commit_sha,
+            "references": matches,
+        }
+
+
+def _get_dependency_neighbors(arguments: DependencyInput, context: ToolContext) -> dict[str, Any]:
+    from tracegate.studio.index_store import RepositoryIndexError, load_repository_map
+
+    with _session_factory(context)() as session:
+        try:
+            repository_map = load_repository_map(session, context.repository_id)
+        except RepositoryIndexError as exc:
+            raise ToolExecutionError("repository_not_indexed", str(exc)) from exc
+    node_by_id = {node.id: node for node in repository_map.nodes}
+    if arguments.node_id not in node_by_id:
+        raise ToolExecutionError("graph_node_not_found", "Graph node was not found in the current index")
+    adjacency: dict[str, list[tuple[str, str, bool]]] = {}
+    for edge in repository_map.edges:
+        adjacency.setdefault(edge.source, []).append((edge.target, edge.kind, edge.confirmed))
+        adjacency.setdefault(edge.target, []).append((edge.source, edge.kind, edge.confirmed))
+    depth_by_id = {arguments.node_id: 0}
+    frontier = {arguments.node_id}
+    relationships: list[dict[str, Any]] = []
+    for depth in range(1, arguments.depth + 1):
+        following: set[str] = set()
+        for source in frontier:
+            for target, kind, confirmed in adjacency.get(source, []):
+                relationships.append(
+                    {"source": source, "target": target, "kind": kind, "confirmed": confirmed}
+                )
+                if target not in depth_by_id:
+                    depth_by_id[target] = depth
+                    following.add(target)
+                if len(depth_by_id) >= arguments.limit:
+                    break
+        frontier = following
+        if len(depth_by_id) >= arguments.limit:
+            break
+    return {
+        "index_version": repository_map.index_version,
+        "commit_sha": repository_map.commit_sha,
+        "nodes": [
+            {**node_by_id[node_id].__dict__, "depth": depth}
+            for node_id, depth in depth_by_id.items()
+        ],
+        "edges": relationships[: arguments.limit * 4],
+        "truncated": len(depth_by_id) >= arguments.limit,
+    }
+
+
+def _get_repository_map(arguments: RepositoryMapInput, context: ToolContext) -> dict[str, Any]:
+    from tracegate.studio.index_store import RepositoryIndexError, load_repository_map
+
+    with _session_factory(context)() as session:
+        try:
+            repository_map = load_repository_map(session, context.repository_id)
+        except RepositoryIndexError as exc:
+            raise ToolExecutionError("repository_not_indexed", str(exc)) from exc
+    nodes = list(repository_map.nodes[: arguments.limit])
+    node_ids = {node.id for node in nodes}
+    edges = [
+        edge for edge in repository_map.edges if edge.source in node_ids and edge.target in node_ids
+    ]
+    return {
+        "index_version": repository_map.index_version,
+        "commit_sha": repository_map.commit_sha,
+        "nodes": [node.__dict__ for node in nodes],
+        "edges": [edge.__dict__ for edge in edges],
+        "truncated": len(repository_map.nodes) > arguments.limit,
+    }
+
+
+def _pull_request_context(context: ToolContext):  # type: ignore[no-untyped-def]
+    from tracegate.studio.models import PullRequest, Repository
+
+    if context.pull_request_id is None:
+        raise ToolExecutionError("pull_request_context_missing", "This tool requires a Pull Request context")
+    with _session_factory(context)() as session:
+        pull_request = session.get(PullRequest, context.pull_request_id)
+        if pull_request is None or pull_request.repository_id != context.repository_id:
+            raise ToolExecutionError("pull_request_not_found", "Pull Request is not in this repository context")
+        repository = session.get(Repository, context.repository_id)
+        if repository is None:
+            raise ToolExecutionError("repository_not_found", "Repository context no longer exists")
+        return {
+            "id": pull_request.id,
+            "number": pull_request.number,
+            "title": pull_request.title,
+            "state": pull_request.state,
+            "url": pull_request.url,
+            "author": pull_request.author,
+            "base_sha": pull_request.base_sha,
+            "head_sha": pull_request.head_sha,
+            "draft": pull_request.draft,
+            "additions": pull_request.additions,
+            "deletions": pull_request.deletions,
+            "changed_files": pull_request.changed_files,
+            "analysis_status": pull_request.analysis_status,
+            "owner": repository.owner,
+            "repository": repository.name,
+        }
+
+
+def _get_pr_metadata(_arguments: BaseModel, context: ToolContext) -> dict[str, Any]:
+    return _pull_request_context(context)
+
+
+async def _github_resource(context: ToolContext, resource: str) -> list[dict[str, Any]]:
+    from tracegate.github import GitHubAPIError, GitHubProvider
+
+    metadata = _pull_request_context(context)
+    provider = GitHubProvider(context.github_token)
+    try:
+        if resource == "files":
+            return await provider.get_pull_request_files(
+                metadata["owner"], metadata["repository"], metadata["number"]
+            )
+        if resource == "commits":
+            return await provider.get_pull_request_commits(
+                metadata["owner"], metadata["repository"], metadata["number"]
+            )
+        if resource == "comments":
+            review = await provider.get_review_comments(
+                metadata["owner"], metadata["repository"], metadata["number"]
+            )
+            issue = await provider.get_issue_comments(
+                metadata["owner"], metadata["repository"], metadata["number"]
+            )
+            return [
+                *({**item, "tracegate_comment_kind": "review"} for item in review),
+                *({**item, "tracegate_comment_kind": "issue"} for item in issue),
+            ]
+        if resource == "checks":
+            if not metadata["head_sha"]:
+                raise ToolExecutionError("pull_request_head_missing", "Pull Request has no Head SHA")
+            return await provider.get_check_runs(
+                metadata["owner"], metadata["repository"], metadata["head_sha"]
+            )
+        raise ToolExecutionError("invalid_resource", "Unsupported GitHub resource")
+    except GitHubAPIError as exc:
+        raise ToolExecutionError("github_request_failed", str(exc)) from exc
+    finally:
+        await provider.close()
+
+
+def _get_pr_files(_arguments: BaseModel, context: ToolContext) -> dict[str, Any]:
+    return {"files": asyncio.run(_github_resource(context, "files"))}
+
+
+def _get_pr_commits(_arguments: BaseModel, context: ToolContext) -> dict[str, Any]:
+    return {"commits": asyncio.run(_github_resource(context, "commits"))}
+
+
+def _get_pr_comments(_arguments: BaseModel, context: ToolContext) -> dict[str, Any]:
+    return {"comments": asyncio.run(_github_resource(context, "comments"))}
+
+
+def _get_check_runs(_arguments: BaseModel, context: ToolContext) -> dict[str, Any]:
+    return {"check_runs": asyncio.run(_github_resource(context, "checks"))}
+
+
 _COMMAND_ALLOWLIST = {
     ("python", "-m", "pytest"),
     ("python3", "-m", "pytest"),
@@ -354,6 +679,88 @@ def _run_command(arguments: RunCommandInput, context: ToolContext) -> dict[str, 
     }
 
 
+def _run_tests(arguments: RunTestsInput, context: ToolContext) -> dict[str, Any]:
+    commands = {
+        "python": ["python", "-m", "pytest"],
+        "frontend": ["pnpm", "test"],
+        "rust": ["cargo", "test"],
+    }
+    return _run_command(
+        RunCommandInput(
+            argv=commands[arguments.target],
+            timeout_seconds=arguments.timeout_seconds,
+        ),
+        context,
+    )
+
+
+def _apply_patch(arguments: ApplyPatchInput, context: ToolContext) -> dict[str, Any]:
+    if not context.write_enabled:
+        raise ToolExecutionError("write_mode_disabled", "Patch application is disabled for this run")
+    if (
+        context.patch_confirmation_id is None
+        or arguments.confirmation_id != context.patch_confirmation_id
+    ):
+        raise ToolExecutionError(
+            "write_confirmation_required",
+            "Patch application requires the exact confirmation identifier shown to the user",
+        )
+    changed_paths: set[str] = set()
+    for line in arguments.patch.splitlines():
+        if not line.startswith(("+++ ", "--- ")):
+            continue
+        raw_path = line[4:].split("\t", 1)[0]
+        if raw_path == "/dev/null":
+            continue
+        if raw_path.startswith(("a/", "b/")):
+            raw_path = raw_path[2:]
+        if raw_path.startswith('"') or "\x00" in raw_path:
+            raise ToolExecutionError("patch_path_invalid", "Quoted or NUL patch paths are not supported")
+        try:
+            context.boundary.resolve(raw_path, allow_missing=True)
+        except RepositoryPathError as exc:
+            raise ToolExecutionError("patch_path_forbidden", str(exc)) from exc
+        changed_paths.add(raw_path)
+    if not changed_paths:
+        raise ToolExecutionError("patch_invalid", "Patch does not contain a bounded file header")
+
+    environment = {
+        name: os.environ[name]
+        for name in ("PATH", "HOME", "LANG", "LC_ALL", "TMP", "TEMP")
+        if name in os.environ
+    }
+    environment.update({"GIT_TERMINAL_PROMPT": "0", "GIT_OPTIONAL_LOCKS": "0"})
+    commands = (
+        ["git", "apply", "--check", "--whitespace=nowarn", "-"],
+        ["git", "apply", "--whitespace=nowarn", "-"],
+    )
+    for command in commands:
+        process = subprocess.run(
+            command,
+            cwd=context.boundary.root,
+            input=arguments.patch,
+            capture_output=True,
+            text=True,
+            errors="replace",
+            timeout=30,
+            env=environment,
+            check=False,
+        )
+        if process.returncode != 0:
+            raise ToolExecutionError(
+                "patch_check_failed" if "--check" in command else "patch_apply_failed",
+                process.stderr[:4000] or "git apply rejected the patch",
+            )
+    diff = GitProvider(context.boundary).diff().stdout
+    return {
+        "applied": True,
+        "changed_paths": sorted(changed_paths),
+        "git_diff": diff,
+        "committed": False,
+        "pushed": False,
+    }
+
+
 class EmptyInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -382,6 +789,41 @@ def create_read_only_registry() -> ToolRegistry:
         handler=_search_code,
     )
     registry.register(
+        name="search_symbol",
+        description="Search symbols in the current persisted index version.",
+        permission=PermissionLevel.REPOSITORY_READ,
+        input_model=SearchSymbolInput,
+        handler=_search_symbol,
+    )
+    registry.register(
+        name="get_symbol_definition",
+        description="Resolve an exact symbol definition from the current persisted index.",
+        permission=PermissionLevel.REPOSITORY_READ,
+        input_model=SymbolInput,
+        handler=_get_symbol_definition,
+    )
+    registry.register(
+        name="get_symbol_references",
+        description="Read parser-recorded references to a symbol from the current index.",
+        permission=PermissionLevel.REPOSITORY_READ,
+        input_model=SymbolInput,
+        handler=_get_symbol_references,
+    )
+    registry.register(
+        name="get_dependency_neighbors",
+        description="Traverse one or two hops of confirmed static repository graph relationships.",
+        permission=PermissionLevel.REPOSITORY_READ,
+        input_model=DependencyInput,
+        handler=_get_dependency_neighbors,
+    )
+    registry.register(
+        name="get_repository_map",
+        description="Read a bounded view of the persisted commit-bound Repository Map.",
+        permission=PermissionLevel.REPOSITORY_READ,
+        input_model=RepositoryMapInput,
+        handler=_get_repository_map,
+    )
+    registry.register(
         name="get_git_status",
         description="Read repository status and current branch.",
         permission=PermissionLevel.REPOSITORY_READ,
@@ -403,6 +845,58 @@ def create_read_only_registry() -> ToolRegistry:
         handler=_git_log,
     )
     registry.register(
+        name="get_pr_metadata",
+        description="Read the persisted Pull Request snapshot bound to the current run.",
+        permission=PermissionLevel.REPOSITORY_READ,
+        input_model=EmptyInput,
+        handler=_get_pr_metadata,
+    )
+    registry.register(
+        name="get_pr_files",
+        description="Read changed-file metadata from the GitHub Pull Request API.",
+        permission=PermissionLevel.NETWORK,
+        input_model=EmptyInput,
+        handler=_get_pr_files,
+        timeout_seconds=30,
+        max_output_bytes=8 * 1024 * 1024,
+    )
+    registry.register(
+        name="get_pr_commits",
+        description="Read commit metadata from the GitHub Pull Request API.",
+        permission=PermissionLevel.NETWORK,
+        input_model=EmptyInput,
+        handler=_get_pr_commits,
+        timeout_seconds=30,
+        max_output_bytes=8 * 1024 * 1024,
+    )
+    registry.register(
+        name="get_pr_comments",
+        description="Read review and issue comments from the GitHub Pull Request API.",
+        permission=PermissionLevel.NETWORK,
+        input_model=EmptyInput,
+        handler=_get_pr_comments,
+        timeout_seconds=45,
+        max_output_bytes=8 * 1024 * 1024,
+    )
+    registry.register(
+        name="get_check_runs",
+        description="Read GitHub Check Runs for the Pull Request Head SHA.",
+        permission=PermissionLevel.NETWORK,
+        input_model=EmptyInput,
+        handler=_get_check_runs,
+        timeout_seconds=30,
+        max_output_bytes=8 * 1024 * 1024,
+    )
+    registry.register(
+        name="run_tests",
+        description="Run the repository Python, frontend, or Rust test command through the allowlist.",
+        permission=PermissionLevel.COMMAND_RESTRICTED,
+        input_model=RunTestsInput,
+        handler=_run_tests,
+        timeout_seconds=305,
+        max_output_bytes=1_100_000,
+    )
+    registry.register(
         name="run_command",
         description="Run an argument-vector command from a small test/check allowlist.",
         permission=PermissionLevel.COMMAND_RESTRICTED,
@@ -410,5 +904,14 @@ def create_read_only_registry() -> ToolRegistry:
         handler=_run_command,
         timeout_seconds=305,
         max_output_bytes=1_100_000,
+    )
+    registry.register(
+        name="apply_patch",
+        description="Apply a shown unified diff only after explicit write mode and confirmation; never commit or push.",
+        permission=PermissionLevel.WRITE_CONFIRMATION,
+        input_model=ApplyPatchInput,
+        handler=_apply_patch,
+        timeout_seconds=35,
+        max_output_bytes=2 * 1024 * 1024,
     )
     return registry

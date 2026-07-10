@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import json
+import os
 import time
 from datetime import datetime, timezone
 from pathlib import Path
@@ -47,11 +48,11 @@ NODE_NAMES = (
 
 
 class WorkflowCancelled(RuntimeError):
-    pass
+    """Raised after cancellation state has been persisted."""
 
 
 class WorkflowExecutionError(RuntimeError):
-    pass
+    """Raised when an Agent workflow terminates without a successful report."""
 
 
 class PlanOutput(BaseModel):
@@ -294,7 +295,14 @@ class TraceGateAgentWorkflow:
                 results.extend(hit.__dict__ for hit in retrieved.hits)
         if repository.local_path:
             boundary = RepositoryBoundary(Path(repository.local_path))
-            context = ToolContext(repository.id, boundary, "Repository Retriever")
+            context = ToolContext(
+                repository.id,
+                boundary,
+                "Repository Retriever",
+                session_factory=self.session_factory,
+                pull_request_id=state.get("pull_request_id"),
+                github_token=os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN"),
+            )
             for query in plan.retrieval_queries[:3]:
                 before = len(self.tools.invocations)
                 try:

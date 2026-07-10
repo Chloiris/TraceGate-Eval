@@ -39,6 +39,7 @@ def test_initial_migration_creates_core_tables_and_singletons(tmp_path: Path) ->
             "evidence_records",
             "findings",
             "index_versions",
+            "webhook_deliveries",
             "indexed_files",
             "indexed_symbols",
             "indexed_content_fts",
@@ -53,7 +54,7 @@ def test_initial_migration_creates_core_tables_and_singletons(tmp_path: Path) ->
             "repository_syncs",
             "repositories",
         } <= tables
-        assert current_revision(database.engine) == "20260710_0002"
+        assert current_revision(database.engine) == "20260710_0003"
         with database.session_factory() as session:
             settings = session.scalar(select(AppSettings))
             onboarding = session.scalar(select(OnboardingState))
@@ -71,7 +72,7 @@ def test_migration_is_idempotent(tmp_path: Path) -> None:
     upgrade_database(url)
     database = StudioDatabase(url)
     try:
-        assert current_revision(database.engine) == "20260710_0002"
+        assert current_revision(database.engine) == "20260710_0003"
     finally:
         database.dispose()
 
@@ -93,7 +94,7 @@ def test_agent_index_migration_upgrades_existing_p0_database_without_data_loss(t
     upgrade_database(url)
     upgraded = StudioDatabase(url)
     try:
-        assert current_revision(upgraded.engine) == "20260710_0002"
+        assert current_revision(upgraded.engine) == "20260710_0003"
         with upgraded.engine.connect() as connection:
             assert connection.exec_driver_sql(
                 "SELECT full_name FROM repositories WHERE id = 'repo-1'"

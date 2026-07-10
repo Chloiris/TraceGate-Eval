@@ -2,6 +2,9 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
+import platform
+import re
 from collections.abc import Generator
 from datetime import datetime, timezone
 from pathlib import Path
@@ -15,23 +18,38 @@ from sqlalchemy.orm import Session
 
 from .config import StudioSettings
 from .errors import StudioAPIError
-from .eval_bridge import eval_component_status
+from .eval_bridge import EvalArtifactError, eval_component_status, evaluation_summary
 from .github_sync import sync_repository_pull_requests
 from .index_store import RepositoryIndexError, load_repository_map, persist_repository_index
-from .models import AgentRun, AgentStep, AppSettings, EvidenceRecord, Finding, OnboardingState, PullRequest, Repository
+from .models import (
+    AgentRun,
+    AgentStep,
+    AppSettings,
+    EvidenceRecord,
+    Finding,
+    OnboardingState,
+    PullRequest,
+    Repository,
+    ToolCallRecord,
+)
 from .run_manager import configured_model
 from .schemas import (
     ComponentStatus,
     AgentRunListResponse,
     AgentRunResponse,
+    AgentRunDetailResponse,
     AgentStepResponse,
     AnalyzeResponse,
     EvidenceResponse,
+    EvaluationSummaryResponse,
     FindingResponse,
     HealthResponse,
     OnboardingResponse,
     OnboardingUpdate,
     IndexVersionResponse,
+    PullRequestDiffResponse,
+    ReviewMapResponse,
+    ChangeTourResponse,
     PullRequestListResponse,
     PullRequestResponse,
     RepositoryCreate,
@@ -45,13 +63,21 @@ from .schemas import (
     SettingsUpdate,
     SystemComponents,
     SystemStatusResponse,
+    AgentDescriptorResponse,
+    ToolDescriptorResponse,
+    DiagnosticsResponse,
+    AgentEvidenceGraphResponse,
+    UpdateStatusResponse,
 )
 from .security import require_local_token
 from tracegate.github import GitHubAPIError
 from tracegate.repository import RepositoryBoundary, RepositoryPathError
 from tracegate.retrieval import hybrid_retrieve
 from tracegate.models import ModelConfigurationError
-from tracegate.agent.workflow import PROMPT_VERSION, WORKFLOW_VERSION
+from tracegate.agent.workflow import NODE_NAMES, PROMPT_VERSION, WORKFLOW_VERSION
+from tracegate.tools import create_read_only_registry
+from tracegate.vcs import GitCommandError, GitProvider
+from .config import default_data_dir
 
 
 router = APIRouter(prefix="/api/v1", dependencies=[Depends(require_local_token)])
@@ -99,7 +125,7 @@ def _github_status(settings: StudioSettings) -> ComponentStatus:
         return ComponentStatus(
             state="not_configured",
             configured=False,
-            message="GitHub is not connected.",
+            message="GitHub 尚未连接",
             detail="Configure a GitHub credential before accessing private repositories or monitoring PRs.",
         )
     return ComponentStatus(
@@ -121,7 +147,7 @@ def _model_status(settings: StudioSettings, app_settings: AppSettings) -> Compon
         return ComponentStatus(
             state="not_configured",
             configured=False,
-            message="Model is not configured.",
+            message="模型尚未配置",
             detail="Missing " + " and ".join(missing) + "; no substitute provider was used.",
         )
     return ComponentStatus(
@@ -177,19 +203,219 @@ def system_status(request: Request, session: SessionDependency) -> SystemStatusR
     return SystemStatusResponse(status=status, components=components, checked_at=utcnow())
 
 
+@router.get("/evaluations", response_model=EvaluationSummaryResponse)
+def evaluations(request: Request) -> EvaluationSummaryResponse:
+    try:
+        payload = evaluation_summary(request.app.state.settings.eval_root)
+    except EvalArtifactError as exc:
+        raise StudioAPIError(409, "evaluation_artifacts_unavailable", str(exc)) from exc
+    except (KeyError, TypeError, ValueError, OSError) as exc:
+        raise StudioAPIError(
+            409,
+            "evaluation_artifacts_invalid",
+            f"Checked-in evaluation artifacts are invalid ({type(exc).__name__}); no replacement metrics were returned.",
+        ) from exc
+    try:
+        return EvaluationSummaryResponse.model_validate(payload)
+    except (KeyError, TypeError, ValueError) as exc:
+        raise StudioAPIError(
+            500,
+            "evaluation_artifacts_invalid",
+            "Checked-in evaluation artifacts failed schema validation; no replacement metrics were returned.",
+        ) from exc
+
+
+_AGENT_METADATA: dict[str, tuple[str, list[str], list[str]]] = {
+    "Planner": (
+        "Turns the PR review request into bounded retrieval and analysis objectives.",
+        ["structured planning", "retrieval query design"],
+        [],
+    ),
+    "Repository Retriever": (
+        "Retrieves commit-bound code and repository context through controlled tools.",
+        ["repository search", "bounded file context"],
+        ["search_code", "read_file", "list_directory", "get_git_diff", "get_git_log"],
+    ),
+    "Context Resolver": (
+        "Resolves current evidence against stale, unknown, or conflicting claims.",
+        ["EvidencePacket", "ClaimBench status resolution", "commit binding"],
+        ["read_file", "search_code"],
+    ),
+    "Code Analyst": (
+        "Produces structured candidate findings from retrieved code evidence.",
+        ["semantic code review", "structured findings"],
+        ["read_file", "search_code", "get_git_diff"],
+    ),
+    "Risk Reviewer": (
+        "Applies TraceGate risk and evidence policy to candidate findings.",
+        ["risk classification", "evidence-aware judgment"],
+        [],
+    ),
+    "Verifier": (
+        "Verifies paths, line ranges, evidence identifiers, and the analyzed commit.",
+        ["EvidencePacket verifier", "source validation", "commit validation"],
+        ["read_file"],
+    ),
+    "Report Composer": (
+        "Composes the final review summary without inventing unsupported evidence.",
+        ["structured report", "recommended review order"],
+        [],
+    ),
+}
+
+
+@router.get("/agents", response_model=list[AgentDescriptorResponse])
+def agents() -> list[AgentDescriptorResponse]:
+    return [
+        AgentDescriptorResponse(
+            name=name,
+            version=WORKFLOW_VERSION,
+            responsibility=_AGENT_METADATA[name][0],
+            status="enabled",
+            capabilities=_AGENT_METADATA[name][1],
+            allowed_tools=_AGENT_METADATA[name][2],
+        )
+        for name in NODE_NAMES
+    ]
+
+
+@router.get("/tools", response_model=list[ToolDescriptorResponse])
+def tools(session: SessionDependency) -> list[ToolDescriptorResponse]:
+    descriptors = create_read_only_registry().descriptors()
+    rows: list[ToolDescriptorResponse] = []
+    for descriptor in descriptors:
+        recent_call_count = int(
+            session.scalar(
+                select(func.count()).select_from(ToolCallRecord).where(
+                    ToolCallRecord.tool_name == descriptor.name
+                )
+            )
+            or 0
+        )
+        recent_error_count = int(
+            session.scalar(
+                select(func.count()).select_from(ToolCallRecord).where(
+                    ToolCallRecord.tool_name == descriptor.name,
+                    ToolCallRecord.status == "failed",
+                )
+            )
+            or 0
+        )
+        most_recent_error = session.scalar(
+            select(ToolCallRecord.error_code)
+            .where(
+                ToolCallRecord.tool_name == descriptor.name,
+                ToolCallRecord.status == "failed",
+            )
+            .order_by(ToolCallRecord.id.desc())
+            .limit(1)
+        )
+        rows.append(
+            ToolDescriptorResponse(
+                name=descriptor.name,
+                description=descriptor.description,
+                permission=descriptor.permission.value,
+                timeout_seconds=descriptor.timeout_seconds,
+                max_output_bytes=descriptor.max_output_bytes,
+                input_schema=descriptor.input_schema,
+                enabled=descriptor.permission.value != "WRITE_CONFIRMATION",
+                recent_call_count=recent_call_count,
+                recent_error_count=recent_error_count,
+                most_recent_error=most_recent_error,
+            )
+        )
+    return rows
+
+
+def _artifact_version(root: Path, relative_path: str, pattern: str) -> str | None:
+    try:
+        content = (root / relative_path).read_text(encoding="utf-8")
+    except (OSError, UnicodeError):
+        return None
+    match = re.search(pattern, content, flags=re.MULTILINE)
+    return match.group(1) if match else None
+
+
+@router.get("/diagnostics", response_model=DiagnosticsResponse)
+def diagnostics(request: Request, session: SessionDependency) -> DiagnosticsResponse:
+    settings: StudioSettings = request.app.state.settings
+    app_settings = _settings_row(session)
+    git_commit: str | None = None
+    try:
+        git_commit = GitProvider(RepositoryBoundary(settings.eval_root)).head_sha()
+    except (OSError, RepositoryPathError, GitCommandError):
+        git_commit = None
+    frontend_version = _artifact_version(
+        settings.eval_root,
+        "apps/web/package.json",
+        r'^\s*"version"\s*:\s*"([^"]+)"',
+    )
+    desktop_version = _artifact_version(
+        settings.eval_root,
+        "apps/desktop/src-tauri/Cargo.toml",
+        r'^version\s*=\s*"([^"]+)"',
+    )
+    database_url = request.app.state.database.engine.url
+    monitor = request.app.state.repository_monitor.snapshot()
+    workspaces = list(
+        session.scalars(
+            select(Repository.local_path)
+            .where(Repository.local_path.is_not(None))
+            .order_by(Repository.full_name)
+        )
+    )
+    return DiagnosticsResponse(
+        software_version=settings.version,
+        git_commit=git_commit,
+        operating_system=platform.system(),
+        architecture=platform.machine(),
+        python_version=platform.python_version(),
+        frontend_version=frontend_version,
+        desktop_version=desktop_version,
+        database_type=database_url.get_backend_name(),
+        database_path=(database_url.database if database_url.get_backend_name() == "sqlite" else None),
+        log_path=str(default_data_dir() / "logs" / "tracegate-studio.jsonl"),
+        workspace_paths=[path for path in workspaces if path],
+        sidecar_pid=os.getpid(),
+        api_port=settings.port,
+        github=_github_status(settings),
+        model=_model_status(settings, app_settings),
+        monitor=monitor.__dict__,
+        agent_queue=request.app.state.run_manager.active_count(),
+        index_queue=0,
+        telemetry_enabled=False,
+    )
+
+
+@router.get("/system/update", response_model=UpdateStatusResponse)
+def update_status(request: Request) -> UpdateStatusResponse:
+    return UpdateStatusResponse(
+        current_version=request.app.state.settings.version,
+        channel="stable",
+        configured=False,
+        update_available=False,
+        latest_version=None,
+        manifest_url=None,
+        signature_verification=False,
+        message="Automatic updates are not configured; no unsigned update was offered.",
+    )
+
+
 @router.get("/settings", response_model=SettingsResponse)
 def get_settings(session: SessionDependency) -> AppSettings:
     return _settings_row(session)
 
 
 @router.put("/settings", response_model=SettingsResponse)
-def update_settings(payload: SettingsUpdate, session: SessionDependency) -> AppSettings:
+def update_settings(payload: SettingsUpdate, request: Request, session: SessionDependency) -> AppSettings:
     row = _settings_row(session)
     for field, value in payload.model_dump(exclude_unset=True).items():
         setattr(row, field, value)
     row.updated_at = utcnow()
     session.commit()
     session.refresh(row)
+    if "background_monitoring" in payload.model_fields_set:
+        request.app.state.repository_monitor.wake()
     return row
 
 
@@ -257,6 +483,8 @@ def update_onboarding(
     session.commit()
     session.refresh(onboarding)
     session.refresh(app_settings)
+    if "background_monitoring" in values:
+        request.app.state.repository_monitor.wake()
     repository_added = bool(session.scalar(select(func.count()).select_from(Repository)))
     return _onboarding_response(
         request.app.state.settings,
@@ -312,6 +540,7 @@ def create_repository(
             f"Repository {payload.full_name} has already been added.",
         ) from exc
     session.refresh(repository)
+    request.app.state.repository_monitor.wake()
     return repository
 
 
@@ -344,6 +573,7 @@ def get_repository(repository_id: str, session: SessionDependency) -> Repository
 def update_repository(
     repository_id: str,
     payload: RepositoryUpdate,
+    request: Request,
     session: SessionDependency,
 ) -> Repository:
     repository = _repository(session, repository_id)
@@ -355,6 +585,8 @@ def update_repository(
     repository.updated_at = utcnow()
     session.commit()
     session.refresh(repository)
+    if "monitoring_enabled" in values:
+        request.app.state.repository_monitor.wake()
     return repository
 
 
@@ -474,6 +706,393 @@ def get_pull_request(pull_request_id: str, session: SessionDependency) -> PullRe
     return pull_request
 
 
+@router.get("/pull-requests/{pull_request_id}/diff", response_model=PullRequestDiffResponse)
+def get_pull_request_diff(
+    pull_request_id: str,
+    session: SessionDependency,
+    path: str | None = Query(default=None, max_length=2048),
+) -> PullRequestDiffResponse:
+    pull_request = session.get(PullRequest, pull_request_id)
+    if pull_request is None:
+        raise StudioAPIError(404, "pull_request_not_found", "Pull Request was not found.")
+    repository = _repository(session, pull_request.repository_id)
+    if not repository.local_path or not pull_request.base_sha or not pull_request.head_sha:
+        raise StudioAPIError(409, "pull_request_diff_unavailable", "A local workspace and Base/Head SHAs are required.")
+    try:
+        boundary = RepositoryBoundary(Path(repository.local_path))
+        git = GitProvider(boundary)
+        names = git.run("diff", "--name-status", "--find-renames", f"{pull_request.base_sha}...{pull_request.head_sha}")
+        unified = git.diff(pull_request.base_sha, pull_request.head_sha).stdout
+    except (OSError, RepositoryPathError, GitCommandError) as exc:
+        raise StudioAPIError(409, "pull_request_diff_unavailable", str(exc)) from exc
+    changed_files = []
+    for line in names.stdout.splitlines():
+        parts = line.split("\t")
+        if len(parts) >= 2:
+            changed_files.append({"status": parts[0], "path": parts[-1]})
+    selected_path = path or (changed_files[0]["path"] if changed_files else None)
+    original: str | None = None
+    modified: str | None = None
+    if selected_path:
+        if selected_path not in {item["path"] for item in changed_files}:
+            raise StudioAPIError(422, "invalid_diff_path", "Selected path is not changed by this Pull Request.")
+        try:
+            original = git.show(pull_request.base_sha, selected_path).stdout
+        except GitCommandError:
+            original = None
+        try:
+            modified = git.show(pull_request.head_sha, selected_path).stdout
+        except GitCommandError:
+            modified = None
+    return PullRequestDiffResponse(
+        pull_request_id=pull_request.id,
+        base_sha=pull_request.base_sha,
+        head_sha=pull_request.head_sha,
+        changed_files=changed_files,
+        selected_path=selected_path,
+        original=original,
+        modified=modified,
+        unified_diff=unified,
+    )
+
+
+def _change_status(raw_status: str) -> str:
+    marker = raw_status[:1].upper()
+    return {
+        "A": "added",
+        "D": "deleted",
+        "R": "renamed",
+    }.get(marker, "modified")
+
+
+def _review_map(
+    pull_request_id: str,
+    session: Session,
+) -> ReviewMapResponse:
+    pull_request = session.get(PullRequest, pull_request_id)
+    if pull_request is None:
+        raise StudioAPIError(404, "pull_request_not_found", "Pull Request was not found.")
+    repository = _repository(session, pull_request.repository_id)
+    if not pull_request.head_sha or repository.current_commit_sha != pull_request.head_sha:
+        raise StudioAPIError(
+            409,
+            "pull_request_index_mismatch",
+            "Index the Pull Request Head SHA before requesting its Review Map.",
+        )
+    diff = get_pull_request_diff(pull_request_id, session, path=None)
+    try:
+        repository_map = load_repository_map(session, repository.id)
+    except RepositoryIndexError as exc:
+        raise StudioAPIError(409, "repository_index_unavailable", str(exc)) from exc
+    if repository_map.commit_sha != pull_request.head_sha:
+        raise StudioAPIError(
+            409,
+            "pull_request_index_mismatch",
+            "The current static graph is not bound to this Pull Request Head SHA.",
+        )
+
+    changed = {item.path: _change_status(item.status) for item in diff.changed_files}
+    node_by_id = {node.id: node for node in repository_map.nodes}
+    direct = {node.id for node in repository_map.nodes if node.path in changed}
+    adjacency: dict[str, set[str]] = {node.id: set() for node in repository_map.nodes}
+    for edge in repository_map.edges:
+        if edge.source in adjacency and edge.target in adjacency:
+            adjacency[edge.source].add(edge.target)
+            adjacency[edge.target].add(edge.source)
+
+    depth_by_id = {node_id: 0 for node_id in direct}
+    frontier = set(direct)
+    for depth in (1, 2):
+        next_frontier: set[str] = set()
+        for node_id in frontier:
+            for neighbor in adjacency.get(node_id, set()):
+                if neighbor not in depth_by_id:
+                    depth_by_id[neighbor] = depth
+                    next_frontier.add(neighbor)
+        frontier = next_frontier
+
+    run_ids = list(
+        session.scalars(
+            select(AgentRun.id).where(
+                AgentRun.pull_request_id == pull_request.id,
+                AgentRun.head_sha == pull_request.head_sha,
+            )
+        )
+    )
+    findings = (
+        list(session.scalars(select(Finding).where(Finding.agent_run_id.in_(run_ids))))
+        if run_ids
+        else []
+    )
+    evidence = (
+        list(session.scalars(select(EvidenceRecord).where(EvidenceRecord.agent_run_id.in_(run_ids))))
+        if run_ids
+        else []
+    )
+    finding_ids_by_path: dict[str, list[str]] = {}
+    evidence_ids_by_path: dict[str, list[str]] = {}
+    risk_by_path: dict[str, str] = {}
+    risk_order = {"info": 0, "low": 1, "medium": 2, "high": 3, "critical": 4}
+    for finding in findings:
+        if not finding.file_path:
+            continue
+        finding_ids_by_path.setdefault(finding.file_path, []).append(finding.id)
+        current = risk_by_path.get(finding.file_path)
+        if current is None or risk_order.get(finding.severity, -1) > risk_order.get(current, -1):
+            risk_by_path[finding.file_path] = finding.severity
+        for evidence_id in finding.evidence_ids_json:
+            evidence_ids_by_path.setdefault(finding.file_path, []).append(evidence_id)
+    for record in evidence:
+        if record.file_path:
+            evidence_ids_by_path.setdefault(record.file_path, []).append(record.id)
+
+    nodes: list[dict[str, object]] = []
+    selected_ids = set(depth_by_id)
+    for node_id in sorted(selected_ids, key=lambda item: (depth_by_id[item], node_by_id[item].path, item)):
+        node = node_by_id[node_id]
+        nodes.append(
+            {
+                "id": node.id,
+                "kind": node.kind,
+                "label": node.label,
+                "path": node.path,
+                "symbol": node.symbol,
+                "language": node.language,
+                "impact_depth": depth_by_id[node.id],
+                "change_status": changed.get(node.path),
+                "risk": risk_by_path.get(node.path),
+                "finding_ids": sorted(set(finding_ids_by_path.get(node.path, []))),
+                "evidence_ids": sorted(set(evidence_ids_by_path.get(node.path, []))),
+            }
+        )
+
+    represented_paths = {node_by_id[node_id].path for node_id in direct}
+    for path, status in sorted(changed.items()):
+        if path not in represented_paths:
+            nodes.append(
+                {
+                    "id": f"diff:{path}",
+                    "kind": "file",
+                    "label": path.rsplit("/", 1)[-1],
+                    "path": path,
+                    "symbol": None,
+                    "language": None,
+                    "impact_depth": 0,
+                    "change_status": status,
+                    "risk": risk_by_path.get(path),
+                    "finding_ids": sorted(set(finding_ids_by_path.get(path, []))),
+                    "evidence_ids": sorted(set(evidence_ids_by_path.get(path, []))),
+                }
+            )
+
+    edges: list[dict[str, object]] = [
+        {
+            "id": edge.id,
+            "source": edge.source,
+            "target": edge.target,
+            "kind": edge.kind,
+            "confirmed": edge.confirmed,
+        }
+        for edge in repository_map.edges
+        if edge.source in selected_ids and edge.target in selected_ids
+    ]
+
+    path_target = {
+        node["path"]: node["id"]
+        for node in nodes
+        if node["kind"] == "file" and isinstance(node["path"], str)
+    }
+    for finding in findings:
+        if not finding.file_path or finding.file_path not in path_target:
+            continue
+        finding_node_id = f"finding:{finding.id}"
+        nodes.append(
+            {
+                "id": finding_node_id,
+                "kind": "finding",
+                "label": finding.title,
+                "path": finding.file_path,
+                "symbol": finding.symbol,
+                "language": None,
+                "impact_depth": 0,
+                "change_status": changed.get(finding.file_path),
+                "risk": finding.severity,
+                "finding_ids": [finding.id],
+                "evidence_ids": finding.evidence_ids_json,
+            }
+        )
+        edges.append(
+            {
+                "id": f"finding-edge:{finding.id}",
+                "source": finding_node_id,
+                "target": path_target[finding.file_path],
+                "kind": "supported-by-code",
+                "confirmed": finding.verifier_status == "verified",
+            }
+        )
+    finding_node_ids = {node["id"] for node in nodes if node["kind"] == "finding"}
+    for record in evidence:
+        related = [
+            finding
+            for finding in findings
+            if record.id in finding.evidence_ids_json and f"finding:{finding.id}" in finding_node_ids
+        ]
+        if not related:
+            continue
+        evidence_node_id = f"evidence:{record.id}"
+        nodes.append(
+            {
+                "id": evidence_node_id,
+                "kind": "evidence",
+                "label": record.source_type,
+                "path": record.file_path,
+                "symbol": None,
+                "language": None,
+                "impact_depth": 0,
+                "change_status": changed.get(record.file_path or ""),
+                "risk": None,
+                "finding_ids": [finding.id for finding in related],
+                "evidence_ids": [record.id],
+            }
+        )
+        for finding in related:
+            edges.append(
+                {
+                    "id": f"evidence-edge:{record.id}:{finding.id}",
+                    "source": evidence_node_id,
+                    "target": f"finding:{finding.id}",
+                    "kind": "supports",
+                    "confirmed": True,
+                }
+            )
+
+    node_limit = 800
+    truncated = len(nodes) > node_limit
+    if truncated:
+        nodes = nodes[:node_limit]
+        retained = {str(node["id"]) for node in nodes}
+        edges = [edge for edge in edges if edge["source"] in retained and edge["target"] in retained]
+    return ReviewMapResponse(
+        pull_request_id=pull_request.id,
+        base_sha=diff.base_sha,
+        head_sha=diff.head_sha,
+        index_version=repository_map.index_version,
+        source="git_diff+static_index+agent_evidence",
+        nodes=nodes,
+        edges=edges,
+        truncated=truncated,
+        message=(
+            "Map is capped at 800 nodes; refine the view to inspect omitted impact nodes."
+            if truncated
+            else "Impact depth is derived from the checked-out Head SHA, static graph, and persisted Agent evidence."
+        ),
+    )
+
+
+@router.get("/pull-requests/{pull_request_id}/graph", response_model=ReviewMapResponse)
+def pull_request_graph(pull_request_id: str, session: SessionDependency) -> ReviewMapResponse:
+    return _review_map(pull_request_id, session)
+
+
+def _tour_category(path: str) -> tuple[int, str, str]:
+    normalized = path.casefold()
+    if any(part in normalized for part in ("route", "controller", "/api", "endpoint")):
+        return 0, "API entry", "Review the externally reachable entry point and its request boundary."
+    if any(part in normalized for part in ("schema", "types", "dto", "model")):
+        return 1, "Parameters and data structures", "Review the changed data contract before its consumers."
+    if any(part in normalized for part in ("database", "migration", "repository", "/db", ".sql")):
+        return 3, "Data persistence", "Review persistence and migration effects after the calling logic."
+    if any(part in normalized for part in ("test", "spec", "__tests__")):
+        return 5, "Tests", "Review executable verification for the preceding production changes."
+    if any(part in normalized for part in ("config", ".env", "toml", "yaml", "yml", "json")):
+        return 6, "Configuration", "Review deployment and runtime configuration effects."
+    return 2, "Core business logic", "Review the changed implementation and its static dependencies."
+
+
+@router.get("/pull-requests/{pull_request_id}/tour", response_model=ChangeTourResponse)
+def pull_request_tour(pull_request_id: str, session: SessionDependency) -> ChangeTourResponse:
+    review = _review_map(pull_request_id, session)
+    changed_paths = sorted(
+        {
+            node.path
+            for node in review.nodes
+            if node.path and node.kind == "file" and node.change_status is not None
+        }
+    )
+    path_by_node = {node.id: node.path for node in review.nodes if node.path}
+    dependencies: dict[str, set[str]] = {path: set() for path in changed_paths}
+    relation_count: dict[str, int] = {path: 0 for path in changed_paths}
+    for edge in review.edges:
+        source_path = path_by_node.get(edge.source)
+        target_path = path_by_node.get(edge.target)
+        if (
+            edge.confirmed
+            and edge.kind in {"import", "call"}
+            and source_path in dependencies
+            and target_path in dependencies
+            and source_path != target_path
+        ):
+            dependencies[source_path].add(target_path)
+            relation_count[source_path] += 1
+            relation_count[target_path] += 1
+
+    remaining = set(changed_paths)
+    ordered: list[str] = []
+    while remaining:
+        ready = [path for path in remaining if not (dependencies[path] & remaining)]
+        if not ready:
+            ready = list(remaining)
+        ready.sort(key=lambda path: (_tour_category(path)[0], path))
+        chosen = ready[0]
+        ordered.append(chosen)
+        remaining.remove(chosen)
+
+    sequence_by_path = {path: index + 1 for index, path in enumerate(ordered)}
+    steps = []
+    for index, path in enumerate(ordered, start=1):
+        path_nodes = [node for node in review.nodes if node.path == path]
+        risks = [node.risk for node in path_nodes if node.risk]
+        risk_order = {"info": 0, "low": 1, "medium": 2, "high": 3, "critical": 4}
+        risk = max(risks, key=lambda value: risk_order[value]) if risks else None
+        prerequisites = sorted(
+            (sequence_by_path[item] for item in dependencies[path] if sequence_by_path[item] < index),
+            reverse=True,
+        )
+        _rank, title, purpose = _tour_category(path)
+        has_relation = relation_count[path] > 0
+        steps.append(
+            {
+                "sequence": index,
+                "title": title,
+                "files": [path],
+                "symbols": sorted({node.symbol for node in path_nodes if node.symbol}),
+                "purpose": purpose + " This classification is derived from the path and static index.",
+                "prerequisite_step": prerequisites[0] if prerequisites else None,
+                "risk": risk,
+                "evidence_ids": sorted({item for node in path_nodes for item in node.evidence_ids}),
+                "checkpoints": [
+                    "Inspect the changed hunks in this file.",
+                    "Confirm the indexed callers/importers shown in Review Map.",
+                    "Validate any linked Finding against its cited Evidence.",
+                ],
+                "confidence": "high" if has_relation else "low",
+            }
+        )
+    complete = len(changed_paths) <= 1 or all(relation_count[path] > 0 for path in changed_paths)
+    return ChangeTourResponse(
+        pull_request_id=review.pull_request_id,
+        head_sha=review.head_sha,
+        source="git_diff+static_index+agent_evidence",
+        complete=complete,
+        message=(
+            "Review order is grounded in confirmed static relationships."
+            if complete
+            else "Recommended order may be incomplete: one or more changed files have no confirmed static relationship."
+        ),
+        steps=steps,
+    )
+
+
 @router.post("/pull-requests/{pull_request_id}/analyze", response_model=AnalyzeResponse)
 async def analyze_pull_request(
     pull_request_id: str,
@@ -556,12 +1175,191 @@ def list_runs(
     return AgentRunListResponse(items=rows, total=total, limit=limit, offset=offset)
 
 
-@router.get("/runs/{run_id}", response_model=AgentRunResponse)
-def get_run(run_id: str, session: SessionDependency) -> AgentRun:
+@router.get("/runs/{run_id}", response_model=AgentRunDetailResponse)
+def get_run(run_id: str, session: SessionDependency) -> AgentRunDetailResponse:
     run = session.get(AgentRun, run_id)
     if run is None:
         raise StudioAPIError(404, "run_not_found", "Agent Run was not found.")
-    return run
+    steps = list(
+        session.scalars(
+            select(AgentStep).where(AgentStep.agent_run_id == run_id).order_by(AgentStep.sequence)
+        )
+    )
+    step_ids = [step.id for step in steps]
+    tool_calls = (
+        list(
+            session.scalars(
+                select(ToolCallRecord)
+                .where(ToolCallRecord.agent_step_id.in_(step_ids))
+                .order_by(ToolCallRecord.id)
+            )
+        )
+        if step_ids
+        else []
+    )
+    return AgentRunDetailResponse(
+        **AgentRunResponse.model_validate(run).model_dump(),
+        steps=steps,
+        tool_calls=tool_calls,
+    )
+
+
+@router.get("/runs/{run_id}/graph", response_model=AgentEvidenceGraphResponse)
+def run_evidence_graph(run_id: str, session: SessionDependency) -> AgentEvidenceGraphResponse:
+    run = session.get(AgentRun, run_id)
+    if run is None:
+        raise StudioAPIError(404, "run_not_found", "Agent Run was not found.")
+    steps = list(
+        session.scalars(
+            select(AgentStep).where(AgentStep.agent_run_id == run_id).order_by(AgentStep.sequence)
+        )
+    )
+    step_ids = [step.id for step in steps]
+    tool_calls = (
+        list(session.scalars(select(ToolCallRecord).where(ToolCallRecord.agent_step_id.in_(step_ids))))
+        if step_ids
+        else []
+    )
+    evidence = list(
+        session.scalars(select(EvidenceRecord).where(EvidenceRecord.agent_run_id == run_id))
+    )
+    findings = list(session.scalars(select(Finding).where(Finding.agent_run_id == run_id)))
+    nodes: list[dict[str, object]] = [
+        {
+            "id": f"task:{run.id}",
+            "kind": "user_task",
+            "label": "Pull Request review",
+            "detail": f"run={run.id}",
+            "status": run.status,
+            "path": None,
+            "line": None,
+            "commit_sha": run.head_sha,
+            "confidence": None,
+        }
+    ]
+    edges: list[dict[str, object]] = []
+    previous = f"task:{run.id}"
+    for step in steps:
+        node_id = f"step:{step.id}"
+        nodes.append(
+            {
+                "id": node_id,
+                "kind": "agent_step",
+                "label": step.node,
+                "detail": step.output_summary or step.error_message,
+                "status": step.status,
+                "path": None,
+                "line": None,
+                "commit_sha": run.head_sha,
+                "confidence": None,
+            }
+        )
+        edges.append(
+            {
+                "id": f"sequence:{previous}:{node_id}",
+                "source": previous,
+                "target": node_id,
+                "kind": "workflow_sequence",
+                "confirmed": True,
+            }
+        )
+        previous = node_id
+    for tool_call in tool_calls:
+        node_id = f"tool:{tool_call.id}"
+        nodes.append(
+            {
+                "id": node_id,
+                "kind": "tool_call",
+                "label": tool_call.tool_name,
+                "detail": tool_call.output_summary,
+                "status": tool_call.status,
+                "path": None,
+                "line": None,
+                "commit_sha": run.head_sha,
+                "confidence": None,
+            }
+        )
+        edges.append(
+            {
+                "id": f"invoked:{tool_call.agent_step_id}:{tool_call.id}",
+                "source": f"step:{tool_call.agent_step_id}",
+                "target": node_id,
+                "kind": "invoked",
+                "confirmed": True,
+            }
+        )
+    for record in evidence:
+        node_id = f"evidence:{record.id}"
+        line = record.payload_json.get("start_line")
+        nodes.append(
+            {
+                "id": node_id,
+                "kind": "evidence",
+                "label": record.source_type,
+                "detail": record.source_uri,
+                "status": "persisted",
+                "path": record.file_path,
+                "line": line if isinstance(line, int) else None,
+                "commit_sha": record.commit_sha,
+                "confidence": None,
+            }
+        )
+        edges.append(
+            {
+                "id": f"evidence-run:{record.id}",
+                "source": f"task:{run.id}",
+                "target": node_id,
+                "kind": "persisted_for_run",
+                "confirmed": True,
+            }
+        )
+    evidence_ids = {record.id for record in evidence}
+    for finding in findings:
+        node_id = f"finding:{finding.id}"
+        nodes.append(
+            {
+                "id": node_id,
+                "kind": "finding",
+                "label": finding.title,
+                "detail": finding.message,
+                "status": finding.verifier_status,
+                "path": finding.file_path,
+                "line": finding.line_start,
+                "commit_sha": finding.commit_sha,
+                "confidence": finding.confidence,
+            }
+        )
+        linked = False
+        for evidence_id in finding.evidence_ids_json:
+            if evidence_id not in evidence_ids:
+                continue
+            linked = True
+            edges.append(
+                {
+                    "id": f"supports:{evidence_id}:{finding.id}",
+                    "source": f"evidence:{evidence_id}",
+                    "target": node_id,
+                    "kind": "supports",
+                    "confirmed": finding.verifier_status == "verified",
+                }
+            )
+        if not linked:
+            edges.append(
+                {
+                    "id": f"finding-run:{finding.id}",
+                    "source": f"task:{run.id}",
+                    "target": node_id,
+                    "kind": "persisted_for_run",
+                    "confirmed": True,
+                }
+            )
+    return AgentEvidenceGraphResponse(
+        run_id=run.id,
+        head_sha=run.head_sha,
+        nodes=nodes,
+        edges=edges,
+        message="Edges represent persisted workflow sequence, tool ownership, run ownership, and cited Evidence only.",
+    )
 
 
 @router.post("/runs/{run_id}/cancel", response_model=AgentRunResponse)

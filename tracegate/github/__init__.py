@@ -7,8 +7,12 @@ from .provider import (
     GitHubRateLimit,
     PullRequestData,
 )
+from .oauth import DeviceAuthorizationPublic, GitHubDeviceFlow, GitHubOAuthError
 
 __all__ = [
+    "DeviceAuthorizationPublic",
+    "GitHubDeviceFlow",
+    "GitHubOAuthError",
     "GitHubAPIError",
     "GitHubNotModified",
     "GitHubProvider",

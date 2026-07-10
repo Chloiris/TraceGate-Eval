@@ -417,3 +417,24 @@ class EvalRun(Base):
         DateTime(timezone=True), nullable=False, server_default=func.current_timestamp()
     )
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class WebhookDelivery(Base):
+    __tablename__ = "webhook_deliveries"
+    __table_args__ = (
+        UniqueConstraint("delivery_id", name="uq_webhook_deliveries_delivery_id"),
+        Index("ix_webhook_deliveries_received", "received_at"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    delivery_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    event: Mapped[str] = mapped_column(String(128), nullable=False)
+    payload_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    status: Mapped[str] = mapped_column(String(64), nullable=False)
+    repository_full_name: Mapped[str | None] = mapped_column(String(201))
+    pull_request_number: Mapped[int | None] = mapped_column(Integer)
+    error_message: Mapped[str | None] = mapped_column(Text)
+    received_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.current_timestamp()
+    )
+    processed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
