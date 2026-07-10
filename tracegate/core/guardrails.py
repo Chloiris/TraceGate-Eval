@@ -48,7 +48,28 @@ class ScanFinding:
 
 
 def should_scan(path: Path) -> bool:
-    skip_parts = {".git", ".venv", ".pytest_cache", "runs", "runs_stage2", "runs_claim", "datasets"}
+    skip_parts = {
+        ".git",
+        ".mypy_cache",
+        ".pnpm-store",
+        ".pytest_cache",
+        ".ruff_cache",
+        ".tracegate-dev",
+        ".venv",
+        ".vite",
+        "artifacts",
+        "build",
+        "coverage",
+        "datasets",
+        "dist",
+        "node_modules",
+        "playwright-report",
+        "runs",
+        "runs_claim",
+        "runs_stage2",
+        "target",
+        "test-results",
+    }
     if any(part in skip_parts for part in path.parts):
         return False
     if path.as_posix() == "docs/FALLBACK_AUDIT.md":
