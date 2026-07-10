@@ -30,10 +30,10 @@ The unified test command was run after the P0 implementation:
 
 ```text
 ./scripts/test.sh
-Python: 78 passed, 1 Starlette/httpx deprecation warning
+Python: 81 passed, 1 Starlette/httpx deprecation warning
 TypeScript: ESLint and strict typecheck passed
-Frontend: 12 Vitest tests passed
-Rust: cargo fmt --check, cargo clippy, and 12 tests passed
+Frontend: 14 Vitest tests passed
+Rust: cargo fmt --check, cargo clippy, 14 regular tests, and 1 explicit native Keychain test passed
 ```
 
 The strict fallback guard was rerun after excluding generated dependency and
@@ -88,6 +88,32 @@ observed:
   clicking of the macOS status item was not possible in the available UI
   automation, so tray restore remains `IMPLEMENTED_UNVERIFIED`.
 
+The rebuilt packaged Sidecar also created a real rotating JSONL log at:
+
+```text
+~/Library/Application Support/io.tracegate.studio/logs/tracegate-studio.jsonl
+```
+
+The observed records included Sidecar start, migration, API ready, Uvicorn
+shutdown, database disposal and process-finished events. Tests verify bearer,
+provider-token and key-pattern redaction; the handler is capped at 5 MiB with
+three backups.
+
+The desktop settings page reported `macOS Keychain` for both credential types
+and never returned a secret value. The explicit native integration test wrote,
+read and deleted a dedicated verification credential:
+
+```text
+cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml \
+  credentials::tests::native_secure_store_round_trip -- --ignored
+test credentials::tests::native_secure_store_round_trip ... ok
+```
+
+Production credentials are injected into the child environment only when the
+Sidecar starts; changing one in Settings clearly requires an application
+restart. No credential is stored in SQLite, browser storage, frontend state
+beyond the password-field submission, API responses, or ordinary logs.
+
 Desktop screenshot:
 
 - `docs/screenshots/p0-desktop-macos.png`
@@ -96,11 +122,11 @@ Desktop screenshot:
 
 ```text
 artifacts/macos/TraceGate-Studio-macos-arm64.zip
-SHA-256: 47424653173a1718a282cbc5eb992f831d3b7a7dd5cc2933aaeca43f1b714791
+SHA-256: 808ff6dc29cbedb457ed66a6dd0cbcf42d8fe4e1d9d4f244157684b81882f4d6
 ```
 
 `artifacts/` is intentionally ignored because these are local build outputs.
-The checked-in `SHA256SUMS.txt` is not used to imply code signing.
+The generated `SHA256SUMS.txt` is not used to imply code signing.
 
 ## Distribution/signing limitation
 

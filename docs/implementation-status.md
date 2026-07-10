@@ -36,20 +36,20 @@
 | Repository audit and baseline | VERIFIED_MACOS | `docs/current-baseline.md` plus recorded commands |
 | Architecture decision | VERIFIED_MACOS | ADR boundaries were exercised by the packaged macOS app; see `docs/verification/p0-macos.md` |
 | Development branch | VERIFIED_MACOS | `feat/tracegate-studio-fullstack` created from `76a23ab` |
-| Monorepo workspace and locked Node dependencies | VERIFIED_MACOS | pnpm workspace, `pnpm-lock.yaml`, frozen install and 12 tests |
+| Monorepo workspace and locked Node dependencies | VERIFIED_MACOS | pnpm workspace, `pnpm-lock.yaml`, frozen install and 14 tests |
 | Locked Python environment | VERIFIED_MACOS | `uv.lock`; frozen uv environment used for tests and packaging |
 | React + strict TypeScript browser client | VERIFIED_MACOS | Real Dashboard/onboarding/settings browser run and screenshots |
-| Typed API client and shared types | VERIFIED_MACOS | Zod-validated client; 8 package tests plus web integration tests |
+| Typed API client and shared types | VERIFIED_MACOS | Zod-validated client; 9 package tests plus 5 web integration tests |
 | FastAPI `/api/v1` service | VERIFIED_MACOS | Authenticated API tests and real browser/desktop process |
 | Local API authentication and CORS | VERIFIED_MACOS | Auth/CORS tests plus Tauri-origin runtime verification |
 | SQLAlchemy 2 persistence | VERIFIED_MACOS | Studio models and API persistence tests |
 | SQLite default database | VERIFIED_MACOS | Real onboarding/settings persistence and database tests |
 | Alembic migration and SQLite migration test | VERIFIED_MACOS | `20260710_0001`; fresh/idempotent migration tests |
-| Structured/redacted rotating logs | NOT_STARTED | Existing redaction can be reused |
+| Structured/redacted rotating logs | VERIFIED_MACOS | Packaged Sidecar wrote redacted JSONL with 5 MiB/3-backup limits and clean shutdown events |
 | System status API | VERIFIED_MACOS | Explicit ready/not-configured/unavailable states tested and rendered |
 | Diagnostics API/page | NOT_STARTED | P0 status is present; full diagnostics remains separate work |
 | Non-secret settings persistence | VERIFIED_MACOS | Theme/language/background choices persist; API never accepts a secret |
-| Platform secure credential storage | NOT_STARTED | Keychain/Credential Manager bridge is not implemented |
+| Platform secure credential storage | VERIFIED_MACOS | Native Keychain round-trip passed and deleted its verification entry; Windows code awaits CI |
 | Python Sidecar entry and health check | VERIFIED_MACOS | Independent and packaged authenticated health checks passed |
 | macOS arm64 PyInstaller Sidecar | VERIFIED_MACOS | Native Mach-O artifact built and bundled |
 | Tauri 2 shell | VERIFIED_MACOS | Packaged `.app` launched with real Sidecar/WebView |

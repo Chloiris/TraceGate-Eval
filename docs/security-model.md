@@ -43,22 +43,22 @@ untrusted data. They cannot change system policy or grant tool permission.
 
 | Threat | Required control | Initial state |
 | --- | --- | --- |
-| Another local process calls the Sidecar | Random per-launch bearer token, loopback bind, restrictive CORS, no token logging | IN_PROGRESS |
+| Another local process calls the Sidecar | Random per-launch bearer token, loopback bind, restrictive CORS, no token logging | VERIFIED_MACOS |
 | Directory traversal | Resolve canonical path and require containment below enrolled root | NOT_STARTED |
 | Symlink escape | Resolve each target before read/write and reject outside targets | NOT_STARTED |
 | Sensitive-file read | Deny `.env`, SSH, cloud credentials, keychains and configurable patterns | NOT_STARTED |
 | Prompt injection | Treat repository/PR/model text as quoted evidence; policy is out of prompt control | NOT_STARTED |
 | Arbitrary command execution | Argument-vector allowlist, repository cwd, timeout, output cap and filtered env | NOT_STARTED |
 | Destructive patching | Write tool disabled by default; show patch/diff; separate confirmation for external mutations | NOT_STARTED |
-| Credential disclosure | Platform secure storage, redacted logs/API/traces and narrow provider adapters | NOT_STARTED |
+| Credential disclosure | Platform secure storage, redacted logs/API/traces and narrow provider adapters | VERIFIED_MACOS |
 | Cross-repository leakage | Repository ID/root attached to every run, tool call and evidence lookup | NOT_STARTED |
 | Stale evidence | Bind run, index and evidence to base/head SHA; verifier rejects mismatches | NOT_STARTED |
 | Invented dependencies | Graph edges come from Git/parser/index only; model annotations are non-authoritative | NOT_STARTED |
 | Webhook forgery/replay | HMAC SHA-256 verification, constant-time compare and delivery-ID deduplication | NOT_STARTED |
-| Malicious frontend content | React escaping, CSP, no unsafe HTML, schema validation and bounded response sizes | IN_PROGRESS |
-| Tauri privilege escalation | Minimal capabilities and commands; no shell plugin by default | NOT_STARTED |
-| Orphan/duplicate Sidecar | Single instance, PID ownership, bounded restart and graceful true-quit | NOT_STARTED |
-| Log/data accumulation | Rotation, retention, explicit export/delete and no source telemetry | NOT_STARTED |
+| Malicious frontend content | React escaping, CSP, no unsafe HTML, schema validation and bounded response sizes | VERIFIED_MACOS |
+| Tauri privilege escalation | Minimal capabilities and commands; no shell plugin permission exposed to the WebView | VERIFIED_MACOS |
+| Orphan/duplicate Sidecar | Single instance, PID ownership, bounded restart and graceful true-quit | VERIFIED_MACOS |
+| Log/data accumulation | Rotation, retention, explicit export/delete and no source telemetry | IN_PROGRESS |
 
 ## Local API
 
