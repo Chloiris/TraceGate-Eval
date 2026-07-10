@@ -1,6 +1,8 @@
 use tauri::{AppHandle, Manager, RunEvent, Runtime};
 
-use crate::{deep_link, state::DesktopState, window};
+use crate::state::DesktopState;
+#[cfg(target_os = "macos")]
+use crate::{deep_link, window};
 
 pub fn request_exit<R: Runtime>(app: &AppHandle<R>) {
     let state = app.state::<DesktopState>();

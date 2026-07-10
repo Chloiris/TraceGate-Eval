@@ -93,7 +93,7 @@ jobs:
           upgrade_database(url)
           engine = create_engine(url)
           try:
-              require_current_revision(engine)
+              require_current_revision(engine, url)
               assert "app_settings" in inspect(engine).get_table_names()
               print(current_revision(engine))
           finally:
