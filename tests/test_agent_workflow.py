@@ -11,7 +11,15 @@ from tracegate.models import ModelResult
 from tracegate.studio.database import StudioDatabase
 from tracegate.studio.index_store import persist_repository_index
 from tracegate.studio.migration_runner import upgrade_database
-from tracegate.studio.models import AgentRun, AgentStep, EvidenceRecord, Finding, PullRequest, Repository, ToolCallRecord
+from tracegate.studio.models import (
+    AgentRun,
+    AgentStep,
+    EvidenceRecord,
+    Finding,
+    PullRequest,
+    Repository,
+    ToolCallRecord,
+)
 from tracegate.tools import create_read_only_registry
 
 
@@ -21,14 +29,16 @@ class RecordingModel:
     def __init__(self) -> None:
         self.calls: list[str] = []
 
-    async def complete_structured(self, *, system_prompt: str, user_prompt: str, output_schema):  # type: ignore[no-untyped-def]
+    async def complete_structured(
+        self, *, system_prompt: str, user_prompt: str, output_schema
+    ):  # type: ignore[no-untyped-def]
         self.calls.append(output_schema.__name__)
         evidence_match = re.search(r"\[(studio-evidence:[^\]]+)\]", user_prompt)
         evidence_id = evidence_match.group(1) if evidence_match else ""
         payloads = {
             "PlanOutput": {
                 "objective": "Review the indexed function",
-                "retrieval_queries": ["indexed_function"],
+                "retrieval_queries": ["query-that-does-not-match-the-repository"],
                 "focus_areas": ["security"],
             },
             "FindingsOutput": {
@@ -70,23 +80,37 @@ def _git(command: list[str], cwd: Path) -> None:
 
 
 @pytest.mark.asyncio
-async def test_langgraph_workflow_persists_steps_tools_evidence_and_verified_finding(tmp_path: Path) -> None:
+async def test_langgraph_workflow_persists_steps_tools_evidence_and_verified_finding(
+    tmp_path: Path,
+) -> None:
     workspace = tmp_path / "repo"
     workspace.mkdir()
     _git(["init", "-q"], workspace)
     _git(["config", "user.email", "tracegate@example.invalid"], workspace)
     _git(["config", "user.name", "TraceGate Test"], workspace)
-    (workspace / "main.py").write_text("def indexed_function():\n    return 0\n", encoding="utf-8")
+    (workspace / "main.py").write_text(
+        "def indexed_function():\n    return 0\n", encoding="utf-8"
+    )
     _git(["add", "."], workspace)
     _git(["commit", "-qm", "base fixture"], workspace)
     base_sha = subprocess.run(
-        ["git", "rev-parse", "HEAD"], cwd=workspace, check=True, capture_output=True, text=True
+        ["git", "rev-parse", "HEAD"],
+        cwd=workspace,
+        check=True,
+        capture_output=True,
+        text=True,
     ).stdout.strip()
-    (workspace / "main.py").write_text("def indexed_function():\n    return -1\n", encoding="utf-8")
+    (workspace / "main.py").write_text(
+        "def indexed_function():\n    return -1\n", encoding="utf-8"
+    )
     _git(["add", "."], workspace)
     _git(["commit", "-qm", "agent fixture"], workspace)
     head_sha = subprocess.run(
-        ["git", "rev-parse", "HEAD"], cwd=workspace, check=True, capture_output=True, text=True
+        ["git", "rev-parse", "HEAD"],
+        cwd=workspace,
+        check=True,
+        capture_output=True,
+        text=True,
     ).stdout.strip()
 
     url = f"sqlite+pysqlite:///{(tmp_path / 'studio.db').as_posix()}"
@@ -139,7 +163,12 @@ async def test_langgraph_workflow_persists_steps_tools_evidence_and_verified_fin
         result = await workflow.run(run_id)
 
         assert result["report"]["recommended_review_order"] == ["main.py"]
-        assert model.calls == ["PlanOutput", "FindingsOutput", "RiskJudgmentOutput", "ReportOutput"]
+        assert model.calls == [
+            "PlanOutput",
+            "FindingsOutput",
+            "RiskJudgmentOutput",
+            "ReportOutput",
+        ]
         with database.session_factory() as session:
             stored_run = session.get(AgentRun, run_id)
             assert stored_run is not None
@@ -148,10 +177,30 @@ async def test_langgraph_workflow_persists_steps_tools_evidence_and_verified_fin
             assert stored_run.input_tokens == 40
             assert stored_run.retrieval_hit_count >= 1
             assert stored_run.context_scope == "changed_files"
-            assert session.scalar(select_count(AgentStep, AgentStep.agent_run_id == run_id)) == 7
-            assert session.scalar(select_count(EvidenceRecord, EvidenceRecord.agent_run_id == run_id)) >= 1
+            assert (
+                session.scalar(
+                    select_count(AgentStep, AgentStep.agent_run_id == run_id)
+                )
+                == 7
+            )
+            assert (
+                session.scalar(
+                    select_count(EvidenceRecord, EvidenceRecord.agent_run_id == run_id)
+                )
+                >= 1
+            )
             assert session.scalar(select_count(ToolCallRecord)) >= 1
-            finding = session.query(Finding).filter(Finding.agent_run_id == run_id).one()
+            evidence = (
+                session.query(EvidenceRecord)
+                .filter(EvidenceRecord.agent_run_id == run_id)
+                .one()
+            )
+            assert evidence.payload_json["source"] == "changed_file_diff"
+            assert "@@" in evidence.payload_json["snippet"]
+            assert "return -1" in evidence.payload_json["snippet"]
+            finding = (
+                session.query(Finding).filter(Finding.agent_run_id == run_id).one()
+            )
             assert finding.commit_sha == head_sha
             assert finding.verifier_status == "verified"
             assert finding.evidence_ids_json
@@ -159,7 +208,10 @@ async def test_langgraph_workflow_persists_steps_tools_evidence_and_verified_fin
             assert stored_pr is not None
             assert stored_pr.risk_level == "medium"
             assert stored_pr.risk_score == 40.0
-            assert stored_pr.conclusion_summary == "One evidence-bound concern requires review."
+            assert (
+                stored_pr.conclusion_summary
+                == "One evidence-bound concern requires review."
+            )
             assert stored_pr.impact_paths_json == ["main.py"]
             assert stored_pr.recommended_review_order_json == ["main.py"]
     finally:

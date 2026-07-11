@@ -38,6 +38,13 @@ def _id(prefix: str, value: str) -> str:
     return f"{prefix}:{hashlib.sha256(value.encode()).hexdigest()[:20]}"
 
 
+def _symbol_id(path: str, qualified_name: str, start_line: int) -> str:
+    # Conditional or compatibility branches may declare the same qualified
+    # symbol more than once in one file. The declaration line keeps each real
+    # graph node stable and distinct.
+    return _id("symbol", f"{path}:{qualified_name}:{start_line}")
+
+
 def build_repository_map(repository_id: str, snapshot: IndexSnapshot) -> RepositoryMap:
     repository_node = _id("repository", repository_id)
     nodes: list[GraphNode] = [
@@ -75,7 +82,14 @@ def build_repository_map(repository_id: str, snapshot: IndexSnapshot) -> Reposit
         test_file = (
             basename.startswith("test_")
             or basename.endswith(
-                (".test.js", ".test.jsx", ".test.ts", ".test.tsx", ".spec.js", ".spec.ts")
+                (
+                    ".test.js",
+                    ".test.jsx",
+                    ".test.ts",
+                    ".test.tsx",
+                    ".spec.js",
+                    ".spec.ts",
+                )
             )
             or "/tests/" in f"/{path}/"
         )
@@ -99,7 +113,7 @@ def build_repository_map(repository_id: str, snapshot: IndexSnapshot) -> Reposit
             )
         )
         for symbol in indexed.parsed.symbols:
-            symbol_id = _id("symbol", f"{path}:{symbol.qualified_name}")
+            symbol_id = _symbol_id(path, symbol.qualified_name, symbol.start_line)
             nodes.append(
                 GraphNode(
                     symbol_id,
@@ -110,7 +124,14 @@ def build_repository_map(repository_id: str, snapshot: IndexSnapshot) -> Reposit
                     language=indexed.parsed.language,
                 )
             )
-            edges.append(GraphEdge(_id("edge", f"{file_id}:{symbol_id}:contains"), file_id, symbol_id, "contains"))
+            edges.append(
+                GraphEdge(
+                    _id("edge", f"{file_id}:{symbol_id}:contains"),
+                    file_id,
+                    symbol_id,
+                    "contains",
+                )
+            )
 
     for path, indexed in sorted(snapshot.files.items()):
         source = file_nodes[path]
@@ -119,23 +140,46 @@ def build_repository_map(repository_id: str, snapshot: IndexSnapshot) -> Reposit
             target_path = module_to_path.get(normalized)
             if target_path:
                 target = file_nodes[target_path]
-                edges.append(GraphEdge(_id("edge", f"{source}:{target}:import"), source, target, "import"))
+                edges.append(
+                    GraphEdge(
+                        _id("edge", f"{source}:{target}:import"),
+                        source,
+                        target,
+                        "import",
+                    )
+                )
         symbols_by_name = {symbol.name: symbol for symbol in indexed.parsed.symbols}
         symbol_ids = {
-            symbol.name: _id("symbol", f"{path}:{symbol.qualified_name}")
+            symbol.name: _symbol_id(path, symbol.qualified_name, symbol.start_line)
             for symbol in indexed.parsed.symbols
         }
+        symbol_ids_by_qualified: dict[str, str] = {}
+        for symbol in indexed.parsed.symbols:
+            symbol_ids_by_qualified.setdefault(
+                symbol.qualified_name,
+                _symbol_id(path, symbol.qualified_name, symbol.start_line),
+            )
         for reference in indexed.parsed.references:
             simple_target = reference.target.rsplit(".", 1)[-1]
             if reference.source_symbol and simple_target in symbols_by_name:
-                source_id = _id("symbol", f"{path}:{reference.source_symbol}")
+                source_id = symbol_ids_by_qualified.get(reference.source_symbol)
+                if source_id is None:
+                    continue
                 target_id = symbol_ids[simple_target]
-                edges.append(GraphEdge(_id("edge", f"{source_id}:{target_id}:call"), source_id, target_id, "call"))
+                edges.append(
+                    GraphEdge(
+                        _id("edge", f"{source_id}:{target_id}:call"),
+                        source_id,
+                        target_id,
+                        "call",
+                    )
+                )
 
+    unique_edges = tuple(dict.fromkeys(edges))
     return RepositoryMap(
         repository_id=repository_id,
         commit_sha=snapshot.commit_sha,
         index_version=snapshot.id,
         nodes=tuple(nodes),
-        edges=tuple(edges),
+        edges=unique_edges,
     )

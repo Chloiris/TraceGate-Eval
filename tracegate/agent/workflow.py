@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import asyncio
-import hashlib
 import json
 import os
 import time
@@ -11,11 +10,17 @@ from typing import Any, Literal, TypedDict
 
 from langgraph.graph import END, START, StateGraph
 from pydantic import BaseModel, ConfigDict, Field
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
 
 from tracegate.models import ModelProvider
-from tracegate.pr_advisor.evidence_packet import EvidenceItem, EvidencePacket, detect_risk_areas, sanitize_text, stable_id
+from tracegate.pr_advisor.evidence_packet import (
+    EvidenceItem,
+    EvidencePacket,
+    detect_risk_areas,
+    sanitize_text,
+    stable_id,
+)
 from tracegate.pr_advisor.verifier import verify_judgment
 from tracegate.repository import RepositoryBoundary, RepositoryPathError
 from tracegate.retrieval import hybrid_retrieve
@@ -84,7 +89,12 @@ class FindingsOutput(BaseModel):
 
 class RiskJudgmentOutput(BaseModel):
     evidence_status: Literal[
-        "active", "stale", "unknown", "conflicting", "needs_more_evidence", "no_relevant_claim"
+        "active",
+        "stale",
+        "unknown",
+        "conflicting",
+        "needs_more_evidence",
+        "no_relevant_claim",
     ]
     expected_decision: Literal["preserve", "revise", "verify_first", "none"]
     evidence_used: list[str] = Field(default_factory=list)
@@ -132,7 +142,9 @@ class TraceGateAgentWorkflow:
         model: ModelProvider,
         tools: ToolRegistry,
         *,
-        context_scope: Literal["changed_files", "retrieved_context"] = "retrieved_context",
+        context_scope: Literal[
+            "changed_files", "retrieved_context"
+        ] = "retrieved_context",
     ) -> None:
         self.session_factory = session_factory
         self.model = model
@@ -162,7 +174,9 @@ class TraceGateAgentWorkflow:
             if run is None:
                 raise WorkflowExecutionError("Agent Run was not found")
             if not run.pull_request_id or not run.head_sha or not run.index_version:
-                raise WorkflowExecutionError("Agent Run is missing PR, Head SHA, or Index Version")
+                raise WorkflowExecutionError(
+                    "Agent Run is missing PR, Head SHA, or Index Version"
+                )
             run.status = "running"
             run.workflow_version = WORKFLOW_VERSION
             run.prompt_version = PROMPT_VERSION
@@ -193,7 +207,11 @@ class TraceGateAgentWorkflow:
                     run.status = "cancelled"
                     run.current_node = None
                     run.finished_at = utcnow()
-                    pull_request = session.get(PullRequest, run.pull_request_id) if run.pull_request_id else None
+                    pull_request = (
+                        session.get(PullRequest, run.pull_request_id)
+                        if run.pull_request_id
+                        else None
+                    )
                     if pull_request:
                         pull_request.analysis_status = "cancelled"
                     session.commit()
@@ -209,11 +227,17 @@ class TraceGateAgentWorkflow:
                     run.error_code = type(exc).__name__
                     run.error_message = sanitize_text(exc, max_chars=2000)
                     run.finished_at = utcnow()
-                    pull_request = session.get(PullRequest, run.pull_request_id) if run.pull_request_id else None
+                    pull_request = (
+                        session.get(PullRequest, run.pull_request_id)
+                        if run.pull_request_id
+                        else None
+                    )
                     if pull_request:
                         pull_request.analysis_status = "failed"
                     session.commit()
-            raise WorkflowExecutionError(f"Agent workflow failed: {type(exc).__name__}") from exc
+            raise WorkflowExecutionError(
+                f"Agent workflow failed: {type(exc).__name__}"
+            ) from exc
         with self.session_factory() as session:
             run = session.get(AgentRun, run_id)
             if run:
@@ -225,7 +249,11 @@ class TraceGateAgentWorkflow:
                 run.retry_count = result.get("retry_count", 0)
                 run.retrieval_hit_count = result.get("retrieval_hit_count", 0)
                 run.finished_at = utcnow()
-                pull_request = session.get(PullRequest, run.pull_request_id) if run.pull_request_id else None
+                pull_request = (
+                    session.get(PullRequest, run.pull_request_id)
+                    if run.pull_request_id
+                    else None
+                )
                 if pull_request:
                     pull_request.analysis_status = "completed"
                 session.commit()
@@ -260,7 +288,11 @@ class TraceGateAgentWorkflow:
                 with self.session_factory() as session:
                     step = session.get(AgentStep, step_id)
                     if step:
-                        step.status = "cancelled" if isinstance(exc, WorkflowCancelled) else "failed"
+                        step.status = (
+                            "cancelled"
+                            if isinstance(exc, WorkflowCancelled)
+                            else "failed"
+                        )
                         step.error_code = type(exc).__name__
                         step.error_message = sanitize_text(exc, max_chars=2000)
                         step.finished_at = utcnow()
@@ -307,25 +339,37 @@ class TraceGateAgentWorkflow:
                 "Repository Retriever",
                 session_factory=self.session_factory,
                 pull_request_id=state.get("pull_request_id"),
-                github_token=os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN"),
+                github_token=os.environ.get("GITHUB_TOKEN")
+                or os.environ.get("GH_TOKEN"),
             )
             for query in plan.retrieval_queries[:3]:
                 before = len(self.tools.invocations)
                 try:
-                    output = await self.tools.execute("search_code", {"query": query, "max_results": 20}, context)
-                    results.extend({**item, "kind": "text", "source": "ripgrep", "score": 60.0} for item in output["matches"])
+                    output = await self.tools.execute(
+                        "search_code", {"query": query, "max_results": 20}, context
+                    )
+                    results.extend(
+                        {**item, "kind": "text", "source": "ripgrep", "score": 60.0}
+                        for item in output["matches"]
+                    )
                     status, error_code = "completed", None
                 except ToolExecutionError as exc:
                     output = {"error": exc.code}
                     status, error_code = "failed", exc.code
-                invocation = self.tools.invocations[-1] if len(self.tools.invocations) > before else None
+                invocation = (
+                    self.tools.invocations[-1]
+                    if len(self.tools.invocations) > before
+                    else None
+                )
                 with self.session_factory() as session:
                     session.add(
                         ToolCallRecord(
                             agent_step_id=step_id,
                             tool_name="search_code",
                             permission="REPOSITORY_READ",
-                            arguments_summary=json.dumps({"query": query}, ensure_ascii=False),
+                            arguments_summary=json.dumps(
+                                {"query": query}, ensure_ascii=False
+                            ),
                             output_summary=sanitize_text(output, max_chars=2000),
                             status=status,
                             duration_ms=invocation.duration_ms if invocation else None,
@@ -339,8 +383,14 @@ class TraceGateAgentWorkflow:
             if key[0] and key not in deduplicated:
                 deduplicated[key] = item
         if self.context_scope == "changed_files":
-            if not repository.local_path or not pull_request.base_sha or not pull_request.head_sha:
-                raise WorkflowExecutionError("Changed-file-only model context requires a local workspace and Base/Head SHAs")
+            if (
+                not repository.local_path
+                or not pull_request.base_sha
+                or not pull_request.head_sha
+            ):
+                raise WorkflowExecutionError(
+                    "Changed-file-only model context requires a local workspace and Base/Head SHAs"
+                )
             try:
                 boundary = RepositoryBoundary(Path(repository.local_path))
                 git = GitProvider(boundary)
@@ -355,42 +405,61 @@ class TraceGateAgentWorkflow:
                     if line.strip()
                 }
             except (OSError, RepositoryPathError, GitCommandError) as exc:
-                raise WorkflowExecutionError("Could not resolve changed-file-only model context") from exc
-            deduplicated = {
-                key: item for key, item in deduplicated.items() if key[0] in changed_paths
-            }
-            missing = changed_paths - {key[0] for key in deduplicated}
-            if missing:
+                raise WorkflowExecutionError(
+                    "Could not resolve changed-file-only model context"
+                ) from exc
+            changed_context: dict[tuple[str, str | None], dict[str, Any]] = {}
+            if changed_paths:
                 with self.session_factory() as session:
                     rows = list(
                         session.scalars(
                             select(IndexedFile).where(
                                 IndexedFile.index_version_id == state["index_version"],
-                                IndexedFile.path.in_(sorted(missing)),
+                                IndexedFile.path.in_(sorted(changed_paths)),
                             )
                         )
                     )
                 for row in rows:
-                    deduplicated[(row.path, None)] = {
+                    diff_snippet = git.run(
+                        "diff",
+                        "--unified=12",
+                        f"{pull_request.base_sha}...{pull_request.head_sha}",
+                        "--",
+                        row.path,
+                    ).stdout
+                    changed_context[(row.path, None)] = {
                         "path": row.path,
                         "symbol": None,
-                        "snippet": row.content,
-                        "source": "changed_file_index",
+                        "snippet": diff_snippet or row.content,
+                        "source": "changed_file_diff"
+                        if diff_snippet
+                        else "changed_file_index",
                         "score": 100.0,
                     }
+            deduplicated = changed_context
         bounded = list(deduplicated.values())[:30]
         return {"retrieval": bounded, "retrieval_hit_count": len(bounded)}
 
-    async def _context_resolver(self, state: WorkflowState, _step_id: str) -> WorkflowState:
+    async def _context_resolver(
+        self, state: WorkflowState, _step_id: str
+    ) -> WorkflowState:
         repository, pull_request = self._repository_and_pr(state)
         if pull_request.head_sha != state["head_sha"]:
-            raise WorkflowExecutionError("Pull Request Head SHA changed after this run was queued")
+            raise WorkflowExecutionError(
+                "Pull Request Head SHA changed after this run was queued"
+            )
         evidence_ids: list[str] = []
         seen_paths: set[str] = set()
         with self.session_factory() as session:
             version = session.get(IndexVersion, state["index_version"])
-            if version is None or version.repository_id != repository.id or version.commit_sha != state["head_sha"]:
-                raise WorkflowExecutionError("Index Version is not bound to the Pull Request Head SHA")
+            if (
+                version is None
+                or version.repository_id != repository.id
+                or version.commit_sha != state["head_sha"]
+            ):
+                raise WorkflowExecutionError(
+                    "Index Version is not bound to the Pull Request Head SHA"
+                )
             for item in state.get("retrieval", [])[:20]:
                 path = item.get("path")
                 if not isinstance(path, str):
@@ -406,7 +475,9 @@ class TraceGateAgentWorkflow:
                 )
                 if indexed is None:
                     continue
-                evidence_id = stable_id("studio-evidence", state["run_id"], path, indexed.content_hash)
+                evidence_id = stable_id(
+                    "studio-evidence", state["run_id"], path, indexed.content_hash
+                )
                 if session.get(EvidenceRecord, evidence_id) is None:
                     session.add(
                         EvidenceRecord(
@@ -418,7 +489,12 @@ class TraceGateAgentWorkflow:
                             commit_sha=state["head_sha"],
                             content_hash=indexed.content_hash,
                             payload_json={
-                                "snippet": sanitize_text(item.get("snippet") or item.get("text") or indexed.content, max_chars=2000),
+                                "snippet": sanitize_text(
+                                    item.get("snippet")
+                                    or item.get("text")
+                                    or indexed.content,
+                                    max_chars=2000,
+                                ),
                                 "source": item.get("source"),
                                 "score": item.get("score"),
                             },
@@ -448,7 +524,9 @@ class TraceGateAgentWorkflow:
             **self._usage_update(state, result),
         }
 
-    async def _risk_reviewer(self, state: WorkflowState, _step_id: str) -> WorkflowState:
+    async def _risk_reviewer(
+        self, state: WorkflowState, _step_id: str
+    ) -> WorkflowState:
         result = await self.model.complete_structured(
             system_prompt="Classify whether the supplied evidence is active, stale, unknown, or conflicting under TraceGate semantics.",
             user_prompt=(
@@ -466,16 +544,26 @@ class TraceGateAgentWorkflow:
         repository, pull_request = self._repository_and_pr(state)
         with self.session_factory() as session:
             evidence = list(
-                session.scalars(select(EvidenceRecord).where(EvidenceRecord.agent_run_id == state["run_id"]))
+                session.scalars(
+                    select(EvidenceRecord).where(
+                        EvidenceRecord.agent_run_id == state["run_id"]
+                    )
+                )
             )
         packet = EvidencePacket(
             repo=repository.full_name,
             pr_number=pull_request.number,
             pr_url=pull_request.url,
             title=pull_request.title,
-            changed_files=sorted({item.file_path for item in evidence if item.file_path}),
-            risk_areas=detect_risk_areas(pull_request.title, *(item.file_path for item in evidence)),
-            candidate_claims=[item.get("title", "") for item in state.get("findings", [])],
+            changed_files=sorted(
+                {item.file_path for item in evidence if item.file_path}
+            ),
+            risk_areas=detect_risk_areas(
+                pull_request.title, *(item.file_path for item in evidence)
+            ),
+            candidate_claims=[
+                item.get("title", "") for item in state.get("findings", [])
+            ],
             evidence_items=[
                 EvidenceItem(
                     evidence_id=item.id,
@@ -489,44 +577,60 @@ class TraceGateAgentWorkflow:
                 )
                 for item in evidence
             ],
-            missing_evidence=[] if evidence else ["No commit-bound repository evidence was retrieved."],
+            missing_evidence=[]
+            if evidence
+            else ["No commit-bound repository evidence was retrieved."],
         )
         verified_judgment = verify_judgment(packet, dict(state["judgment"]))
         evidence_by_id = {item.id: item for item in evidence}
         with self.session_factory() as session:
             indexed_rows = list(
                 session.scalars(
-                    select(IndexedFile).where(IndexedFile.index_version_id == state["index_version"])
+                    select(IndexedFile).where(
+                        IndexedFile.index_version_id == state["index_version"]
+                    )
                 )
             )
-        line_counts = {item.path: len(item.content.splitlines()) for item in indexed_rows}
+        line_counts = {
+            item.path: len(item.content.splitlines()) for item in indexed_rows
+        }
         verified_findings: list[dict[str, Any]] = []
         for raw in state.get("findings", []):
             finding = FindingDraft.model_validate(raw)
             valid_ids = [
                 evidence_id
                 for evidence_id in finding.evidence_ids
-                if evidence_id in evidence_by_id and evidence_by_id[evidence_id].commit_sha == state["head_sha"]
+                if evidence_id in evidence_by_id
+                and evidence_by_id[evidence_id].commit_sha == state["head_sha"]
             ]
             path_is_cited = finding.path is None or any(
-                evidence_by_id[evidence_id].file_path == finding.path for evidence_id in valid_ids
+                evidence_by_id[evidence_id].file_path == finding.path
+                for evidence_id in valid_ids
             )
             line_range_valid = (
                 finding.start_line is None
                 or finding.end_line is None
                 or (
                     finding.path in line_counts
-                    and finding.start_line <= finding.end_line <= line_counts[finding.path]
+                    and finding.start_line
+                    <= finding.end_line
+                    <= line_counts[finding.path]
                 )
             )
-            verifier_status = "verified" if valid_ids and path_is_cited and line_range_valid else "needs_confirmation"
+            verifier_status = (
+                "verified"
+                if valid_ids and path_is_cited and line_range_valid
+                else "needs_confirmation"
+            )
             updated = finding.model_dump(mode="json")
             updated["evidence_ids"] = valid_ids
             updated["verifier_status"] = verifier_status
             verified_findings.append(updated)
         return {"findings": verified_findings, "judgment": verified_judgment}
 
-    async def _report_composer(self, state: WorkflowState, _step_id: str) -> WorkflowState:
+    async def _report_composer(
+        self, state: WorkflowState, _step_id: str
+    ) -> WorkflowState:
         result = await self.model.complete_structured(
             system_prompt="Compose a concise evidence-bound review report and file review order.",
             user_prompt=json.dumps(
@@ -541,12 +645,16 @@ class TraceGateAgentWorkflow:
         )
         report = ReportOutput.model_validate(result.payload)
         evidence_paths = {
-            item.get("path") for item in state.get("findings", []) if isinstance(item.get("path"), str)
+            item.get("path")
+            for item in state.get("findings", [])
+            if isinstance(item.get("path"), str)
         }
         verified_report = report.model_copy(
             update={
                 "recommended_review_order": [
-                    path for path in report.recommended_review_order if path in evidence_paths
+                    path
+                    for path in report.recommended_review_order
+                    if path in evidence_paths
                 ]
             }
         )
@@ -572,13 +680,21 @@ class TraceGateAgentWorkflow:
                         symbol=finding.symbol,
                         evidence_ids_json=item.get("evidence_ids", []),
                         suggested_action=finding.suggested_action,
-                        verifier_status=item.get("verifier_status", "needs_confirmation"),
+                        verifier_status=item.get(
+                            "verifier_status", "needs_confirmation"
+                        ),
                         model_profile=self.model.profile,
                     )
                 )
             pull_request = session.get(PullRequest, state["pull_request_id"])
             if pull_request is not None:
-                severity_weight = {"info": 10, "low": 25, "medium": 50, "high": 75, "critical": 100}
+                severity_weight = {
+                    "info": 10,
+                    "low": 25,
+                    "medium": 50,
+                    "high": 75,
+                    "critical": 100,
+                }
                 highest = max(
                     persisted_findings,
                     key=lambda item: (severity_weight[item.severity], item.confidence),
@@ -598,9 +714,14 @@ class TraceGateAgentWorkflow:
                     verified_report.recommended_review_order
                 )
             session.commit()
-        return {"report": verified_report.model_dump(mode="json"), **self._usage_update(state, result)}
+        return {
+            "report": verified_report.model_dump(mode="json"),
+            **self._usage_update(state, result),
+        }
 
-    def _repository_and_pr(self, state: WorkflowState) -> tuple[Repository, PullRequest]:
+    def _repository_and_pr(
+        self, state: WorkflowState
+    ) -> tuple[Repository, PullRequest]:
         with self.session_factory() as session:
             repository = session.get(Repository, state["repository_id"])
             pull_request = session.get(PullRequest, state["pull_request_id"])
@@ -614,7 +735,9 @@ class TraceGateAgentWorkflow:
         with self.session_factory() as session:
             rows = list(
                 session.scalars(
-                    select(EvidenceRecord).where(EvidenceRecord.agent_run_id == state["run_id"])
+                    select(EvidenceRecord).where(
+                        EvidenceRecord.agent_run_id == state["run_id"]
+                    )
                 )
             )
         return "\n".join(
@@ -634,4 +757,6 @@ class TraceGateAgentWorkflow:
     @staticmethod
     def _state_summary(value: dict[str, Any]) -> str:
         safe = {key: item for key, item in value.items() if key not in {"retrieval"}}
-        return sanitize_text(json.dumps(safe, ensure_ascii=False, default=str), max_chars=2000)
+        return sanitize_text(
+            json.dumps(safe, ensure_ascii=False, default=str), max_chars=2000
+        )
