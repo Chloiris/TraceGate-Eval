@@ -14,7 +14,9 @@ from tracegate.indexing import (
     IndexSnapshot,
     LanguageCapability,
     ParsedFile,
+    RelationStatus,
     RepositoryIndexer,
+    TypeRelation,
 )
 from tracegate.indexing.indexer import IndexedFile as SnapshotFile
 from tracegate.indexing.parser import SymbolKind
@@ -52,6 +54,7 @@ def _latest_snapshot(session: Session, repository_id: str) -> IndexSnapshot | No
             language=row.language,
             capabilities=tuple(LanguageCapability(item) for item in row.capabilities_json),
             imports=tuple(row.imports_json),
+            exports=tuple(row.exports_json),
             symbols=tuple(
                 CodeSymbol(
                     name=item.name,
@@ -63,7 +66,24 @@ def _latest_snapshot(session: Session, repository_id: str) -> IndexSnapshot | No
                 )
                 for item in symbols
             ),
-            references=tuple(CodeReference(**item) for item in row.references_json),
+            references=tuple(
+                CodeReference(
+                    **{
+                        **item,
+                        "status": RelationStatus(item.get("status", "unknown")),
+                    }
+                )
+                for item in row.references_json
+            ),
+            relationships=tuple(
+                TypeRelation(
+                    **{
+                        **item,
+                        "status": RelationStatus(item.get("status", "unknown")),
+                    }
+                )
+                for item in row.relationships_json
+            ),
         )
         files[row.path] = SnapshotFile(row.path, row.content_hash, row.size_bytes, parsed)
     return IndexSnapshot(
@@ -133,6 +153,7 @@ def persist_repository_index(session: Session, repository: Repository) -> tuple[
                 size_bytes=item.size_bytes,
                 capabilities_json=[capability.value for capability in item.parsed.capabilities],
                 imports_json=list(item.parsed.imports),
+                exports_json=list(item.parsed.exports),
                 references_json=[
                     {
                         "source_symbol": reference.source_symbol,
@@ -140,8 +161,19 @@ def persist_repository_index(session: Session, repository: Repository) -> tuple[
                         "kind": reference.kind,
                         "line": reference.line,
                         "resolved": reference.resolved,
+                        "status": reference.status.value,
                     }
                     for reference in item.parsed.references
+                ],
+                relationships_json=[
+                    {
+                        "source_symbol": relation.source_symbol,
+                        "target": relation.target,
+                        "kind": relation.kind,
+                        "line": relation.line,
+                        "status": relation.status.value,
+                    }
+                    for relation in item.parsed.relationships
                 ],
                 content=content,
             )

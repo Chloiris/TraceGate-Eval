@@ -36,6 +36,7 @@ from .models import (
     Finding,
     GraphEdgeRecord,
     IndexedFile,
+    IndexedSymbol,
     IndexVersion,
     NotificationRecord,
     OnboardingState,
@@ -92,6 +93,8 @@ from .schemas import (
 )
 from .security import require_local_token
 from tracegate.github import GitHubAPIError, GitHubProvider
+from tracegate.graph import symbol_node_id
+from tracegate.indexing import changed_line_numbers
 from tracegate.repository import RepositoryBoundary, RepositoryPathError
 from tracegate.retrieval import hybrid_retrieve
 from tracegate.models import ModelConfigurationError, ModelProviderError
@@ -991,7 +994,7 @@ def repository_graph(repository_id: str, session: SessionDependency) -> Reposito
         commit_sha=repository_map.commit_sha,
         index_version=repository_map.index_version,
         nodes=[node.__dict__ for node in repository_map.nodes],
-        edges=[edge.__dict__ for edge in repository_map.edges],
+        edges=[edge.__dict__ for edge in repository_map.edges if edge.confirmed],
     )
 
 
@@ -1225,10 +1228,27 @@ def _review_map(
 
     changed = {item.path: _change_status(item.status) for item in diff.changed_files}
     node_by_id = {node.id: node for node in repository_map.nodes}
-    direct = {node.id for node in repository_map.nodes if node.path in changed}
+    changed_lines = changed_line_numbers(diff.unified_diff)
+    changed_symbol_ids: set[str] = set()
+    symbol_rows = session.execute(
+        select(IndexedSymbol, IndexedFile)
+        .join(IndexedFile, IndexedFile.id == IndexedSymbol.indexed_file_id)
+        .where(IndexedFile.index_version_id == repository_map.index_version)
+    ).all()
+    for symbol, indexed_file in symbol_rows:
+        lines = changed_lines.get(indexed_file.path, frozenset())
+        if any(symbol.start_line <= line <= symbol.end_line for line in lines):
+            changed_symbol_ids.add(
+                symbol_node_id(indexed_file.path, symbol.qualified_name, symbol.start_line)
+            )
+    direct = {
+        node.id
+        for node in repository_map.nodes
+        if node.path in changed and node.kind in {"file", "test"}
+    } | changed_symbol_ids
     adjacency: dict[str, set[str]] = {node.id: set() for node in repository_map.nodes}
     for edge in repository_map.edges:
-        if edge.source in adjacency and edge.target in adjacency:
+        if edge.confirmed and edge.source in adjacency and edge.target in adjacency:
             adjacency[edge.source].add(edge.target)
             adjacency[edge.target].add(edge.source)
 
@@ -1326,7 +1346,7 @@ def _review_map(
             "confirmed": edge.confirmed,
         }
         for edge in repository_map.edges
-        if edge.source in selected_ids and edge.target in selected_ids
+        if edge.confirmed and edge.source in selected_ids and edge.target in selected_ids
     ]
 
     path_target = {
@@ -1416,7 +1436,7 @@ def _review_map(
         message=(
             "Map is capped at 800 nodes; refine the view to inspect omitted impact nodes."
             if truncated
-            else "Impact depth is derived from the checked-out Head SHA, static graph, and persisted Agent evidence."
+            else "Impact depth uses exact Head-side changed lines, parser ranges, confirmed static edges, and separately labelled Agent evidence."
         ),
     )
 

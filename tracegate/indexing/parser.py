@@ -5,6 +5,7 @@ import re
 from dataclasses import dataclass, field
 from enum import StrEnum
 from pathlib import Path
+from typing import Iterable
 
 
 class LanguageCapability(StrEnum):
@@ -13,6 +14,39 @@ class LanguageCapability(StrEnum):
     REFERENCE_LEVEL = "reference-level"
     CALL_LEVEL = "call-level"
     PARTIAL_ANALYSIS = "partial-analysis"
+
+
+class CapabilityStatus(StrEnum):
+    SUPPORTED = "SUPPORTED"
+    PARTIAL = "PARTIAL"
+    UNSUPPORTED = "UNSUPPORTED"
+
+
+class ParserFeature(StrEnum):
+    FILE_RECOGNITION = "file_recognition"
+    IMPORT_EXPORT = "import_export"
+    CLASS_INTERFACE = "class_interface"
+    FUNCTION_METHOD = "function_method"
+    SYMBOL_DEFINITION = "symbol_definition"
+    SYMBOL_REFERENCE = "symbol_reference"
+    INHERITANCE_IMPLEMENTATION = "inheritance_implementation"
+    FILE_DEPENDENCY = "file_level_dependency"
+    FUNCTION_CALL = "function_level_call"
+    TEST_RELATIONSHIP = "test_relationship"
+    CHANGED_SYMBOL_MAPPING = "changed_symbol_mapping"
+    LINE_RANGE_ACCURACY = "line_range_accuracy"
+
+
+class RelationStatus(StrEnum):
+    CONFIRMED = "confirmed"
+    INFERRED = "inferred"
+    UNKNOWN = "unknown"
+
+
+@dataclass(frozen=True)
+class CapabilityAssessment:
+    status: CapabilityStatus
+    limitation: str = ""
 
 
 class SymbolKind(StrEnum):
@@ -39,6 +73,16 @@ class CodeReference:
     kind: str
     line: int
     resolved: bool = False
+    status: RelationStatus = RelationStatus.UNKNOWN
+
+
+@dataclass(frozen=True)
+class TypeRelation:
+    source_symbol: str
+    target: str
+    kind: str
+    line: int
+    status: RelationStatus = RelationStatus.UNKNOWN
 
 
 @dataclass(frozen=True)
@@ -47,9 +91,176 @@ class ParsedFile:
     language: str
     capabilities: tuple[LanguageCapability, ...]
     imports: tuple[str, ...] = ()
+    exports: tuple[str, ...] = ()
     symbols: tuple[CodeSymbol, ...] = ()
     references: tuple[CodeReference, ...] = ()
+    relationships: tuple[TypeRelation, ...] = ()
     parse_errors: tuple[str, ...] = ()
+
+
+def _assessment(status: CapabilityStatus, limitation: str = "") -> CapabilityAssessment:
+    return CapabilityAssessment(status, limitation)
+
+
+PARSER_CAPABILITY_MATRIX: dict[str, dict[ParserFeature, CapabilityAssessment]] = {
+    "python": {
+        ParserFeature.FILE_RECOGNITION: _assessment(CapabilityStatus.SUPPORTED),
+        ParserFeature.IMPORT_EXPORT: _assessment(
+            CapabilityStatus.PARTIAL,
+            "AST imports are captured; __all__ and runtime exports are not modeled.",
+        ),
+        ParserFeature.CLASS_INTERFACE: _assessment(
+            CapabilityStatus.PARTIAL,
+            "Classes are supported; Python has no native interface declaration model here.",
+        ),
+        ParserFeature.FUNCTION_METHOD: _assessment(CapabilityStatus.SUPPORTED),
+        ParserFeature.SYMBOL_DEFINITION: _assessment(CapabilityStatus.SUPPORTED),
+        ParserFeature.SYMBOL_REFERENCE: _assessment(
+            CapabilityStatus.PARTIAL,
+            "Only call-site references are recorded; arbitrary name reads are not indexed.",
+        ),
+        ParserFeature.INHERITANCE_IMPLEMENTATION: _assessment(
+            CapabilityStatus.PARTIAL,
+            "Only direct same-file base classes are confirmed; imported and dynamic bases remain unknown.",
+        ),
+        ParserFeature.FILE_DEPENDENCY: _assessment(
+            CapabilityStatus.PARTIAL,
+            "Only uniquely resolved local Python modules produce confirmed file edges.",
+        ),
+        ParserFeature.FUNCTION_CALL: _assessment(
+            CapabilityStatus.PARTIAL,
+            "Only unique direct-name calls to same-file symbols are confirmed.",
+        ),
+        ParserFeature.TEST_RELATIONSHIP: _assessment(
+            CapabilityStatus.PARTIAL,
+            "Conventional test paths/names plus a uniquely resolved local import are required.",
+        ),
+        ParserFeature.CHANGED_SYMBOL_MAPPING: _assessment(
+            CapabilityStatus.PARTIAL,
+            "Head-side changed lines map to overlapping symbols; deleted symbols are not reconstructed.",
+        ),
+        ParserFeature.LINE_RANGE_ACCURACY: _assessment(CapabilityStatus.SUPPORTED),
+    },
+    "javascript": {
+        ParserFeature.FILE_RECOGNITION: _assessment(CapabilityStatus.SUPPORTED),
+        ParserFeature.IMPORT_EXPORT: _assessment(
+            CapabilityStatus.PARTIAL,
+            "Common single-line ESM/CommonJS forms only; dynamic and complex multiline forms are excluded.",
+        ),
+        ParserFeature.CLASS_INTERFACE: _assessment(
+            CapabilityStatus.PARTIAL,
+            "Top-level classes are detected; JavaScript has no interface declarations.",
+        ),
+        ParserFeature.FUNCTION_METHOD: _assessment(
+            CapabilityStatus.PARTIAL,
+            "Top-level function and arrow declarations only; methods are not parsed.",
+        ),
+        ParserFeature.SYMBOL_DEFINITION: _assessment(
+            CapabilityStatus.PARTIAL, "Top-level declaration patterns only."
+        ),
+        ParserFeature.SYMBOL_REFERENCE: _assessment(CapabilityStatus.UNSUPPORTED),
+        ParserFeature.INHERITANCE_IMPLEMENTATION: _assessment(
+            CapabilityStatus.PARTIAL,
+            "extends syntax is recorded as inferred and never emitted as a confirmed static edge.",
+        ),
+        ParserFeature.FILE_DEPENDENCY: _assessment(
+            CapabilityStatus.PARTIAL, "Only unique relative local imports/requires are confirmed."
+        ),
+        ParserFeature.FUNCTION_CALL: _assessment(CapabilityStatus.UNSUPPORTED),
+        ParserFeature.TEST_RELATIONSHIP: _assessment(
+            CapabilityStatus.PARTIAL,
+            "Conventional test names plus a unique relative import are required.",
+        ),
+        ParserFeature.CHANGED_SYMBOL_MAPPING: _assessment(
+            CapabilityStatus.PARTIAL, "Only declaration-line overlap is available."
+        ),
+        ParserFeature.LINE_RANGE_ACCURACY: _assessment(
+            CapabilityStatus.PARTIAL, "Only declaration start lines are reported."
+        ),
+    },
+    "typescript": {
+        ParserFeature.FILE_RECOGNITION: _assessment(CapabilityStatus.SUPPORTED),
+        ParserFeature.IMPORT_EXPORT: _assessment(
+            CapabilityStatus.PARTIAL, "Common single-line ESM forms only."
+        ),
+        ParserFeature.CLASS_INTERFACE: _assessment(
+            CapabilityStatus.PARTIAL, "Top-level class/interface declarations only."
+        ),
+        ParserFeature.FUNCTION_METHOD: _assessment(
+            CapabilityStatus.PARTIAL,
+            "Top-level function and arrow declarations only; methods are not parsed.",
+        ),
+        ParserFeature.SYMBOL_DEFINITION: _assessment(
+            CapabilityStatus.PARTIAL, "Top-level declaration patterns only."
+        ),
+        ParserFeature.SYMBOL_REFERENCE: _assessment(CapabilityStatus.UNSUPPORTED),
+        ParserFeature.INHERITANCE_IMPLEMENTATION: _assessment(
+            CapabilityStatus.PARTIAL,
+            "extends/implements syntax is inferred only and never a confirmed static edge.",
+        ),
+        ParserFeature.FILE_DEPENDENCY: _assessment(
+            CapabilityStatus.PARTIAL, "Only unique relative local imports are confirmed."
+        ),
+        ParserFeature.FUNCTION_CALL: _assessment(CapabilityStatus.UNSUPPORTED),
+        ParserFeature.TEST_RELATIONSHIP: _assessment(
+            CapabilityStatus.PARTIAL,
+            "Conventional test names plus a unique relative import are required.",
+        ),
+        ParserFeature.CHANGED_SYMBOL_MAPPING: _assessment(
+            CapabilityStatus.PARTIAL, "Only declaration-line overlap is available."
+        ),
+        ParserFeature.LINE_RANGE_ACCURACY: _assessment(
+            CapabilityStatus.PARTIAL, "Only declaration start lines are reported."
+        ),
+    },
+    "java": {
+        ParserFeature.FILE_RECOGNITION: _assessment(CapabilityStatus.SUPPORTED),
+        ParserFeature.IMPORT_EXPORT: _assessment(
+            CapabilityStatus.PARTIAL, "Imports are detected; Java has no export declaration model here."
+        ),
+        ParserFeature.CLASS_INTERFACE: _assessment(
+            CapabilityStatus.PARTIAL, "Simple top-level class/interface declarations only."
+        ),
+        ParserFeature.FUNCTION_METHOD: _assessment(
+            CapabilityStatus.PARTIAL, "Simple method declarations only; constructors and complex syntax may be missed."
+        ),
+        ParserFeature.SYMBOL_DEFINITION: _assessment(
+            CapabilityStatus.PARTIAL, "Top-level types and simple method declarations only."
+        ),
+        ParserFeature.SYMBOL_REFERENCE: _assessment(CapabilityStatus.UNSUPPORTED),
+        ParserFeature.INHERITANCE_IMPLEMENTATION: _assessment(
+            CapabilityStatus.PARTIAL,
+            "extends/implements syntax is inferred only and never a confirmed static edge.",
+        ),
+        ParserFeature.FILE_DEPENDENCY: _assessment(
+            CapabilityStatus.PARTIAL, "Only unique explicit local imports are confirmed."
+        ),
+        ParserFeature.FUNCTION_CALL: _assessment(CapabilityStatus.UNSUPPORTED),
+        ParserFeature.TEST_RELATIONSHIP: _assessment(
+            CapabilityStatus.PARTIAL,
+            "Conventional test paths/names plus a unique explicit import are required.",
+        ),
+        ParserFeature.CHANGED_SYMBOL_MAPPING: _assessment(
+            CapabilityStatus.PARTIAL, "Only declaration-line overlap is available."
+        ),
+        ParserFeature.LINE_RANGE_ACCURACY: _assessment(
+            CapabilityStatus.PARTIAL, "Only declaration start lines are reported."
+        ),
+    },
+}
+
+
+def map_changed_symbols(
+    parsed_file: ParsedFile,
+    changed_lines: Iterable[int],
+) -> tuple[CodeSymbol, ...]:
+    """Map Head-side changed lines to symbols using only persisted parser ranges."""
+    lines = {line for line in changed_lines if line > 0}
+    return tuple(
+        symbol
+        for symbol in parsed_file.symbols
+        if any(symbol.start_line <= line <= symbol.end_line for line in lines)
+    )
 
 
 _EXTENSIONS = {
@@ -68,11 +279,24 @@ _ECMA_SYMBOL = re.compile(
     r"(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*(?:async\s*)?\([^)]*\)\s*=>)",
     re.MULTILINE,
 )
+_ECMA_NAMED_EXPORT = re.compile(r"^\s*export\s*\{([^}]+)\}", re.MULTILINE)
+_ECMA_TYPE_RELATION = re.compile(
+    r"^\s*(?:export\s+)?(?:default\s+)?(class|interface)\s+([A-Za-z_$][\w$]*)"
+    r"(?:\s+extends\s+([A-Za-z_$][\w$]*))?"
+    r"(?:\s+implements\s+([^\{]+))?",
+    re.MULTILINE,
+)
 _JAVA_IMPORT = re.compile(r"^\s*import\s+(?:static\s+)?([\w.*]+)\s*;", re.MULTILINE)
 _JAVA_TYPE = re.compile(r"^\s*(?:public\s+)?(?:abstract\s+)?(class|interface)\s+(\w+)", re.MULTILINE)
 _JAVA_METHOD = re.compile(
     r"^\s*(?:public|protected|private|static|final|synchronized|native|abstract|\s)+"
     r"[\w<>\[\], ?]+\s+(\w+)\s*\([^;{}]*\)\s*(?:throws [^{]+)?\{",
+    re.MULTILINE,
+)
+_JAVA_TYPE_RELATION = re.compile(
+    r"^\s*(?:public\s+)?(?:abstract\s+)?(class|interface)\s+(\w+)"
+    r"(?:\s+extends\s+([\w.]+))?"
+    r"(?:\s+implements\s+([^\{]+))?",
     re.MULTILINE,
 )
 
@@ -109,6 +333,51 @@ class UnifiedCodeParser:
             )
         visitor = _PythonVisitor()
         visitor.visit(tree)
+        symbols_by_name: dict[str, list[CodeSymbol]] = {}
+        for symbol in visitor.symbols:
+            symbols_by_name.setdefault(symbol.name, []).append(symbol)
+        type_symbols_by_name = {
+            name: [
+                symbol
+                for symbol in symbols
+                if symbol.kind in {SymbolKind.CLASS, SymbolKind.INTERFACE}
+            ]
+            for name, symbols in symbols_by_name.items()
+        }
+        references = tuple(
+            CodeReference(
+                reference.source_symbol,
+                reference.target,
+                reference.kind,
+                reference.line,
+                resolved=(
+                    "." not in reference.target
+                    and len(symbols_by_name.get(reference.target, [])) == 1
+                ),
+                status=(
+                    RelationStatus.CONFIRMED
+                    if "." not in reference.target
+                    and len(symbols_by_name.get(reference.target, [])) == 1
+                    else RelationStatus.UNKNOWN
+                ),
+            )
+            for reference in visitor.references
+        )
+        relationships = tuple(
+            TypeRelation(
+                relation.source_symbol,
+                relation.target,
+                relation.kind,
+                relation.line,
+                (
+                    RelationStatus.CONFIRMED
+                    if "." not in relation.target
+                    and len(type_symbols_by_name.get(relation.target, [])) == 1
+                    else RelationStatus.UNKNOWN
+                ),
+            )
+            for relation in visitor.relationships
+        )
         return ParsedFile(
             path=path,
             language="python",
@@ -120,29 +389,53 @@ class UnifiedCodeParser:
             ),
             imports=tuple(sorted(visitor.imports)),
             symbols=tuple(visitor.symbols),
-            references=tuple(visitor.references),
+            references=references,
+            relationships=relationships,
         )
 
     def _parse_ecmascript(self, path: str, content: str, language: str) -> ParsedFile:
         imports = tuple(sorted(set(_ECMA_IMPORT.findall(content))))
         symbols: list[CodeSymbol] = []
+        exports: set[str] = set()
         for match in _ECMA_SYMBOL.finditer(content):
             declaration, named, arrow = match.groups()
             name = named or arrow
             kind = SymbolKind.CLASS if declaration == "class" else SymbolKind.INTERFACE if declaration == "interface" else SymbolKind.FUNCTION
             line = content.count("\n", 0, match.start()) + 1
             symbols.append(CodeSymbol(name, name, kind, match.group(0).strip(), line, line))
+            if match.group(0).lstrip().startswith("export "):
+                exports.add(name)
+        for match in _ECMA_NAMED_EXPORT.finditer(content):
+            for item in match.group(1).split(","):
+                exported = item.strip().split(" as ")[-1].strip()
+                if exported:
+                    exports.add(exported)
+        relationships: list[TypeRelation] = []
+        for match in _ECMA_TYPE_RELATION.finditer(content):
+            _kind, source, parent, implementations = match.groups()
+            line = content.count("\n", 0, match.start()) + 1
+            if parent:
+                relationships.append(
+                    TypeRelation(source, parent, "inherit", line, RelationStatus.INFERRED)
+                )
+            for target in (implementations or "").split(","):
+                target = target.strip()
+                if target:
+                    relationships.append(
+                        TypeRelation(source, target, "implement", line, RelationStatus.INFERRED)
+                    )
         return ParsedFile(
             path=path,
             language=language,
             capabilities=(
                 LanguageCapability.FILE_LEVEL,
                 LanguageCapability.SYMBOL_LEVEL,
-                LanguageCapability.REFERENCE_LEVEL,
                 LanguageCapability.PARTIAL_ANALYSIS,
             ),
             imports=imports,
+            exports=tuple(sorted(exports)),
             symbols=tuple(symbols),
+            relationships=tuple(relationships),
         )
 
     def _parse_java(self, path: str, content: str) -> ParsedFile:
@@ -155,17 +448,31 @@ class UnifiedCodeParser:
         for match in _JAVA_METHOD.finditer(content):
             line = content.count("\n", 0, match.start()) + 1
             symbols.append(CodeSymbol(match.group(1), match.group(1), SymbolKind.METHOD, match.group(0).strip(), line, line))
+        relationships: list[TypeRelation] = []
+        for match in _JAVA_TYPE_RELATION.finditer(content):
+            _kind, source, parent, implementations = match.groups()
+            line = content.count("\n", 0, match.start()) + 1
+            if parent:
+                relationships.append(
+                    TypeRelation(source, parent, "inherit", line, RelationStatus.INFERRED)
+                )
+            for target in (implementations or "").split(","):
+                target = target.strip()
+                if target:
+                    relationships.append(
+                        TypeRelation(source, target, "implement", line, RelationStatus.INFERRED)
+                    )
         return ParsedFile(
             path=path,
             language="java",
             capabilities=(
                 LanguageCapability.FILE_LEVEL,
                 LanguageCapability.SYMBOL_LEVEL,
-                LanguageCapability.REFERENCE_LEVEL,
                 LanguageCapability.PARTIAL_ANALYSIS,
             ),
             imports=imports,
             symbols=tuple(symbols),
+            relationships=tuple(relationships),
         )
 
 
@@ -174,6 +481,7 @@ class _PythonVisitor(ast.NodeVisitor):
     imports: set[str] = field(default_factory=set)
     symbols: list[CodeSymbol] = field(default_factory=list)
     references: list[CodeReference] = field(default_factory=list)
+    relationships: list[TypeRelation] = field(default_factory=list)
     scope: list[str] = field(default_factory=list)
 
     def visit_Import(self, node: ast.Import) -> None:
@@ -185,6 +493,13 @@ class _PythonVisitor(ast.NodeVisitor):
 
     def visit_ClassDef(self, node: ast.ClassDef) -> None:
         self._record_symbol(node, SymbolKind.CLASS, f"class {node.name}")
+        source = ".".join([*self.scope, node.name])
+        for base in node.bases:
+            target = self._call_name(base)
+            if target:
+                self.relationships.append(
+                    TypeRelation(source, target, "inherit", node.lineno, RelationStatus.UNKNOWN)
+                )
         self.scope.append(node.name)
         self.generic_visit(node)
         self.scope.pop()

@@ -16,7 +16,7 @@ from tracegate.config import PROJECT_ROOT
 from tracegate.studio.app import SECURITY_HEADERS, create_app
 from tracegate.studio.config import StudioSettings
 from tracegate.github import ChangedFileData, CheckRunData, CommitData, GitHubRateLimit, PullRequestData
-from tracegate.studio.models import PullRequest
+from tracegate.studio.models import GraphEdgeRecord, GraphNodeRecord, PullRequest
 
 
 TOKEN = "test-local-token-0123456789-abcdef"
@@ -633,7 +633,10 @@ def test_pr_diff_review_map_and_tour_are_bound_to_real_git_and_index(
         cwd=repository_path,
         check=True,
     )
-    (repository_path / "main.py").write_text("def value():\n    return 1\n", encoding="utf-8")
+    (repository_path / "main.py").write_text(
+        "def value():\n    return 1\n\ndef untouched():\n    return 10\n",
+        encoding="utf-8",
+    )
     subprocess.run(["git", "add", "."], cwd=repository_path, check=True)
     subprocess.run(["git", "commit", "-qm", "base"], cwd=repository_path, check=True)
     base_sha = subprocess.check_output(
@@ -645,7 +648,7 @@ def test_pr_diff_review_map_and_tour_are_bound_to_real_git_and_index(
         encoding="utf-8",
     )
     (repository_path / "main.py").write_text(
-        "from helper import doubled\n\ndef value():\n    return doubled(2)\n",
+        "from helper import doubled\n\ndef value():\n    return doubled(2)\n\ndef untouched():\n    return 10\n",
         encoding="utf-8",
     )
     subprocess.run(["git", "add", "."], cwd=repository_path, check=True)
@@ -666,6 +669,36 @@ def test_pr_diff_review_map_and_tour_are_bound_to_real_git_and_index(
     assert indexed.status_code == 200
     assert indexed.json()["commit_sha"] == head_sha
     with client.app.state.database.session_factory() as session:
+        main_file = (
+            session.query(GraphNodeRecord)
+            .filter(
+                GraphNodeRecord.index_version_id == indexed.json()["id"],
+                GraphNodeRecord.path == "main.py",
+                GraphNodeRecord.kind == "file",
+            )
+            .one()
+        )
+        session.add(
+            GraphNodeRecord(
+                id="unconfirmed-parser-node",
+                index_version_id=indexed.json()["id"],
+                kind="file",
+                label="unconfirmed.py",
+                path="unconfirmed.py",
+                symbol=None,
+                language="python",
+            )
+        )
+        session.add(
+            GraphEdgeRecord(
+                id="unconfirmed-parser-edge",
+                index_version_id=indexed.json()["id"],
+                source=main_file.id,
+                target="unconfirmed-parser-node",
+                kind="inferred",
+                confirmed=False,
+            )
+        )
         pull_request = PullRequest(
             repository_id=repository["id"],
             number=4,
@@ -680,6 +713,12 @@ def test_pr_diff_review_map_and_tour_are_bound_to_real_git_and_index(
         session.commit()
         session.refresh(pull_request)
         pull_request_id = pull_request.id
+
+    repository_graph = client.get(
+        f"/api/v1/repositories/{repository['id']}/graph",
+        headers=auth_headers(),
+    ).json()
+    assert "unconfirmed-parser-edge" not in {edge["id"] for edge in repository_graph["edges"]}
 
     diff = client.get(
         f"/api/v1/pull-requests/{pull_request_id}/diff",
@@ -704,6 +743,13 @@ def test_pr_diff_review_map_and_tour_are_bound_to_real_git_and_index(
         "helper.py",
         "main.py",
     }
+    symbol_depths = {
+        node["symbol"]: node["impact_depth"]
+        for node in graph_body["nodes"]
+        if node["symbol"] in {"value", "untouched"}
+    }
+    assert symbol_depths == {"value": 0, "untouched": 1}
+    assert "unconfirmed.py" not in {node["path"] for node in graph_body["nodes"]}
     assert all(edge["confirmed"] for edge in graph_body["edges"])
 
     tour = client.get(

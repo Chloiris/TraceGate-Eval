@@ -374,7 +374,9 @@ class IndexedFile(Base):
     size_bytes: Mapped[int] = mapped_column(Integer, nullable=False)
     capabilities_json: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
     imports_json: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
+    exports_json: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
     references_json: Mapped[list[dict[str, Any]]] = mapped_column(JSON, nullable=False, default=list)
+    relationships_json: Mapped[list[dict[str, Any]]] = mapped_column(JSON, nullable=False, default=list)
     content: Mapped[str] = mapped_column(Text, nullable=False)
 
 

@@ -55,3 +55,4 @@ tracegate = [
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+norecursedirs = ["tests/fixtures/parser_repositories"]

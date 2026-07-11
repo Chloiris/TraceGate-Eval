@@ -1,9 +1,7 @@
 from __future__ import annotations
 
 import asyncio
-import json
 import os
-import re
 import subprocess
 import time
 from collections.abc import Callable
@@ -501,6 +499,8 @@ def _get_dependency_neighbors(arguments: DependencyInput, context: ToolContext) 
         raise ToolExecutionError("graph_node_not_found", "Graph node was not found in the current index")
     adjacency: dict[str, list[tuple[str, str, bool]]] = {}
     for edge in repository_map.edges:
+        if not edge.confirmed:
+            continue
         adjacency.setdefault(edge.source, []).append((edge.target, edge.kind, edge.confirmed))
         adjacency.setdefault(edge.target, []).append((edge.source, edge.kind, edge.confirmed))
     depth_by_id = {arguments.node_id: 0}
@@ -544,7 +544,9 @@ def _get_repository_map(arguments: RepositoryMapInput, context: ToolContext) -> 
     nodes = list(repository_map.nodes[: arguments.limit])
     node_ids = {node.id for node in nodes}
     edges = [
-        edge for edge in repository_map.edges if edge.source in node_ids and edge.target in node_ids
+        edge
+        for edge in repository_map.edges
+        if edge.confirmed and edge.source in node_ids and edge.target in node_ids
     ]
     return {
         "index_version": repository_map.index_version,
