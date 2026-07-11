@@ -50,12 +50,14 @@ observation, not a long-duration energy study.
 
 ## Not measured
 
-- GitHub PR synchronization latency: `BLOCKED` because this verification pass
-  did not have authorization to make remote GitHub requests.
-- Real-model end-to-end latency: `BLOCKED` because no model credential was
-  configured.
+- GitHub PR synchronization latency: not measured as a polling benchmark. A
+  public PR was fetched and indexed successfully in the later live-model run.
+- Real-model latency was measured separately on 2026-07-11 against
+  `psf/requests#7565`: **12,362 ms** end-to-end, **11,998 ms** accumulated model
+  latency, 3,826 total tokens, four real model requests and zero retries. This
+  is one smoke run, not a percentile. See
+  `docs/verification/real-model-e2e-macos.md`.
 - Windows idle CPU and UI time-to-interactive: `IMPLEMENTED_UNVERIFIED`; no
   Windows runner or graphical machine was used.
 - Statistical percentiles and polyglot monorepo performance: not measured by
   this deterministic smoke benchmark.
-

@@ -108,13 +108,16 @@ not a count of confirmed vulnerabilities.
 - Lightweight FastAPI benchmark dashboard and API.
 - Python CI on Ubuntu and macOS plus PR advisory workflows.
 
-## Current modules that cannot be run or verified here
+## Baseline blockers and subsequent disposition
 
-- A real semantic LLM run is blocked because neither `DEEPSEEK_API_KEY` nor
-  `TRACEGATE_LLM_API_KEY` is configured in the current process.
-- Authenticated GitHub operations are currently blocked: no GitHub token is in
-  the environment and `gh auth status` timed out while validating the active
-  account. Public unauthenticated REST reads may still work but are rate-limited.
+- The original audit found no model credential in the process environment. On
+  2026-07-11, a credential stored under the macOS Keychain service
+  `deepseek-api-key` was injected directly into a child process without logging
+  its value. The production DeepSeek provider and full public-PR workflow are
+  now `VERIFIED_MACOS`; see `docs/verification/real-model-e2e-macos.md`.
+- The original authenticated-GitHub blocker was subsequently cleared through
+  the existing `gh` session. Public PR metadata and exact Git revisions were
+  fetched for the real-model verification without persisting a GitHub token.
 - React, TypeScript, browser E2E and Tauri builds do not yet exist at baseline.
 - Rust/Tauri tests cannot run until a Rust toolchain is located or installed.
 - Windows binaries and Windows manual behaviour cannot be produced or verified

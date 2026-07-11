@@ -1,6 +1,6 @@
 # TraceGate Studio implementation status
 
-- Last updated: 2026-07-10
+- Last updated: 2026-07-11
 - Branch: `feat/tracegate-studio-fullstack`
 - Status owner: TraceGate maintainers
 
@@ -22,12 +22,12 @@
 
 | Feature | Status | Evidence / note |
 | --- | --- | --- |
-| Existing suite plus Studio tests | VERIFIED_MACOS | 125 Python tests, 20 TypeScript/Vitest tests, 20 Rust tests (1 explicit secure-store mutation ignored), and 4 Chrome Playwright flows; original Eval coverage remains intact |
+| Existing suite plus Studio tests | VERIFIED_MACOS | 129 Python tests, 20 TypeScript/Vitest tests, 20 Rust tests (1 explicit secure-store mutation ignored), and 4 Chrome Playwright flows; original Eval coverage remains intact |
 | ClaimBench controlled benchmark | VERIFIED_MACOS | Existing tests and checked-in 160-run reports; metric definitions unchanged |
 | Real-PR hard benchmark | VERIFIED_MACOS | Existing tests and checked-in 19 scored cases |
 | EvidencePacket and redaction | VERIFIED_MACOS | Existing `tests/test_pr_advisor.py` |
 | Semantic verifier/guardrails | VERIFIED_MACOS | Existing tests; strict scan reports 0 dangerous runtime paths |
-| Real DeepSeek semantic execution | BLOCKED | No model key is configured in the current environment |
+| Real DeepSeek semantic execution | VERIFIED_MACOS | Keychain credential injected without logging; `psf/requests#7565` completed 7 workflow steps, 4 real model requests, 3 Tool Calls, 1 Evidence and 1 Finding; see `docs/verification/real-model-e2e-macos.md` |
 
 ## P0: foundation and desktop loop
 
@@ -118,9 +118,10 @@
 
 The reproducible smoke record in `docs/performance.md` measured 100/1000-file
 production index/graph paths, Review Map, a 157 ms browser data-ready wall-clock
-upper bound, and five 0.1% idle Python-worker CPU samples. GitHub sync and real
-model latency remain `BLOCKED` because this pass had neither remote-operation
-permission nor a model credential.
+upper bound, and five 0.1% idle Python-worker CPU samples. A subsequent real
+DeepSeek PR-analysis run measured 12,362 ms end-to-end and 11,998 ms of model
+latency; see `docs/verification/real-model-e2e-macos.md`. Windows performance
+remains outside the current Mac verification boundary.
 
 ## P3: explicitly deferred interfaces
 

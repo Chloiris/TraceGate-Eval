@@ -99,9 +99,10 @@ in `docs/performance.md` and `docs/performance-results.json`.
 
 ## Explicit limitations
 
-- No real model credential exists, so a successful live semantic-model run is
-  `BLOCKED`; tests prove the explicit failure path and use dependency-injected
-  model doubles only inside unit tests.
+- The missing-model limitation recorded during this P1 pass was cleared by the
+  later production-path verification in
+  `docs/verification/real-model-e2e-macos.md`. This historical pass itself used
+  dependency-injected model doubles only inside unit tests.
 - Windows code and workflows do not count as Windows CI evidence until the
   current workflow run is inspected with user permission.
 - No Windows graphical machine is available, so no Windows manual status is
