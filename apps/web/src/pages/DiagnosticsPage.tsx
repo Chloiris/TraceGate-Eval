@@ -5,6 +5,10 @@ import { errorMessage } from "../lib/errors";
 import { useI18n } from "../i18n";
 
 export function DiagnosticsPage() {
+  return <DiagnosticsContent />;
+}
+
+export function DiagnosticsContent({ embedded = false }: { embedded?: boolean }) {
   const { locale, text } = useI18n();
   const diagnostics = useDiagnostics();
   const updateStatus = useUpdateStatus();
@@ -12,7 +16,7 @@ export function DiagnosticsPage() {
   if (diagnostics.isError) return <ErrorState title={text("诊断信息不可用", "Diagnostics unavailable")} message={errorMessage(diagnostics.error)} onRetry={() => void diagnostics.refetch()} />;
   const data = diagnostics.data;
   return (
-    <div className="page-stack">
+    <div className={embedded ? "page-stack settings-diagnostics" : "page-stack"}>
       <header className="page-header">
         <span className="eyebrow">LOCAL DIAGNOSTICS</span>
         <h2>{text("诊断", "Diagnostics")}</h2>

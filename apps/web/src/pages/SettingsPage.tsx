@@ -1,22 +1,58 @@
 import { useEffect, useState, type ChangeEvent, type FormEvent } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { settingsUpdateSchema, type CredentialKind, type CredentialStatus, type Settings } from "@tracegate/shared-types";
 
 import { StatusCard } from "../components/StatusCard";
 import { ErrorState, LoadingState } from "../components/RequestState";
-import { useDiagnostics, useSettings, useSystemStatus, useUpdateSettings } from "../api/queries";
+import { queryKeys, useDiagnostics, useSettings, useSystemStatus, useUpdateSettings } from "../api/queries";
 import { reservedWebViewHosts, type GitHubDeviceAuthorization, type HostBridge } from "../host/hostBridge";
 import { errorMessage } from "../lib/errors";
 import { useI18n } from "../i18n";
+import { DiagnosticsContent } from "./DiagnosticsPage";
+
+export type SettingsSection = "general" | "model" | "automation" | "connections" | "host" | "data" | "diagnostics";
 
 interface SettingsPageProps {
   host: HostBridge;
+  initialSection?: SettingsSection;
 }
 
-export function SettingsPage({ host }: SettingsPageProps) {
+const settingsSections: readonly {
+  id: SettingsSection;
+  target: string;
+  zh: string;
+  en: string;
+  descriptionZh: string;
+  descriptionEn: string;
+}[] = [
+  { id: "general", target: "settings-general", zh: "常规", en: "General", descriptionZh: "外观与本地偏好", descriptionEn: "Appearance and local preferences" },
+  { id: "model", target: "settings-model", zh: "模型", en: "Model", descriptionZh: "Provider 与运行参数", descriptionEn: "Provider and runtime" },
+  { id: "automation", target: "settings-automation", zh: "自动化", en: "Automation", descriptionZh: "轮询、Relay 与分析", descriptionEn: "Polling, relay, and analysis" },
+  { id: "connections", target: "settings-connections", zh: "连接与凭据", en: "Connections", descriptionZh: "安全存储与连接状态", descriptionEn: "Secure storage and status" },
+  { id: "host", target: "settings-host", zh: "当前宿主", en: "Current host", descriptionZh: "桌面与浏览器能力", descriptionEn: "Desktop and browser capabilities" },
+  { id: "data", target: "settings-data", zh: "安全与数据", en: "Security and data", descriptionZh: "策略、路径与存储", descriptionEn: "Policies, paths, and storage" },
+  { id: "diagnostics", target: "settings-diagnostics", zh: "诊断", en: "Diagnostics", descriptionZh: "版本、指标与队列", descriptionEn: "Versions, metrics, and queues" },
+];
+
+export function SettingsPage({ host, initialSection = "general" }: SettingsPageProps) {
   const { text } = useI18n();
   const settingsQuery = useSettings();
   const statusQuery = useSystemStatus();
   const diagnosticsQuery = useDiagnostics();
+  const [activeSection, setActiveSection] = useState<SettingsSection>(initialSection);
+
+  useEffect(() => {
+    setActiveSection(initialSection);
+  }, [initialSection]);
+
+  useEffect(() => {
+    if (!settingsQuery.isSuccess || initialSection === "general") return;
+    const section = settingsSections.find((item) => item.id === initialSection);
+    const element = section ? document.getElementById(section.target) : null;
+    if (element && typeof element.scrollIntoView === "function") {
+      element.scrollIntoView({ block: "start" });
+    }
+  }, [initialSection, settingsQuery.isSuccess]);
 
   if (settingsQuery.isPending) {
     return <LoadingState label={text("正在读取设置…", "Reading settings…")} />;
@@ -39,9 +75,27 @@ export function SettingsPage({ host }: SettingsPageProps) {
         <p>{text("设置通过受鉴权的本地 API 保存。API Token 不会出现在表单、日志或浏览器存储中。", "Settings are saved through the authenticated local API. API tokens never appear in forms, logs, or browser storage.")}</p>
       </header>
 
+      <div className="settings-layout">
+        <nav className="settings-navigation" aria-label={text("设置目录", "Settings sections")}>
+          <span className="eyebrow">{text("设置目录", "SETTINGS")}</span>
+          {settingsSections.map((section) => (
+            <a
+              key={section.id}
+              className={activeSection === section.id ? "settings-navigation-item settings-navigation-item-active" : "settings-navigation-item"}
+              href={`#${section.target}`}
+              aria-current={activeSection === section.id ? "location" : undefined}
+              onClick={() => setActiveSection(section.id)}
+            >
+              <strong>{text(section.zh, section.en)}</strong>
+              <small>{text(section.descriptionZh, section.descriptionEn)}</small>
+            </a>
+          ))}
+        </nav>
+
+        <div className="settings-content">
       <SettingsEditor key={settingsQuery.data.updated_at} settings={settingsQuery.data} host={host} />
 
-      <section aria-labelledby="provider-settings-title">
+      <section id="settings-connections" className="settings-anchor" aria-labelledby="provider-settings-title">
         <div className="section-heading">
           <div>
             <span className="eyebrow">{text("只读连接状态", "READ-ONLY CONNECTION STATUS")}</span>
@@ -65,7 +119,7 @@ export function SettingsPage({ host }: SettingsPageProps) {
         <CredentialPanel host={host} />
       </section>
 
-      <section className="settings-panel" aria-labelledby="host-title">
+      <section id="settings-host" className="settings-panel settings-anchor" aria-labelledby="host-title">
         <span className="eyebrow">HOST BRIDGE</span>
         <h2 id="host-title">{text("当前宿主", "Current host")}: {host.displayName}</h2>
         <p>{text("BrowserHost 从显式环境变量读取开发 Token；TauriHost 通过原生命令取得临时连接信息。", "BrowserHost reads a development token from explicit environment variables; TauriHost obtains temporary connection details through native commands.")}</p>
@@ -76,7 +130,7 @@ export function SettingsPage({ host }: SettingsPageProps) {
         </ul>
       </section>
 
-      <section className="settings-panel" aria-labelledby="policy-title">
+      <section id="settings-data" className="settings-panel settings-anchor" aria-labelledby="policy-title">
         <span className="eyebrow">POLICY · STORAGE · ABOUT</span>
         <h2 id="policy-title">{text("安全策略与本地数据", "Security policy and local data")}</h2>
         <dl className="metadata-grid">
@@ -90,6 +144,12 @@ export function SettingsPage({ host }: SettingsPageProps) {
         {diagnosticsQuery.data ? <details><summary>{text("已授权工作区路径", "Authorized workspace paths")}</summary><ul className="plain-list">{diagnosticsQuery.data.workspace_paths.length ? diagnosticsQuery.data.workspace_paths.map((path) => <li className="mono" key={path}>{path}</li>) : <li>{text("尚无本地工作区", "No local workspaces")}</li>}</ul></details> : null}
         {diagnosticsQuery.isError ? <p className="inline-error">{text("诊断读取失败", "Unable to read diagnostics")}: {errorMessage(diagnosticsQuery.error)}</p> : null}
       </section>
+
+      <section id="settings-diagnostics" className="settings-anchor" aria-label={text("诊断", "Diagnostics")}>
+        <DiagnosticsContent embedded />
+      </section>
+        </div>
+      </div>
     </div>
   );
 }
@@ -102,6 +162,7 @@ const credentialLabels: Record<CredentialKind, { titleZh: string; titleEn: strin
 
 function CredentialPanel({ host }: { host: HostBridge }) {
   const { text } = useI18n();
+  const queryClient = useQueryClient();
   const readCredentialStatus = host.getCredentialStatus?.bind(host);
   const storeCredential = host.storeCredential?.bind(host);
   const deleteCredential = host.deleteCredential?.bind(host);
@@ -134,6 +195,13 @@ function CredentialPanel({ host }: { host: HostBridge }) {
     return <p className="field-note">{text("浏览器宿主不提供密钥写入。请通过后端进程环境变量配置真实凭据。", "The browser host cannot write secrets. Configure real credentials through backend process environment variables.")}</p>;
   }
 
+  async function refreshConnectionState() {
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: queryKeys.systemStatus }),
+      queryClient.invalidateQueries({ queryKey: queryKeys.onboarding }),
+    ]);
+  }
+
   async function save(kind: CredentialKind) {
     if (!storeCredential) {
       setFailure(text("当前宿主不支持系统安全凭据存储。", "The current host does not support secure credential storage."));
@@ -146,7 +214,8 @@ function CredentialPanel({ host }: { host: HostBridge }) {
       const status = await storeCredential(kind, values[kind]);
       setStatuses((current) => ({ ...current, [kind]: status }));
       setValues((current) => ({ ...current, [kind]: "" }));
-      setMessage(text(`${credentialLabels[kind].titleZh} 已写入 ${status.storage}。重启 TraceGate 后后端连接状态生效。`, `${credentialLabels[kind].titleEn} was written to ${status.storage}. Restart TraceGate to apply the backend connection.`));
+      await refreshConnectionState();
+      setMessage(text(`${credentialLabels[kind].titleZh} 已写入 ${status.storage}，后端已重新加载凭据，连接状态已刷新。`, `${credentialLabels[kind].titleEn} was written to ${status.storage}. The backend reloaded the credential and refreshed the connection state.`));
     } catch (error) {
       setFailure(errorMessage(error));
     } finally {
@@ -165,7 +234,8 @@ function CredentialPanel({ host }: { host: HostBridge }) {
     try {
       const status = await deleteCredential(kind);
       setStatuses((current) => ({ ...current, [kind]: status }));
-      setMessage(text(`${credentialLabels[kind].titleZh} 已从 ${status.storage} 删除。重启 TraceGate 后后端连接状态生效。`, `${credentialLabels[kind].titleEn} was removed from ${status.storage}. Restart TraceGate to apply the backend connection.`));
+      await refreshConnectionState();
+      setMessage(text(`${credentialLabels[kind].titleZh} 已从 ${status.storage} 删除，后端已重新加载凭据，连接状态已刷新。`, `${credentialLabels[kind].titleEn} was removed from ${status.storage}. The backend reloaded credentials and refreshed the connection state.`));
     } catch (error) {
       setFailure(errorMessage(error));
     } finally {
@@ -197,7 +267,8 @@ function CredentialPanel({ host }: { host: HostBridge }) {
       if (result.status === "authorized" && credential) {
         setStatuses((current) => ({ ...current, github: credential }));
         setOauthAuthorization(null);
-        setMessage(text(`GitHub OAuth Token 已写入 ${credential.storage}。重启 TraceGate 后连接状态生效。`, `The GitHub OAuth token was stored in ${credential.storage}. Restart TraceGate to apply it.`));
+        await refreshConnectionState();
+        setMessage(text(`GitHub OAuth Token 已写入 ${credential.storage}，后端已重新加载凭据，连接状态已刷新。`, `The GitHub OAuth token was stored in ${credential.storage}. The backend reloaded it and refreshed the connection state.`));
       } else {
         setMessage(text(`GitHub 仍在等待授权；请至少间隔 ${result.intervalSeconds} 秒再检查。`, `GitHub is still waiting for authorization; check again after at least ${result.intervalSeconds} seconds.`));
       }
@@ -257,6 +328,7 @@ function CredentialPanel({ host }: { host: HostBridge }) {
 
 function SettingsEditor({ settings, host }: { settings: Settings; host: HostBridge }) {
   const { text } = useI18n();
+  const queryClient = useQueryClient();
   const updateSettings = useUpdateSettings();
   const [theme, setTheme] = useState(settings.theme);
   const [language, setLanguage] = useState(settings.language);
@@ -384,10 +456,14 @@ function SettingsEditor({ settings, host }: { settings: Settings; host: HostBrid
         webhook_relay_url: webhookRelayUrl.trim(),
         webhook_relay_device_id: webhookRelayDeviceId.trim(),
       });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: queryKeys.systemStatus }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.onboarding }),
+      ]);
       setRelayPairingCode("");
       setNativeMessage(text(
-        `Webhook Relay 已安全配对，授权仓库：${result.repositories.join("、")}。重启 TraceGate 后设备 Token 生效。`,
-        `Webhook Relay paired securely for: ${result.repositories.join(", ")}. Restart TraceGate to activate the device token.`,
+        `Webhook Relay 已安全配对，授权仓库：${result.repositories.join("、")}。后端已重新加载设备 Token，连接状态已刷新。`,
+        `Webhook Relay paired securely for: ${result.repositories.join(", ")}. The backend reloaded the device token and refreshed the connection state.`,
       ));
     } catch (error) {
       setNativeFailure(errorMessage(error));
@@ -421,7 +497,7 @@ function SettingsEditor({ settings, host }: { settings: Settings; host: HostBrid
   }
 
   return (
-    <form className="settings-panel" onSubmit={submit}>
+    <form id="settings-general" className="settings-panel settings-anchor" onSubmit={submit}>
       <div className="form-grid">
         <label className="field">
           <span>{text("主题", "Theme")}</span>
@@ -440,7 +516,7 @@ function SettingsEditor({ settings, host }: { settings: Settings; host: HostBrid
         </label>
       </div>
 
-      <div className="settings-subsection">
+      <div id="settings-model" className="settings-subsection settings-anchor">
         <div>
           <span className="eyebrow">MODEL PROVIDER</span>
           <h3>{text("模型运行参数", "Model runtime")}</h3>
@@ -498,6 +574,7 @@ function SettingsEditor({ settings, host }: { settings: Settings; host: HostBrid
         </div>
       </div>
 
+      <div id="settings-automation" className="settings-anchor settings-automation-section">
       <label className="field">
         <span>{text("GitHub 轮询频率（秒）", "GitHub polling interval (seconds)")}</span>
         <input type="number" min="30" max="3600" step="30" value={githubPollIntervalSeconds} onChange={(event) => setGithubPollIntervalSeconds(event.target.valueAsNumber)} />
@@ -570,6 +647,7 @@ function SettingsEditor({ settings, host }: { settings: Settings; host: HostBrid
           onChange={(event) => setLaunchAtStartup(event.target.checked)}
         />
       </label>
+      </div>
 
       <div className="provider-summary">
         <span>{text("原生通知", "Native notifications")}</span>

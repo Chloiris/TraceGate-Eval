@@ -133,6 +133,27 @@ describe("App startup and system state", () => {
     expect(screen.getByText("模型尚未配置")).toBeInTheDocument();
     expect(screen.getByText("工作区活动")).toBeInTheDocument();
     expect(screen.getByText("配置输入/输出 Token 单价后才显示成本估算。", { exact: false })).toBeInTheDocument();
+    const navigation = screen.getByRole("navigation", { name: "主导航" });
+    expect(navigation).toHaveTextContent("审查队列");
+    expect(navigation).toHaveTextContent("拉取请求审查与分析");
+    expect(navigation).toHaveTextContent("运行记录");
+    expect(navigation).toHaveTextContent("节点与工具轨迹");
+    expect(navigation).toHaveTextContent("评测中心");
+    expect(navigation).toHaveTextContent("真实基准与声明评测");
+    expect(navigation).toHaveTextContent("组件注册");
+    expect(navigation).toHaveTextContent("智能体与工具");
+    expect(navigation).not.toHaveTextContent("PR Inbox");
+    expect(navigation).not.toHaveTextContent("Agent Runs");
+    expect(navigation).not.toHaveTextContent("Eval Center");
+    expect(navigation).not.toHaveTextContent("Registry");
+    expect(navigation).not.toHaveTextContent("诊断");
+    const connectionSummary = screen.getByLabelText("连接摘要");
+    expect(connectionSummary).toHaveTextContent("连接状态");
+    expect(connectionSummary).toHaveTextContent("本地后端");
+    expect(connectionSummary).toHaveTextContent("代码托管");
+    expect(connectionSummary).toHaveTextContent("语义模型");
+    expect(document.querySelector(".workspace-header")).not.toHaveTextContent("后端");
+    expect(screen.queryByRole("button", { name: "打开命令面板" })).not.toBeInTheDocument();
   });
 
   it("uses the desktop secure-store bridge without returning credential values", async () => {
@@ -225,7 +246,7 @@ describe("App startup and system state", () => {
   });
 
   it("routes real Tauri tray actions into Studio views", async () => {
-    let trayHandler: ((action: "settings") => void) | undefined;
+    let trayHandler: ((action: "settings" | "diagnostics") => void) | undefined;
     let closeHandler: (() => void) | undefined;
     const hideMainWindow = vi.fn(async () => undefined);
     vi.stubGlobal("fetch", vi.fn<typeof fetch>(async (input) => {
@@ -257,7 +278,7 @@ describe("App startup and system state", () => {
       displayName: "Tauri 测试宿主",
       getApiConnection: async () => connection,
       onTrayAction: async (handler) => {
-        trayHandler = handler as (action: "settings") => void;
+        trayHandler = handler as (action: "settings" | "diagnostics") => void;
         return () => undefined;
       },
       onCloseRequested: async (handler) => {
@@ -271,6 +292,10 @@ describe("App startup and system state", () => {
     await waitFor(() => expect(trayHandler).toBeDefined());
     await act(async () => trayHandler?.("settings"));
     expect(await screen.findByRole("heading", { name: "设置", level: 2 })).toBeInTheDocument();
+    await act(async () => trayHandler?.("diagnostics"));
+    expect(screen.getByRole("button", { name: /设置.*本地偏好与宿主/ })).toHaveAttribute("aria-current", "page");
+    expect(screen.getByRole("link", { name: /诊断.*版本、指标与队列/ })).toHaveAttribute("aria-current", "location");
+    expect(screen.queryByRole("button", { name: /诊断.*版本、日志与队列/ })).not.toBeInTheDocument();
     await act(async () => closeHandler?.());
     expect(screen.getByRole("heading", { name: "TraceGate 将继续在后台监控 PR。" })).toBeInTheDocument();
     await userEvent.click(screen.getByRole("checkbox", { name: /不再提示/ }));
@@ -278,7 +303,7 @@ describe("App startup and system state", () => {
     expect(hideMainWindow).toHaveBeenCalledOnce();
   });
 
-  it("renders the persisted English shell without claiming an unfinished locale", async () => {
+  it("renders the persisted English shell without the removed command palette", async () => {
     vi.stubGlobal("fetch", vi.fn<typeof fetch>(async (input) => {
       const url = String(input);
       if (url.endsWith("/system/status")) {
@@ -308,13 +333,15 @@ describe("App startup and system state", () => {
     }));
     renderApp(createHost(async () => connection));
     expect(await screen.findByRole("heading", { name: "Overview" })).toBeInTheDocument();
-    expect(screen.getByRole("navigation", { name: "Primary navigation" })).toHaveTextContent("Repositories");
+    const navigation = screen.getByRole("navigation", { name: "Primary navigation" });
+    expect(navigation).toHaveTextContent("Repositories");
+    expect(navigation).not.toHaveTextContent("Diagnostics");
     expect(screen.getByRole("heading", { name: "Some capabilities are not configured" })).toBeInTheDocument();
     expect(document.documentElement.lang).toBe("en-US");
     act(() => window.dispatchEvent(new KeyboardEvent("keydown", { key: "k", metaKey: true })));
-    const paletteSearch = await screen.findByPlaceholderText("Search views, repositories, PRs, or runs…");
-    await userEvent.type(paletteSearch, "Diagnostics{Enter}");
-    expect(await screen.findByRole("heading", { name: "Diagnostics", level: 1 })).toBeInTheDocument();
+    act(() => window.dispatchEvent(new KeyboardEvent("keydown", { key: "k", ctrlKey: true })));
+    expect(screen.queryByRole("dialog", { name: "Command palette" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Open command palette" })).not.toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: /Onboarding.*Complete initial setup/ }));
     expect(await screen.findByRole("heading", { name: "Welcome to TraceGate Studio" })).toBeInTheDocument();
     expect(screen.getByText("Real PR evidence")).toBeInTheDocument();

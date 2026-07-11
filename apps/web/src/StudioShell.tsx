@@ -5,7 +5,6 @@ import { usePullRequests, useRepositories, useRuns, useSettings, useSystemStatus
 import { useApiClient } from "./api/clientContext";
 import { ErrorState, LoadingState } from "./components/RequestState";
 import { PendingStatusBadge, StatusBadge } from "./components/StatusBadge";
-import { CommandPalette } from "./components/CommandPalette";
 import type { DeepLinkRoute, HostBridge, TrayAction } from "./host/hostBridge";
 import { errorMessage } from "./lib/errors";
 import { I18nProvider, type StudioLocale } from "./i18n";
@@ -15,7 +14,6 @@ import { PullRequestInboxPage } from "./pages/PullRequestInboxPage";
 import { AgentRunsPage } from "./pages/AgentRunsPage";
 import { EvalCenterPage } from "./pages/EvalCenterPage";
 import { RegistryPage } from "./pages/RegistryPage";
-import { DiagnosticsPage } from "./pages/DiagnosticsPage";
 import { OnboardingPage } from "./pages/OnboardingPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { useUiStore, type StudioView } from "./store/uiStore";
@@ -33,14 +31,13 @@ const RepositoryMapPage = lazy(async () => {
 const navigation: readonly { id: StudioView; zh: string; en: string; descriptionZh: string; descriptionEn: string; glyph: string }[] = [
   { id: "dashboard", zh: "概览", en: "Overview", descriptionZh: "系统与连接状态", descriptionEn: "System and connections", glyph: "01" },
   { id: "repositories", zh: "仓库", en: "Repositories", descriptionZh: "同步与增量索引", descriptionEn: "Sync and incremental index", glyph: "02" },
-  { id: "pull-requests", zh: "PR Inbox", en: "PR Inbox", descriptionZh: "审查与分析队列", descriptionEn: "Review and analysis queue", glyph: "03" },
+  { id: "pull-requests", zh: "审查队列", en: "PR Inbox", descriptionZh: "拉取请求审查与分析", descriptionEn: "Review and analysis queue", glyph: "03" },
   { id: "repository-map", zh: "代码地图", en: "Code Map", descriptionZh: "静态关系与影响", descriptionEn: "Static relations and impact", glyph: "04" },
-  { id: "runs", zh: "Agent Runs", en: "Agent Runs", descriptionZh: "节点与工具 Trace", descriptionEn: "Node and tool trace", glyph: "05" },
-  { id: "eval", zh: "Eval Center", en: "Eval Center", descriptionZh: "真实基准与 ClaimBench", descriptionEn: "Real benchmarks and ClaimBench", glyph: "06" },
-  { id: "registry", zh: "Registry", en: "Registry", descriptionZh: "Agent 与 Tool", descriptionEn: "Agents and tools", glyph: "07" },
-  { id: "diagnostics", zh: "诊断", en: "Diagnostics", descriptionZh: "版本、日志与队列", descriptionEn: "Versions, logs and queues", glyph: "08" },
-  { id: "onboarding", zh: "首次引导", en: "Onboarding", descriptionZh: "完成基础配置", descriptionEn: "Complete initial setup", glyph: "09" },
-  { id: "settings", zh: "设置", en: "Settings", descriptionZh: "本地偏好与宿主", descriptionEn: "Local preferences and host", glyph: "10" },
+  { id: "runs", zh: "运行记录", en: "Agent Runs", descriptionZh: "节点与工具轨迹", descriptionEn: "Node and tool trace", glyph: "05" },
+  { id: "eval", zh: "评测中心", en: "Eval Center", descriptionZh: "真实基准与声明评测", descriptionEn: "Real benchmarks and ClaimBench", glyph: "06" },
+  { id: "registry", zh: "组件注册", en: "Registry", descriptionZh: "智能体与工具", descriptionEn: "Agents and tools", glyph: "07" },
+  { id: "onboarding", zh: "首次引导", en: "Onboarding", descriptionZh: "完成基础配置", descriptionEn: "Complete initial setup", glyph: "08" },
+  { id: "settings", zh: "设置", en: "Settings", descriptionZh: "本地偏好与宿主", descriptionEn: "Local preferences and host", glyph: "09" },
 ];
 
 export function StudioShell({ host }: { host: HostBridge }) {
@@ -59,7 +56,6 @@ export function StudioShell({ host }: { host: HostBridge }) {
   const [closePromptOpen, setClosePromptOpen] = useState(false);
   const [dismissClosePrompt, setDismissClosePrompt] = useState(false);
   const [closeBusy, setCloseBusy] = useState(false);
-  const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   const previousPullRequests = useRef<Map<string, string | null> | null>(null);
   const previousRuns = useRef<Map<string, string> | null>(null);
   const previousGithubState = useRef<string | null>(null);
@@ -93,19 +89,6 @@ export function StudioShell({ host }: { host: HostBridge }) {
     document.documentElement.dataset.theme = theme;
     document.documentElement.lang = settingsQuery.data?.language ?? "zh-CN";
   }, [settingsQuery.data?.language, settingsQuery.data?.theme]);
-
-  useEffect(() => {
-    const handleKeyboard = (event: globalThis.KeyboardEvent) => {
-      if ((event.metaKey || event.ctrlKey) && event.key.toLocaleLowerCase() === "k") {
-        event.preventDefault();
-        setCommandPaletteOpen((open) => !open);
-      } else if (event.key === "Escape") {
-        setCommandPaletteOpen(false);
-      }
-    };
-    window.addEventListener("keydown", handleKeyboard);
-    return () => window.removeEventListener("keydown", handleKeyboard);
-  }, []);
 
   useEffect(() => {
     const items = notificationPullRequests.data?.items;
@@ -280,6 +263,8 @@ export function StudioShell({ host }: { host: HostBridge }) {
 
   const activeLabel = activeView === "pull-request-detail"
     ? text("PR 详情", "PR Details")
+    : activeView === "diagnostics"
+      ? text("设置", "Settings")
     : (() => { const item = navigation.find((entry) => entry.id === activeView); return item ? text(item.zh, item.en) : text("概览", "Overview"); })();
 
   return (
@@ -298,8 +283,8 @@ export function StudioShell({ host }: { host: HostBridge }) {
             <button
               key={item.id}
               type="button"
-              className={activeView === item.id ? "nav-item nav-item-active" : "nav-item"}
-              aria-current={activeView === item.id ? "page" : undefined}
+              className={activeView === item.id || (activeView === "diagnostics" && item.id === "settings") ? "nav-item nav-item-active" : "nav-item"}
+              aria-current={activeView === item.id || (activeView === "diagnostics" && item.id === "settings") ? "page" : undefined}
               onClick={() => setActiveView(item.id)}
             >
               <span className="nav-glyph">{item.glyph}</span>
@@ -312,24 +297,24 @@ export function StudioShell({ host }: { host: HostBridge }) {
         </nav>
 
         <div className="sidebar-status" aria-label={text("连接摘要", "Connection summary")}>
-          <span className="eyebrow">CONNECTIONS</span>
+          <span className="eyebrow">{text("连接状态", "CONNECTIONS")}</span>
           <div>
             <span>{text("本地后端", "Local backend")}</span>
             {statusQuery.data ? <StatusBadge compact status={statusQuery.data.components.api} /> : <PendingStatusBadge />}
           </div>
           <div>
-            <span>GitHub</span>
+            <span>{text("代码托管", "GitHub")}</span>
             {statusQuery.data ? <StatusBadge compact status={statusQuery.data.components.github} /> : <PendingStatusBadge />}
           </div>
           <div>
-            <span>{text("模型", "Model")}</span>
+            <span>{text("语义模型", "Model")}</span>
             {statusQuery.data ? <StatusBadge compact status={statusQuery.data.components.model} /> : <PendingStatusBadge />}
           </div>
         </div>
 
         <div className="host-caption">
           <span>{host.displayName}</span>
-          <small>{text("API Token 仅驻留内存", "API token stays in memory")}</small>
+          <small>{text("API 令牌仅驻留内存", "API token stays in memory")}</small>
         </div>
       </aside>
 
@@ -346,11 +331,6 @@ export function StudioShell({ host }: { host: HostBridge }) {
             <span className="eyebrow">TRACEGATE STUDIO</span>
             <h1>{activeLabel}</h1>
           </div>
-          <div className="header-status">
-            <button className="command-trigger" type="button" onClick={() => setCommandPaletteOpen(true)} aria-label={text("打开命令面板", "Open command palette")}><span>{text("搜索", "Search")}</span><kbd>⌘K</kbd></button>
-            <span>{text("后端", "Backend")}</span>
-            {statusQuery.data ? <StatusBadge status={statusQuery.data.components.api} /> : <PendingStatusBadge />}
-          </div>
         </header>
 
         {statusQuery.isError ? (
@@ -366,7 +346,6 @@ export function StudioShell({ host }: { host: HostBridge }) {
         {nativeNotice ? <div className={nativeNotice.kind === "error" ? "global-error inline-error" : "global-error inline-success"} role={nativeNotice.kind === "error" ? "alert" : "status"}>{nativeNotice.message}<button className="text-button" type="button" onClick={() => setNativeNotice(null)}>{text("关闭", "Close")}</button></div> : null}
 
         {closePromptOpen ? <div className="modal-backdrop" role="presentation"><section className="confirmation-modal" role="dialog" aria-modal="true" aria-labelledby="close-background-title"><span className="eyebrow">BACKGROUND MONITORING</span><h2 id="close-background-title">{text("TraceGate 将继续在后台监控 PR。", "TraceGate will continue monitoring PRs in the background.")}</h2><p>{text("关闭主窗口不会结束 Sidecar 或当前监控；只有“退出 TraceGate”会终止所有子进程。", "Closing the main window does not stop the Sidecar or monitoring. Only Quit TraceGate terminates all child processes.")}</p><label className="switch-row"><span><strong>{text("不再提示", "Do not show again")}</strong><small>{text("以后关闭窗口时直接隐藏。", "Hide the window immediately on future close requests.")}</small></span><input type="checkbox" checked={dismissClosePrompt} onChange={(event) => setDismissClosePrompt(event.target.checked)} /></label><div className="form-actions"><button className="button button-secondary" type="button" disabled={closeBusy} onClick={() => setClosePromptOpen(false)}>{text("取消", "Cancel")}</button><button className="button button-primary" type="button" disabled={closeBusy} onClick={() => void continueInBackground()}>{closeBusy ? text("处理中…", "Working…") : text("继续在后台运行", "Continue in background")}</button></div></section></div> : null}
-        {commandPaletteOpen ? <CommandPalette onClose={() => setCommandPaletteOpen(false)} /> : null}
 
         <div className="workspace-content"><Suspense fallback={<LoadingState label={text("正在加载代码视图…", "Loading code view…")} />}>
           {activeView === "dashboard" ? <DashboardPage /> : null}
@@ -377,7 +356,7 @@ export function StudioShell({ host }: { host: HostBridge }) {
           {activeView === "runs" ? <AgentRunsPage /> : null}
           {activeView === "eval" ? <EvalCenterPage /> : null}
           {activeView === "registry" ? <RegistryPage /> : null}
-          {activeView === "diagnostics" ? <DiagnosticsPage /> : null}
+          {activeView === "diagnostics" ? <SettingsPage host={host} initialSection="diagnostics" /> : null}
           {activeView === "onboarding" ? <OnboardingPage host={host} /> : null}
           {activeView === "settings" ? <SettingsPage host={host} /> : null}
         </Suspense></div>
