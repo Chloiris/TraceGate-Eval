@@ -151,7 +151,7 @@ pnpm test:e2e
 uv run python scripts/benchmark_studio.py --files 100 1000
 ```
 
-The latest local pass recorded 125 Python tests, 20 TypeScript/Vitest tests, 20
+The latest local pass recorded 159 Python tests, 20 TypeScript/Vitest tests, 20
 Rust tests, 4 Chrome E2E flows, a macOS arm64 `.app`/Sidecar health check, and a
 reproducible 100/1000-file smoke benchmark. See
 [implementation status](docs/implementation-status.md) and
@@ -163,10 +163,16 @@ bounded commands/provider responses, HMAC/replay protection, prompt-injection
 separation, verifier checks, and redacted rotating JSON logs. Telemetry is off.
 See [security model](docs/security-model.md) and [privacy](docs/privacy.md).
 
-Known limitations: no real-model E2E in the current credential-free
-environment; no new GitHub remote verification without explicit permission;
-no Windows CI/GUI evidence; partial JS/TS/Java parsing; no vector embeddings;
-large graph caps; native notification/tray clicks remain manual acceptance.
+Known limitations: Python has precise AST definitions/ranges but only partial
+same-file direct-call and inheritance resolution. JavaScript, TypeScript and
+Java remain declaration-level partial adapters; they do **not** provide a
+semantic reference index or function call graph. Regex-only
+`extends`/`implements` observations are labelled `inferred` and cannot enter
+confirmed Repository/Review Map edges. Changed-symbol mapping is Head-side and
+does not reconstruct deleted symbols. See the audited
+[parser capability matrix](docs/parser-capability-matrix.md). Vector embeddings
+remain disabled, large graphs are capped, Windows GUI acceptance and native
+notification/tray interaction still require manual target-platform evidence.
 
 Contributions should preserve provenance and failure honesty, include tests and
 migrations for schema changes, and avoid secrets/run artifacts. Start with

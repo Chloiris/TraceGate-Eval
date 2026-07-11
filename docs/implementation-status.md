@@ -22,7 +22,7 @@
 
 | Feature | Status | Evidence / note |
 | --- | --- | --- |
-| Existing suite plus Studio tests | VERIFIED_MACOS | 129 Python tests, 20 TypeScript/Vitest tests, 20 Rust tests (1 explicit secure-store mutation ignored), and 4 Chrome Playwright flows; original Eval coverage remains intact |
+| Existing suite plus Studio tests | VERIFIED_MACOS | 159 Python tests, 20 TypeScript/Vitest tests, 20 Rust tests (1 explicit secure-store mutation ignored), and 4 Chrome Playwright flows; original Eval coverage remains intact |
 | ClaimBench controlled benchmark | VERIFIED_MACOS | Existing tests and checked-in 160-run reports; metric definitions unchanged |
 | Real-PR hard benchmark | VERIFIED_MACOS | Existing tests and checked-in 19 scored cases |
 | EvidencePacket and redaction | VERIFIED_MACOS | Existing `tests/test_pr_advisor.py` |
@@ -44,7 +44,7 @@
 | Local API authentication and CORS | VERIFIED_MACOS | Auth/CORS tests plus Tauri-origin runtime verification |
 | SQLAlchemy 2 persistence | VERIFIED_MACOS | Studio models and API persistence tests |
 | SQLite default database | VERIFIED_MACOS | Real onboarding/settings persistence and database tests |
-| Alembic migration and SQLite migration test | VERIFIED_MACOS | `20260710_0001` through `20260710_0004`; fresh, idempotent, and upgrade-with-data tests |
+| Alembic migration and SQLite migration test | VERIFIED_MACOS | `20260710_0001` through `20260711_0005`; fresh, idempotent, offline MySQL DDL and upgrade-with-data tests |
 | Structured/redacted rotating logs | VERIFIED_MACOS | Packaged Sidecar wrote redacted JSONL with 5 MiB/3-backup limits and clean shutdown events |
 | System status API | VERIFIED_MACOS | Explicit ready/not-configured/unavailable states tested and rendered |
 | Diagnostics API/page | VERIFIED_MACOS | Redacted runtime/storage/queue/update state plus GitHub/index/graph/model/retrieval/notification metrics are API-tested and browser-rendered |
@@ -82,7 +82,7 @@
 | PR Inbox | VERIFIED_MACOS | Real persisted inbox exercised in Chrome Playwright |
 | PR details and typed tabs | VERIFIED_MACOS | Nine real-data tabs exercised in Chrome; unavailable Checks remain explicit |
 | Monaco Diff with finding/evidence jumps | VERIFIED_MACOS | Local/offline Monaco and Finding→Diff flow verified by Playwright screenshot/test |
-| Unified CodeParser interface | VERIFIED_MACOS | Python precise and JS/TS/Java partial capability levels tested and persisted |
+| Unified CodeParser interface | VERIFIED_MACOS | Audited 12-row Python/JS/TS/Java matrix with real temporary Git fixtures; Python AST is bounded and JS/TS/Java remain explicit declaration-level partial adapters; see `docs/parser-capability-matrix.md` |
 | Incremental commit-bound index | VERIFIED_MACOS | Content hash/change/deletion and Head SHA binding tests |
 | ripgrep/symbol/FTS5 hybrid retrieval | VERIFIED_MACOS | Sources remain labeled; vector retrieval explicitly disabled |
 | Repository Map backend | VERIFIED_MACOS | Persisted parsed/indexed relationships and commit/index binding tests |

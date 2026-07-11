@@ -10,6 +10,7 @@ with ORM `create_all`.
 | `20260710_0002` | Commit-bound index versions/files/symbols, graph nodes/edges and searchable document store | SQLite creates FTS5 virtual storage; MySQL creates an InnoDB table plus `FULLTEXT(path, content)`. |
 | `20260710_0003` | Durable GitHub webhook delivery IDs, payload hashes, processing state and target PR metadata | Unique delivery identity supports replay deduplication on both engines. |
 | `20260710_0004` | Desktop preferences, configurable model/monitor/Relay policy, Checks, branch refs, structured commits/files/hunks, model profiles, notification outcomes, Registry policy, and provider/index/graph/retrieval observability | Uses dialect-aware JSON defaults and Alembic batch alteration for the SQLite AgentRun foreign key; fresh/idempotent/upgrade tests pass. |
+| `20260711_0005` | Parser exports and typed relationship provenance (`confirmed`, `inferred`, `unknown`) on indexed files | Dialect-aware empty JSON defaults preserve existing SQLite/MySQL rows; inferred relationships remain outside confirmed static graphs. |
 
 Local SQLite verification:
 
