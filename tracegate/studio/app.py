@@ -19,6 +19,7 @@ from .errors import StudioAPIError
 from .migration_runner import require_current_revision, upgrade_database
 from .monitor import RepositoryMonitor
 from .relay_monitor import RelayMonitor
+from .runtime_credentials import router as runtime_credentials_router
 from .run_manager import RunManager
 from .webhooks import router as webhook_router
 
@@ -125,6 +126,7 @@ def create_app(settings: StudioSettings) -> FastAPI:
         return _error_response(exc.status_code, "http_error", str(exc.detail))
 
     app.include_router(router)
+    app.include_router(runtime_credentials_router)
     app.include_router(webhook_router)
     return app
 

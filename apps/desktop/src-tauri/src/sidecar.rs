@@ -29,6 +29,7 @@ pub const SIDECAR_SUBCOMMAND: &str = "serve";
 pub const LOOPBACK_HOST: &str = "127.0.0.1";
 pub const HEALTH_PATH: &str = "/api/v1/health";
 pub const API_PREFIX: &str = "/api/v1";
+pub const CREDENTIAL_CONTROL_PREFIX: &str = "/internal/v1/credentials";
 pub const MAX_RESTARTS: u8 = 2;
 const HEALTH_ATTEMPTS: usize = 120;
 const HEALTH_INTERVAL: Duration = Duration::from_millis(250);
@@ -92,9 +93,16 @@ enum SidecarError {
 struct SupervisorInner {
     child: Mutex<Option<CommandChild>>,
     connection: Mutex<Option<ApiConnection>>,
+    credential_control: Mutex<Option<CredentialControl>>,
     running: AtomicBool,
     shutdown: AtomicBool,
     status: Mutex<SidecarStatus>,
+}
+
+#[derive(Clone)]
+struct CredentialControl {
+    origin: String,
+    token: String,
 }
 
 #[derive(Clone)]
@@ -108,6 +116,7 @@ impl Default for SidecarSupervisor {
             inner: Arc::new(SupervisorInner {
                 child: Mutex::new(None),
                 connection: Mutex::new(None),
+                credential_control: Mutex::new(None),
                 running: AtomicBool::new(false),
                 shutdown: AtomicBool::new(false),
                 status: Mutex::new(SidecarStatus::Stopped),
@@ -133,6 +142,14 @@ impl SidecarSupervisor {
             .clone()
     }
 
+    pub fn credential_refresh_available(&self) -> bool {
+        self.inner
+            .credential_control
+            .lock()
+            .map(|control| control.is_some())
+            .unwrap_or(false)
+    }
+
     pub fn start(&self, app: AppHandle) {
         if self.inner.running.swap(true, Ordering::AcqRel) {
             return;
@@ -144,9 +161,56 @@ impl SidecarSupervisor {
         });
     }
 
+    pub async fn apply_credential(
+        &self,
+        kind: CredentialKind,
+        secret: Option<&str>,
+    ) -> Result<(), String> {
+        let control = self
+            .inner
+            .credential_control
+            .lock()
+            .map_err(|_| "Sidecar credential-control state is unavailable".to_owned())?
+            .clone()
+            .ok_or_else(|| {
+                "TraceGate backend is not healthy; credential refresh is unavailable".to_owned()
+            })?;
+        let client = reqwest::Client::builder()
+            .connect_timeout(Duration::from_secs(2))
+            .timeout(Duration::from_secs(5))
+            .redirect(reqwest::redirect::Policy::none())
+            .build()
+            .map_err(|_| "could not create the Sidecar credential-refresh client".to_owned())?;
+        let url = format!(
+            "{}{}/{}",
+            control.origin,
+            CREDENTIAL_CONTROL_PREFIX,
+            kind.api_name()
+        );
+        let request = match secret {
+            Some(value) => client
+                .put(url)
+                .bearer_auth(&control.token)
+                .json(&serde_json::json!({ "secret": value })),
+            None => client.delete(url).bearer_auth(&control.token),
+        };
+        let response = request
+            .send()
+            .await
+            .map_err(|_| "Sidecar credential refresh request failed".to_owned())?;
+        if !response.status().is_success() {
+            return Err(format!(
+                "Sidecar credential refresh returned HTTP {}",
+                response.status().as_u16()
+            ));
+        }
+        Ok(())
+    }
+
     pub fn shutdown<R: tauri::Runtime>(&self, app: &AppHandle<R>) {
         self.inner.shutdown.store(true, Ordering::Release);
         self.set_connection(None);
+        self.set_credential_control(None);
         if let Some(child) = self
             .inner
             .child
@@ -212,6 +276,7 @@ impl SidecarSupervisor {
         let port = reserve_loopback_port()?;
         let origin = format!("http://{LOOPBACK_HOST}:{port}");
         let token = generate_token();
+        let credential_control_token = generate_token();
         let environment = filter_environment(std::env::vars_os());
 
         let mut command = app
@@ -224,6 +289,10 @@ impl SidecarSupervisor {
             .env("TRACEGATE_HOST", LOOPBACK_HOST)
             .env("TRACEGATE_PORT", port.to_string())
             .env("TRACEGATE_LOCAL_API_TOKEN", &token)
+            .env(
+                "TRACEGATE_CREDENTIAL_CONTROL_TOKEN",
+                &credential_control_token,
+            )
             .env("TRACEGATE_DATA_DIR", &app_data)
             .env("TRACEGATE_PARENT_WATCHDOG", "1")
             .env("TRACEGATE_DESKTOP_PID", std::process::id().to_string())
@@ -267,6 +336,10 @@ impl SidecarSupervisor {
             return Err(SidecarError::HealthTimeout);
         }
 
+        self.set_credential_control(Some(CredentialControl {
+            origin: origin.clone(),
+            token: credential_control_token,
+        }));
         self.set_connection(Some(ApiConnection {
             base_url: format!("{origin}{API_PREFIX}"),
             token,
@@ -320,6 +393,7 @@ impl SidecarSupervisor {
 
     fn clear_current_child(&self) {
         self.set_connection(None);
+        self.set_credential_control(None);
         self.inner
             .child
             .lock()
@@ -329,6 +403,7 @@ impl SidecarSupervisor {
 
     fn stop_current_child(&self) {
         self.set_connection(None);
+        self.set_credential_control(None);
         if let Some(child) = self
             .inner
             .child
@@ -346,6 +421,14 @@ impl SidecarSupervisor {
             .connection
             .lock()
             .expect("Sidecar connection mutex poisoned") = connection;
+    }
+
+    fn set_credential_control(&self, control: Option<CredentialControl>) {
+        *self
+            .inner
+            .credential_control
+            .lock()
+            .expect("Sidecar credential-control mutex poisoned") = control;
     }
 
     fn update_status<R: tauri::Runtime>(&self, app: &AppHandle<R>, status: SidecarStatus) {
@@ -442,12 +525,55 @@ where
 
 #[cfg(test)]
 mod tests {
-    use std::ffi::OsString;
+    use std::{
+        ffi::OsString,
+        io::{Read, Write},
+        net::{TcpListener, TcpStream},
+        sync::{Arc, Mutex},
+        thread,
+        time::Duration,
+    };
 
     use super::{
-        filter_environment, generate_token, ApiConnection, SidecarStatus, API_PREFIX, HEALTH_PATH,
-        MAX_RESTARTS, SIDECAR_SUBCOMMAND,
+        filter_environment, generate_token, ApiConnection, CredentialControl, SidecarStatus,
+        SidecarSupervisor, API_PREFIX, CREDENTIAL_CONTROL_PREFIX, HEALTH_PATH, MAX_RESTARTS,
+        SIDECAR_SUBCOMMAND,
     };
+    use crate::credentials::CredentialKind;
+
+    fn read_request(mut stream: TcpStream) -> String {
+        stream
+            .set_read_timeout(Some(Duration::from_secs(5)))
+            .expect("set request timeout");
+        let mut bytes = Vec::new();
+        let mut chunk = [0_u8; 1024];
+        let expected_length = loop {
+            let count = stream.read(&mut chunk).expect("read request");
+            assert!(count > 0, "request ended before headers");
+            bytes.extend_from_slice(&chunk[..count]);
+            if let Some(header_end) = bytes.windows(4).position(|window| window == b"\r\n\r\n") {
+                let headers = String::from_utf8_lossy(&bytes[..header_end]);
+                let content_length = headers
+                    .lines()
+                    .find_map(|line| {
+                        let (name, value) = line.split_once(':')?;
+                        (name.eq_ignore_ascii_case("content-length"))
+                            .then(|| value.trim().parse::<usize>().expect("content length"))
+                    })
+                    .unwrap_or(0);
+                break header_end + 4 + content_length;
+            }
+        };
+        while bytes.len() < expected_length {
+            let count = stream.read(&mut chunk).expect("read request body");
+            assert!(count > 0, "request ended before body");
+            bytes.extend_from_slice(&chunk[..count]);
+        }
+        stream
+            .write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: close\r\n\r\n{}")
+            .expect("write response");
+        String::from_utf8(bytes).expect("request is utf-8")
+    }
 
     #[test]
     fn token_has_256_bits_encoded_as_hex() {
@@ -482,6 +608,7 @@ mod tests {
     fn retry_and_health_contracts_are_bounded() {
         assert_eq!(MAX_RESTARTS, 2);
         assert_eq!(HEALTH_PATH, "/api/v1/health");
+        assert_eq!(CREDENTIAL_CONTROL_PREFIX, "/internal/v1/credentials");
         assert_eq!(SIDECAR_SUBCOMMAND, "serve");
         assert_eq!(super::HEALTH_ATTEMPTS, 120);
     }
@@ -504,5 +631,63 @@ mod tests {
         assert!(!serialized_status.contains(&connection.base_url));
         assert!(!serialized_status.contains(&connection.token));
         assert!(!serialized_status.contains(API_PREFIX));
+    }
+
+    #[test]
+    fn credential_refresh_uses_private_control_channel_without_replacing_api_connection() {
+        let listener = TcpListener::bind(("127.0.0.1", 0)).expect("bind control server");
+        let origin = format!("http://{}", listener.local_addr().expect("control address"));
+        let requests = Arc::new(Mutex::new(Vec::new()));
+        let captured = requests.clone();
+        let server = thread::spawn(move || {
+            for stream in listener.incoming().take(2) {
+                captured
+                    .lock()
+                    .expect("request capture")
+                    .push(read_request(stream.expect("control request")));
+            }
+        });
+
+        let supervisor = SidecarSupervisor::default();
+        let public_connection = ApiConnection {
+            base_url: "http://127.0.0.1:43123/api/v1".to_owned(),
+            token: "public-api-token-not-for-control".to_owned(),
+        };
+        supervisor.set_connection(Some(public_connection.clone()));
+        supervisor.set_credential_control(Some(CredentialControl {
+            origin,
+            token: "private-control-token-not-for-webview".to_owned(),
+        }));
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .expect("test runtime");
+        runtime.block_on(async {
+            supervisor
+                .apply_credential(
+                    CredentialKind::Github,
+                    Some("not-a-real-github-credential-value"),
+                )
+                .await
+                .expect("apply live credential");
+            supervisor
+                .apply_credential(CredentialKind::Github, None)
+                .await
+                .expect("delete live credential");
+        });
+        server.join().expect("control server completed");
+
+        let requests = requests.lock().expect("captured requests");
+        assert_eq!(requests.len(), 2);
+        assert!(requests[0].starts_with("PUT /internal/v1/credentials/github "));
+        assert!(requests[1].starts_with("DELETE /internal/v1/credentials/github "));
+        for request in requests.iter() {
+            let normalized = request.to_ascii_lowercase();
+            assert!(
+                normalized.contains("authorization: bearer private-control-token-not-for-webview")
+            );
+            assert!(!request.contains(&public_connection.token));
+        }
+        assert_eq!(supervisor.api_connection(), Some(public_connection));
     }
 }

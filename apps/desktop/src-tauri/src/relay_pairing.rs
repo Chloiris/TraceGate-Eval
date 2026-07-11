@@ -1,8 +1,12 @@
 use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
+use tauri::State;
 
-use crate::credentials::{self, CredentialKind, CredentialStatus};
+use crate::{
+    credentials::{self, CredentialKind, CredentialStatus},
+    state::DesktopState,
+};
 
 #[derive(Debug, Deserialize)]
 struct PairingResponse {
@@ -64,6 +68,7 @@ pub async fn pair_webhook_relay(
     base_url: String,
     pairing_code: String,
     device_id: String,
+    state: State<'_, DesktopState>,
 ) -> Result<RelayPairingResult, String> {
     let endpoint = relay_endpoint(&base_url)?;
     if pairing_code.len() < 20
@@ -113,9 +118,16 @@ pub async fn pair_webhook_relay(
     payload.repositories.dedup();
     let credential = credentials::store_credential(CredentialKind::Relay, &payload.device_token)
         .map_err(|error| error.to_string())?;
+    state
+        .sidecar
+        .apply_credential(CredentialKind::Relay, Some(&payload.device_token))
+        .await
+        .map_err(|error| {
+            format!("Relay credential was saved securely but could not be applied live: {error}")
+        })?;
     Ok(RelayPairingResult {
         repositories: payload.repositories,
-        credential,
+        credential: credential.applied_live(),
     })
 }
 

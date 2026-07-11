@@ -83,6 +83,9 @@ def run(argv: Sequence[str] | None = None) -> int:
     except StudioConfigurationError as exc:
         print(f"TraceGate Studio configuration error: {exc}", file=sys.stderr)
         return 2
+    # The desktop-only control token is retained as a SecretStr in application state.
+    # Remove it from the process environment before any repository tools can spawn.
+    os.environ.pop("TRACEGATE_CREDENTIAL_CONTROL_TOKEN", None)
     log_path = configure_logging(default_data_dir(), args.log_level.upper())
     logging.getLogger("tracegate.studio").info(
         "sidecar_starting host=%s port=%s authentication=bearer log=%s",

@@ -30,6 +30,14 @@ impl CredentialKind {
             Self::Relay => "TRACEGATE_RELAY_DEVICE_TOKEN",
         }
     }
+
+    pub fn api_name(self) -> &'static str {
+        match self {
+            Self::Github => "github",
+            Self::Model => "model",
+            Self::Relay => "relay",
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -39,6 +47,18 @@ pub struct CredentialStatus {
     pub configured: bool,
     pub storage: &'static str,
     pub restart_required_after_change: bool,
+}
+
+impl CredentialStatus {
+    pub fn applied_live(mut self) -> Self {
+        self.restart_required_after_change = false;
+        self
+    }
+
+    pub fn with_live_refresh_available(mut self, available: bool) -> Self {
+        self.restart_required_after_change = !available;
+        self
+    }
 }
 
 #[derive(Debug, Error)]
@@ -124,6 +144,9 @@ mod tests {
             CredentialKind::Relay.environment_name(),
             "TRACEGATE_RELAY_DEVICE_TOKEN"
         );
+        assert_eq!(CredentialKind::Github.api_name(), "github");
+        assert_eq!(CredentialKind::Model.api_name(), "model");
+        assert_eq!(CredentialKind::Relay.api_name(), "relay");
     }
 
     #[test]
@@ -136,6 +159,18 @@ mod tests {
         })
         .expect("status serialization");
         assert_eq!(value["configured"], true);
+        assert_eq!(value["restartRequiredAfterChange"], true);
+        let live_value = serde_json::to_value(
+            CredentialStatus {
+                kind: CredentialKind::Github,
+                configured: true,
+                storage: "test secure store",
+                restart_required_after_change: true,
+            }
+            .applied_live(),
+        )
+        .expect("live status serialization");
+        assert_eq!(live_value["restartRequiredAfterChange"], false);
         assert!(value.get("secret").is_none());
         assert!(value.get("token").is_none());
     }

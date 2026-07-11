@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   isComponentReady,
   type ConnectionComponent,
@@ -10,6 +11,7 @@ import {
 } from "@tracegate/shared-types";
 
 import {
+  queryKeys,
   useCreateRepository,
   useOnboarding,
   useSettings,
@@ -68,6 +70,7 @@ export function OnboardingPage({ host }: { host: HostBridge }) {
 function OnboardingFlow({ onboarding, settings, host }: { onboarding: OnboardingState; settings: Settings; host: HostBridge }) {
   const { text } = useI18n();
   const client = useApiClient();
+  const queryClient = useQueryClient();
   const updateOnboarding = useUpdateOnboarding();
   const updateSettings = useUpdateSettings();
   const createRepository = useCreateRepository();
@@ -120,7 +123,13 @@ function OnboardingFlow({ onboarding, settings, host }: { onboarding: Onboarding
       const status = await host.storeCredential(kind, value);
       if (kind === "github") setGithubToken("");
       else setModelKey("");
-      setNativeMessage(text(`凭据已写入 ${status.storage}。请重启 TraceGate，让 Sidecar 读取新凭据后再执行连接测试。`, `Credential saved to ${status.storage}. Restart TraceGate so the Sidecar can read it before testing the connection.`));
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: queryKeys.onboarding }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.systemStatus }),
+      ]);
+      setNativeMessage(status.restartRequiredAfterChange
+        ? text(`凭据已写入 ${status.storage}，但当前后端未能热更新。`, `Credential saved to ${status.storage}, but the current backend could not refresh it live.`)
+        : text(`凭据已写入 ${status.storage} 并立即应用，可以直接执行连接测试。`, `Credential saved to ${status.storage} and applied immediately; you can test the connection now.`));
     } catch (error) {
       setNativeError(errorMessage(error));
     } finally {
@@ -203,7 +212,7 @@ function OnboardingFlow({ onboarding, settings, host }: { onboarding: Onboarding
 
   const blockedReason =
     onboarding.current_step === "github" && !githubReady
-      ? text("GitHub 凭据尚未由当前 Sidecar 读取。保存凭据并重启 TraceGate 后继续。", "The current Sidecar has not loaded a GitHub credential. Save it and restart TraceGate before continuing.")
+      ? text("请先安全保存 GitHub 凭据；当前后端会立即载入，无需重启。", "Save a GitHub credential first; the current backend loads it immediately without a restart.")
       : onboarding.current_step === "github" && !connectionTests.github
         ? text("请执行一次真实 GitHub 连接测试。", "Run a real GitHub connection test.")
         : onboarding.current_step === "model" && modelReady && modelName.trim() && !connectionTests.model

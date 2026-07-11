@@ -13,18 +13,46 @@ use crate::{
 };
 
 #[tauri::command]
-pub fn get_credential_status(kind: CredentialKind) -> Result<CredentialStatus, String> {
-    credentials::credential_status(kind).map_err(|error| error.to_string())
+pub fn get_credential_status(
+    kind: CredentialKind,
+    state: State<'_, DesktopState>,
+) -> Result<CredentialStatus, String> {
+    credentials::credential_status(kind)
+        .map(|status| {
+            status.with_live_refresh_available(state.sidecar.credential_refresh_available())
+        })
+        .map_err(|error| error.to_string())
 }
 
 #[tauri::command]
-pub fn store_credential(kind: CredentialKind, secret: String) -> Result<CredentialStatus, String> {
-    credentials::store_credential(kind, &secret).map_err(|error| error.to_string())
+pub async fn store_credential(
+    kind: CredentialKind,
+    secret: String,
+    state: State<'_, DesktopState>,
+) -> Result<CredentialStatus, String> {
+    let status = credentials::store_credential(kind, &secret).map_err(|error| error.to_string())?;
+    state
+        .sidecar
+        .apply_credential(kind, Some(&secret))
+        .await
+        .map_err(|error| {
+            format!("Credential was saved securely but could not be applied live: {error}")
+        })?;
+    Ok(status.applied_live())
 }
 
 #[tauri::command]
-pub fn delete_credential(kind: CredentialKind) -> Result<CredentialStatus, String> {
-    credentials::delete_credential(kind).map_err(|error| error.to_string())
+pub async fn delete_credential(
+    kind: CredentialKind,
+    state: State<'_, DesktopState>,
+) -> Result<CredentialStatus, String> {
+    let status = credentials::delete_credential(kind).map_err(|error| error.to_string())?;
+    state
+        .sidecar
+        .apply_credential(kind, None)
+        .await
+        .map_err(|error| format!("Credential was removed securely but could not be removed from the running backend: {error}"))?;
+    Ok(status.applied_live())
 }
 
 #[tauri::command]

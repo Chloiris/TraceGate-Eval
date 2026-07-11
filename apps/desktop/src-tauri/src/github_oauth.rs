@@ -6,7 +6,10 @@ use std::{
 use serde::{Deserialize, Serialize};
 use tauri::State;
 
-use crate::credentials::{self, CredentialKind, CredentialStatus};
+use crate::{
+    credentials::{self, CredentialKind, CredentialStatus},
+    state::DesktopState,
+};
 
 const DEVICE_CODE_URL: &str = "https://github.com/login/device/code";
 const ACCESS_TOKEN_URL: &str = "https://github.com/login/oauth/access_token";
@@ -146,6 +149,7 @@ pub async fn begin_github_device_flow(
 #[tauri::command]
 pub async fn poll_github_device_flow(
     state: State<'_, GitHubOAuthState>,
+    desktop_state: State<'_, DesktopState>,
 ) -> Result<DevicePollResult, String> {
     let (client_id, device_code, interval) = {
         let mut guard = state
@@ -242,10 +246,17 @@ pub async fn poll_github_device_flow(
                 .0
                 .lock()
                 .map_err(|_| "GitHub OAuth state is unavailable".to_owned())? = None;
+            desktop_state
+                .sidecar
+                .apply_credential(CredentialKind::Github, Some(&token))
+                .await
+                .map_err(|error| {
+                    format!("GitHub credential was saved securely but could not be applied live: {error}")
+                })?;
             Ok(DevicePollResult {
                 status: "authorized",
                 interval_seconds: interval.as_secs(),
-                credential: Some(credential),
+                credential: Some(credential.applied_live()),
             })
         }
     }

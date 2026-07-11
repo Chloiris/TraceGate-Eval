@@ -207,7 +207,7 @@ def _webhook_relay_status(app_settings: AppSettings, snapshot: object) -> Compon
             state="not_configured",
             configured=False,
             message="Webhook Relay 未配置",
-            detail="Pair this device and restart the Sidecar so it can read the secure Relay token.",
+            detail="Pair this device to load its secure Relay token; browser mode can use an explicit environment variable.",
         )
     connected = bool(getattr(snapshot, "connected", False))
     last_error = getattr(snapshot, "last_error", None)
@@ -287,7 +287,7 @@ async def test_connection(
             raise StudioAPIError(
                 409,
                 "github_not_configured",
-                "GitHub 尚未连接; store a credential and restart the Sidecar before testing.",
+                "GitHub 尚未连接; save a desktop credential or configure an explicit browser-mode environment variable before testing.",
             )
         provider = GitHubProvider(token=token)
         try:

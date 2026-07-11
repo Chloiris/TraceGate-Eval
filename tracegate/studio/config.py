@@ -64,6 +64,7 @@ class StudioSettings(BaseModel):
     host: str = "127.0.0.1"
     port: int = Field(default=8765, ge=1, le=65535)
     local_api_token: SecretStr
+    credential_control_token: SecretStr | None = None
     database_url: str
     cors_origins: tuple[str, ...] = DEFAULT_CORS_ORIGINS
     allowed_hosts: tuple[str, ...] = ("127.0.0.1", "localhost", "testserver")
@@ -86,6 +87,13 @@ class StudioSettings(BaseModel):
     def validate_token(cls, value: SecretStr) -> SecretStr:
         if len(value.get_secret_value()) < 32:
             raise ValueError("TRACEGATE_LOCAL_API_TOKEN must contain at least 32 characters")
+        return value
+
+    @field_validator("credential_control_token")
+    @classmethod
+    def validate_credential_control_token(cls, value: SecretStr | None) -> SecretStr | None:
+        if value is not None and len(value.get_secret_value()) < 32:
+            raise ValueError("TRACEGATE_CREDENTIAL_CONTROL_TOKEN must contain at least 32 characters")
         return value
 
     @field_validator("database_url")
@@ -128,6 +136,11 @@ class StudioSettings(BaseModel):
             "host": os.environ.get("TRACEGATE_HOST", "127.0.0.1"),
             "port": int(os.environ.get("TRACEGATE_PORT", "8765")),
             "local_api_token": SecretStr(token),
+            "credential_control_token": (
+                SecretStr(control_token)
+                if (control_token := os.environ.get("TRACEGATE_CREDENTIAL_CONTROL_TOKEN"))
+                else None
+            ),
             "database_url": os.environ.get("TRACEGATE_DATABASE_URL") or sqlite_database_url(data_dir),
             "cors_origins": origins,
             "auto_migrate": _env_bool("TRACEGATE_AUTO_MIGRATE", True),
