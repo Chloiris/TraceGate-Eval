@@ -12,6 +12,9 @@ use crate::{
     window,
 };
 
+const GITHUB_FINE_GRAINED_PAT_CREATION_URL: &str =
+    "https://github.com/settings/personal-access-tokens/new?name=TraceGate%20Studio&description=Read-only%20Pull%20Request%20review%20for%20TraceGate%20Studio&expires_in=90&pull_requests=read&checks=read";
+
 #[tauri::command]
 pub fn get_credential_status(
     kind: CredentialKind,
@@ -218,6 +221,15 @@ pub fn open_workspace_file(
 }
 
 #[tauri::command]
+#[allow(deprecated)]
+pub fn open_external(app: AppHandle, url: String) -> Result<(), String> {
+    let target = validate_external_url(&url)?;
+    app.shell()
+        .open(target, None)
+        .map_err(|error| format!("could not open GitHub access token page: {error}"))
+}
+
+#[tauri::command]
 pub fn quit_tracegate(app: AppHandle) {
     lifecycle::request_exit(&app);
 }
@@ -297,6 +309,13 @@ fn validate_workspace_file(
     Ok(canonical)
 }
 
+fn validate_external_url(value: &str) -> Result<String, String> {
+    if value != GITHUB_FINE_GRAINED_PAT_CREATION_URL {
+        return Err("only the official GitHub access token creation page may be opened".to_owned());
+    }
+    Ok(value.to_owned())
+}
+
 fn notification_action_opens(action: &str) -> bool {
     action == "default" || action == "open"
 }
@@ -304,8 +323,8 @@ fn notification_action_opens(action: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::{
-        notification_action_opens, validate_notification_text, validate_workspace_file,
-        validate_workspace_path,
+        notification_action_opens, validate_external_url, validate_notification_text,
+        validate_workspace_file, validate_workspace_path,
     };
 
     #[test]
@@ -331,6 +350,30 @@ mod tests {
         assert!(validate_workspace_file(&root, "Cargo.toml").is_ok());
         assert!(validate_workspace_file(&root, "../Cargo.toml").is_err());
         assert!(validate_workspace_file(&root, "/tmp/file").is_err());
+    }
+
+    #[test]
+    fn external_url_allows_only_the_github_token_creation_page() {
+        let allowed = super::GITHUB_FINE_GRAINED_PAT_CREATION_URL;
+        assert_eq!(validate_external_url(allowed).as_deref(), Ok(allowed));
+
+        for rejected in [
+            "https://github.com/settings/personal-access-tokens/new",
+            "https://github.com/settings/personal-access-tokens/new?name=Other",
+            "http://github.com/settings/personal-access-tokens/new",
+            "https://github.example/settings/personal-access-tokens/new",
+            "https://github.com.evil.example/settings/personal-access-tokens/new",
+            "https://github.com@evil.example/settings/personal-access-tokens/new",
+            "https://github.com:8443/settings/personal-access-tokens/new",
+            "https://github.com/settings/tokens/new",
+            "https://github.com/settings/personal-access-tokens/new#fragment",
+            " https://github.com/settings/personal-access-tokens/new",
+        ] {
+            assert!(
+                validate_external_url(rejected).is_err(),
+                "accepted {rejected}"
+            );
+        }
     }
 
     #[test]

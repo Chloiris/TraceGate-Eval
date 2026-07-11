@@ -234,7 +234,7 @@ describe("App startup and system state", () => {
     };
 
     renderApp(host);
-    const field = await screen.findByLabelText("GitHub Fine-grained PAT");
+    const field = await screen.findByLabelText("GitHub 访问令牌（Fine-grained PAT）");
     await userEvent.type(field, "test-credential-material-12345");
     const saveButton = screen.getAllByRole("button", { name: "保存到系统凭据库" })[0];
     if (!saveButton) throw new Error("GitHub secure-store button was not rendered");

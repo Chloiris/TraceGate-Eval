@@ -155,7 +155,7 @@ export function SettingsPage({ host, initialSection = "general" }: SettingsPageP
 }
 
 const credentialLabels: Record<CredentialKind, { titleZh: string; titleEn: string; placeholderZh: string; placeholderEn: string }> = {
-  github: { titleZh: "GitHub Fine-grained PAT", titleEn: "GitHub fine-grained PAT", placeholderZh: "输入 GitHub Token", placeholderEn: "Enter GitHub token" },
+  github: { titleZh: "GitHub 访问令牌（Fine-grained PAT）", titleEn: "GitHub access token (fine-grained PAT)", placeholderZh: "粘贴完整的 github_pat_…", placeholderEn: "Paste the complete github_pat_… token" },
   model: { titleZh: "模型 API Key", titleEn: "Model API key", placeholderZh: "输入模型 Provider 密钥", placeholderEn: "Enter model provider key" },
   relay: { titleZh: "Webhook Relay 设备 Token", titleEn: "Webhook Relay device token", placeholderZh: "输入配对后返回的设备 Token", placeholderEn: "Enter the device token returned by pairing" },
 };

@@ -48,6 +48,7 @@ pub fn run() {
             commands::show_review_notification,
             commands::open_workspace,
             commands::open_workspace_file,
+            commands::open_external,
             commands::quit_tracegate,
             github_oauth::begin_github_device_flow,
             github_oauth::poll_github_device_flow,

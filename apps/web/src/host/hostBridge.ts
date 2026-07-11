@@ -7,6 +7,8 @@ import {
 } from "@tracegate/shared-types";
 
 export type HostKind = "browser" | "tauri" | "ue-webview" | "maya-webview";
+export const GITHUB_FINE_GRAINED_PAT_CREATION_URL =
+  "https://github.com/settings/personal-access-tokens/new?name=TraceGate%20Studio&description=Read-only%20Pull%20Request%20review%20for%20TraceGate%20Studio&expires_in=90&pull_requests=read&checks=read";
 export type TrayAction =
   | "scan_all"
   | "pause_monitoring"
@@ -53,6 +55,7 @@ export interface HostBridge {
   hideMainWindow?(): Promise<void>;
   openWorkspace?(path: string, editor?: boolean): Promise<void>;
   openWorkspaceFile?(workspace: string, path: string, line?: number): Promise<void>;
+  openExternal?(url: string): Promise<void>;
   beginGithubDeviceFlow?(clientId: string): Promise<GitHubDeviceAuthorization>;
   pollGithubDeviceFlow?(): Promise<GitHubDevicePollResult>;
   pairWebhookRelay?(baseUrl: string, pairingCode: string, deviceId: string): Promise<RelayPairingResult>;
@@ -94,6 +97,17 @@ export class BrowserHost implements HostBridge {
       );
     }
     return apiConnectionSchema.parse({ baseUrl: this.#baseUrl, token: this.#token });
+  }
+
+  async openExternal(url: string): Promise<void> {
+    const safeUrl = validateExternalUrl(url);
+    const opened = window.open(safeUrl, "_blank", "noopener,noreferrer");
+    if (opened === null) {
+      throw new HostBridgeError(
+        "host_command_failed",
+        "浏览器阻止了 GitHub 令牌创建页。请允许此页面打开新窗口后重试。",
+      );
+    }
   }
 }
 
@@ -158,6 +172,12 @@ export class TauriHost implements HostBridge {
   async openWorkspaceFile(workspace: string, path: string, line?: number): Promise<void> {
     const { invoke } = await import("@tauri-apps/api/core");
     await invoke("open_workspace_file", { workspace, path, line });
+  }
+
+  async openExternal(url: string): Promise<void> {
+    const safeUrl = validateExternalUrl(url);
+    const { invoke } = await import("@tauri-apps/api/core");
+    await invoke("open_external", { url: safeUrl });
   }
 
   async beginGithubDeviceFlow(clientId: string): Promise<GitHubDeviceAuthorization> {
@@ -229,6 +249,13 @@ export const reservedWebViewHosts: readonly ReservedWebViewHostAdapter[] = [
 
 function isTauriRuntime(): boolean {
   return "__TAURI_INTERNALS__" in window;
+}
+
+function validateExternalUrl(value: string): string {
+  if (value !== GITHUB_FINE_GRAINED_PAT_CREATION_URL) {
+    throw new HostBridgeError("unsupported_host", "仅允许打开 GitHub 官方访问令牌创建页。");
+  }
+  return value;
 }
 
 export function createHostBridge(): HostBridge {
