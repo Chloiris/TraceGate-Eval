@@ -60,6 +60,12 @@ jobs:
           set -euo pipefail
           uv run python scripts/check_secret_hygiene.py 2>&1 | tee .ci-artifacts/security/secrets.log
 
+      - name: Check canonical product facts and documentation consistency
+        shell: bash
+        run: |
+          set -euo pipefail
+          uv run python scripts/check_docs_consistency.py 2>&1 | tee .ci-artifacts/security/docs-consistency.log
+
       - name: Run strict reality guardrail
         shell: bash
         run: |

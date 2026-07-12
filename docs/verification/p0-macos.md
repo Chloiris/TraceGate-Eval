@@ -1,5 +1,8 @@
 # P0 macOS arm64 verification
 
+> **Historical verification record.** Results below are bound to the recorded
+> Studio P0 source and must not be read as current Autofix verification.
+
 - Date: 2026-07-10
 - Host: macOS 26.5.1 (25F80), Apple Silicon arm64
 - Branch: `feat/tracegate-studio-fullstack`

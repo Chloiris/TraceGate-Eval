@@ -1,5 +1,8 @@
 # P1 macOS verification evidence
 
+> **Historical verification record.** Results below are bound to the recorded
+> Studio P1 source and must not be read as current Autofix verification.
+
 - Date: 2026-07-10
 - Platform: macOS arm64
 - Branch: `feat/tracegate-studio-fullstack`

@@ -10,6 +10,7 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, SecretStr
 
+from tracegate import __version__
 from tracegate.repository import RepositoryBoundary
 
 
@@ -98,7 +99,7 @@ class MCPClient:
                 "clientInfo": {
                     "name": "tracegate-studio",
                     "title": "TraceGate Studio",
-                    "version": "0.1.0",
+                    "version": __version__,
                 },
             },
         )

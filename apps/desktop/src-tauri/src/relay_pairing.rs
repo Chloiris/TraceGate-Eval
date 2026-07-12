@@ -83,7 +83,7 @@ pub async fn pair_webhook_relay(
     let client = reqwest::Client::builder()
         .timeout(Duration::from_secs(20))
         .redirect(reqwest::redirect::Policy::none())
-        .user_agent("TraceGate-Studio/0.1")
+        .user_agent(format!("TraceGate-Studio/{}", env!("CARGO_PKG_VERSION")))
         .build()
         .map_err(|_| "could not create Webhook Relay client".to_owned())?;
     let response = client

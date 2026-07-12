@@ -1,5 +1,8 @@
 # Windows x86_64 CI verification
 
+> **Historical verification record.** This source-bound pre-Autofix CI record
+> remains valid only for its recorded commit, runs and automated scope.
+
 - Status: `VERIFIED_WINDOWS_CI`
 - Verified at: 2026-07-12T02:53:11Z
 - Source commit: `a7466ce69441871df229a5ed1cdf32ec594ba935`

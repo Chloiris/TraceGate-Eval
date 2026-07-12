@@ -1,5 +1,8 @@
 # TraceGate Studio current baseline
 
+> **Historical verification record.** This file intentionally preserves the
+> pre-Studio baseline, including its original branch, SHA and test counts.
+
 - Audit date: 2026-07-10 (Asia/Shanghai)
 - Audited commit: `76a23abb8c626af85ca2fdd05cb249d7be8040af`
 - Starting branch: `main` (clean and aligned with `origin/main`)

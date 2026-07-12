@@ -12,6 +12,7 @@ import pytest
 from fastapi.testclient import TestClient
 from pydantic import SecretStr
 
+from tracegate import __version__
 from tracegate.config import PROJECT_ROOT
 from tracegate.studio.app import SECURITY_HEADERS, create_app
 from tracegate.studio.config import StudioSettings
@@ -69,7 +70,7 @@ def test_health_reports_database_and_security_headers(client: TestClient) -> Non
     assert response.json() == {
         "status": "ok",
         "service": "tracegate-studio",
-        "version": "0.1.0",
+        "version": __version__,
         "api_version": "v1",
         "database": {
             "state": "ready",

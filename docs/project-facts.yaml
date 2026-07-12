@@ -1,0 +1,379 @@
+{
+  "schema_version": 1,
+  "canonical_naming": {
+    "repository_name": "TraceGate-Eval",
+    "product_name": "TraceGate Studio",
+    "product_description": "Local-first full-stack AI coding-agent workspace for evidence-grounded PR review, code intelligence, controlled autofix, and agent evaluation.",
+    "eval_module_name": "TraceGate Eval",
+    "claimbench_name": "ClaimBench",
+    "semantic_pr_advisor_name": "Semantic PR Advisor"
+  },
+  "version": "0.4.0",
+  "version_history": {
+    "product_version_policy": "TraceGate Studio and every shipped runtime use one repository-wide product version.",
+    "historical_research_milestones": [
+      "v0.2-alpha",
+      "v0.3-alpha"
+    ],
+    "historical_note": "The v0.2-alpha and v0.3-alpha tags are preserved research and Semantic PR Advisor milestones; their recorded values are not rewritten as product package versions."
+  },
+  "baseline": {
+    "main_sha": "a1dcd7d755c25e0f75aac499943a07b759ec30db",
+    "development_branch": "feat/coding-agent-autofix-loop",
+    "captured_on": "2026-07-12"
+  },
+  "review_workflow": {
+    "version": "tracegate-langgraph-v1",
+    "prompt_version": "tracegate-pr-review-v1",
+    "node_count": 7,
+    "nodes": [
+      "Planner",
+      "Repository Retriever",
+      "Context Resolver",
+      "Code Analyst",
+      "Risk Reviewer",
+      "Verifier",
+      "Report Composer"
+    ]
+  },
+  "tool_registry": {
+    "tool_count": 19,
+    "tools": [
+      "apply_patch",
+      "get_check_runs",
+      "get_dependency_neighbors",
+      "get_git_diff",
+      "get_git_log",
+      "get_git_status",
+      "get_pr_comments",
+      "get_pr_commits",
+      "get_pr_files",
+      "get_pr_metadata",
+      "get_repository_map",
+      "get_symbol_definition",
+      "get_symbol_references",
+      "list_directory",
+      "read_file",
+      "run_command",
+      "run_tests",
+      "search_code",
+      "search_symbol"
+    ]
+  },
+  "test_counts": {
+    "record_kind": "historical_baseline",
+    "source_sha": "a1dcd7d755c25e0f75aac499943a07b759ec30db",
+    "python_collected": 212,
+    "typescript": {
+      "shared_types": 5,
+      "api_client": 7,
+      "web": 18,
+      "total": 30
+    },
+    "rust": {
+      "passed": 22,
+      "ignored": 1
+    },
+    "playwright": 4,
+    "note": "These are the executable pre-Autofix baseline counts. Final current counts must be replaced after the Autofix test matrix runs."
+  },
+  "benchmark_counts": {
+    "real_pr_cases": 19,
+    "real_pr_status_distribution": {
+      "active": 12,
+      "stale": 2,
+      "unknown": 3,
+      "conflicting": 2
+    },
+    "claimbench_runs": 160,
+    "claimbench_modules": {
+      "auth": 32,
+      "job": 32,
+      "order": 32,
+      "payment": 32,
+      "user": 32
+    },
+    "claimbench_evidence_states": {
+      "active": 40,
+      "stale": 40,
+      "unknown": 40,
+      "conflicting": 40
+    },
+    "claimbench_context_groups": 8,
+    "claimbench_models": {
+      "deepseek-v4-pro": 160
+    }
+  },
+  "parser_boundaries": {
+    "python": {
+      "file_recognition": "SUPPORTED",
+      "import_export": "PARTIAL",
+      "class_interface": "PARTIAL",
+      "function_method": "SUPPORTED",
+      "symbol_definition": "PARTIAL",
+      "symbol_reference": "PARTIAL",
+      "inheritance_implementation": "PARTIAL",
+      "file_level_dependency": "PARTIAL",
+      "function_level_call": "PARTIAL",
+      "test_relationship": "PARTIAL",
+      "changed_symbol_mapping": "PARTIAL",
+      "line_range_accuracy": "SUPPORTED"
+    },
+    "javascript": {
+      "file_recognition": "SUPPORTED",
+      "import_export": "PARTIAL",
+      "class_interface": "PARTIAL",
+      "function_method": "PARTIAL",
+      "symbol_definition": "PARTIAL",
+      "symbol_reference": "UNSUPPORTED",
+      "inheritance_implementation": "PARTIAL",
+      "file_level_dependency": "PARTIAL",
+      "function_level_call": "UNSUPPORTED",
+      "test_relationship": "PARTIAL",
+      "changed_symbol_mapping": "PARTIAL",
+      "line_range_accuracy": "PARTIAL"
+    },
+    "typescript": {
+      "file_recognition": "SUPPORTED",
+      "import_export": "PARTIAL",
+      "class_interface": "PARTIAL",
+      "function_method": "PARTIAL",
+      "symbol_definition": "PARTIAL",
+      "symbol_reference": "UNSUPPORTED",
+      "inheritance_implementation": "PARTIAL",
+      "file_level_dependency": "PARTIAL",
+      "function_level_call": "UNSUPPORTED",
+      "test_relationship": "PARTIAL",
+      "changed_symbol_mapping": "PARTIAL",
+      "line_range_accuracy": "PARTIAL"
+    },
+    "java": {
+      "file_recognition": "SUPPORTED",
+      "import_export": "PARTIAL",
+      "class_interface": "PARTIAL",
+      "function_method": "PARTIAL",
+      "symbol_definition": "PARTIAL",
+      "symbol_reference": "UNSUPPORTED",
+      "inheritance_implementation": "PARTIAL",
+      "file_level_dependency": "UNSUPPORTED",
+      "function_level_call": "UNSUPPORTED",
+      "test_relationship": "UNSUPPORTED",
+      "changed_symbol_mapping": "PARTIAL",
+      "line_range_accuracy": "PARTIAL"
+    }
+  },
+  "platforms": {
+    "supported": {
+      "desktop": [
+        "macos-arm64",
+        "windows-x86_64"
+      ],
+      "browser_development": [
+        "macos",
+        "linux"
+      ]
+    },
+    "verified": {
+      "macos_arm64": {
+        "status": "VERIFIED_MACOS",
+        "scope": "Browser, API, packaged Sidecar and bounded desktop lifecycle; native tray/status-item and notification-click acceptance remain excluded."
+      },
+      "windows_x86_64_ci": {
+        "status": "VERIFIED_WINDOWS_CI",
+        "scope": "Automated compilation, tests, secure-store round trip, Sidecar health and unsigned packaging."
+      },
+      "windows_x86_64_manual": {
+        "status": "BLOCKED",
+        "scope": "No real Windows graphical installation or interaction acceptance has been performed."
+      }
+    }
+  },
+  "delivery_artifacts": {
+    "baseline_source_sha": "a1dcd7d755c25e0f75aac499943a07b759ec30db",
+    "macos_arm64": {
+      "status": "VERIFIED_MACOS",
+      "unsigned": true,
+      "workflow_run_id": 29185555819,
+      "artifact_id": 8257933268,
+      "artifact_name": "TraceGate-Studio-macOS-arm64-unsigned-a1dcd7d755c25e0f75aac499943a07b759ec30db",
+      "files": [
+        "TraceGate-Studio-macOS-arm64-unsigned.zip",
+        "tracegate-backend-aarch64-apple-darwin",
+        "SHA256SUMS-macos.txt",
+        "build-info.json"
+      ]
+    },
+    "windows_x86_64": {
+      "status": "VERIFIED_WINDOWS_CI",
+      "unsigned": true,
+      "workflow_run_id": 29185555800,
+      "artifact_id": 8258026173,
+      "artifact_name": "TraceGate-Studio-Windows-x86_64-unsigned-a1dcd7d755c25e0f75aac499943a07b759ec30db",
+      "files": [
+        "TraceGate-Studio-Setup.exe",
+        "TraceGate-Studio.msi",
+        "TraceGate-Studio-portable-x86_64.zip",
+        "SHA256SUMS.txt",
+        "build-info.json",
+        "test-summary.txt"
+      ],
+      "note": "The cited baseline run produced the MSI; the workflow copies it only when Tauri emits it."
+    }
+  },
+  "current_limitations": [
+    {
+      "id": "windows-artifacts-unsigned",
+      "status": "IMPLEMENTED_UNVERIFIED",
+      "summary": "Windows artifacts have no Authenticode signature and SmartScreen behavior is not verified."
+    },
+    {
+      "id": "windows-gui-manual-unverified",
+      "status": "BLOCKED",
+      "summary": "Windows installation, WebView2, tray, notifications, autostart, single-instance, process cleanup and uninstall await real GUI acceptance."
+    },
+    {
+      "id": "macos-native-click-acceptance-unverified",
+      "status": "IMPLEMENTED_UNVERIFIED",
+      "summary": "macOS status-item and notification-click behavior lack direct manual evidence."
+    },
+    {
+      "id": "github-oauth-live-unverified",
+      "status": "IMPLEMENTED_UNVERIFIED",
+      "summary": "The GitHub OAuth Device Flow implementation has not completed a live authorization."
+    },
+    {
+      "id": "vector-retrieval-disabled",
+      "status": "IMPLEMENTED_UNVERIFIED",
+      "summary": "Vector embeddings are disabled; retrieval uses labeled text, symbol, FTS5 and ripgrep sources."
+    },
+    {
+      "id": "large-graph-bounded",
+      "status": "IMPLEMENTED_UNVERIFIED",
+      "summary": "Large graphs are capped and aggregated; backend-local graph paging is not implemented."
+    },
+    {
+      "id": "partial-multilanguage-parser",
+      "status": "IMPLEMENTED_UNVERIFIED",
+      "summary": "JavaScript, TypeScript and Java use bounded declaration adapters and do not provide full semantic call graphs."
+    },
+    {
+      "id": "small-real-pr-dataset",
+      "status": "IMPLEMENTED_UNVERIFIED",
+      "summary": "The 19-case real-PR set is intentionally small and not statistically significant."
+    },
+    {
+      "id": "autofix-no-auto-push",
+      "status": "IMPLEMENTED_UNVERIFIED",
+      "summary": "Controlled Autofix must not automatically commit, push, comment or modify the original workspace."
+    },
+    {
+      "id": "native-tool-calling-not-claimed",
+      "status": "VERIFIED_MACOS",
+      "summary": "The recorded real DeepSeek E2E used JSON compatibility tool selection and is not evidence of native Function Calling."
+    },
+    {
+      "id": "public-pr-autofix-e2e-pending",
+      "status": "BLOCKED",
+      "summary": "The baseline has no verified real public-PR Autofix E2E; final status requires new production-path evidence."
+    }
+  ],
+  "verification_documents": [
+    {
+      "path": "docs/current-baseline.md",
+      "status": "VERIFIED_MACOS",
+      "scope": "Pre-Studio baseline",
+      "historical": true
+    },
+    {
+      "path": "docs/verification/p0-macos.md",
+      "status": "VERIFIED_MACOS",
+      "scope": "Studio P0 macOS evidence",
+      "historical": true
+    },
+    {
+      "path": "docs/verification/p1-macos.md",
+      "status": "VERIFIED_MACOS",
+      "scope": "Studio P1 macOS evidence",
+      "historical": true
+    },
+    {
+      "path": "docs/verification/real-model-e2e-macos.md",
+      "status": "VERIFIED_MACOS",
+      "scope": "One production-path DeepSeek review E2E",
+      "historical": true
+    },
+    {
+      "path": "docs/verification/windows-ci.md",
+      "status": "VERIFIED_WINDOWS_CI",
+      "scope": "Source-bound Windows CI evidence prior to Autofix",
+      "historical": true
+    }
+  ],
+  "documentation_policy": {
+    "historical_marker": "Historical verification record",
+    "historical_documents": [
+      "RELEASE_NOTES_v0.1.md",
+      "RELEASE_NOTES_web_v0.1.md",
+      "docs/RELEASE_NOTES_v0.2-alpha.md",
+      "docs/SEMANTIC_PR_ADVISOR_v0.3.md",
+      "docs/current-baseline.md",
+      "docs/verification/p0-macos.md",
+      "docs/verification/p1-macos.md",
+      "docs/verification/real-model-e2e-macos.md",
+      "docs/verification/windows-ci.md"
+    ],
+    "current_facing_documents": [
+      "README.md",
+      "docs/README_CN.md",
+      "docs/implementation-status.md",
+      "docs/product-tour.md",
+      "docs/demo-script.md",
+      "docs/interview-guide.md",
+      "docs/resume-bullets.md",
+      "docs/api.md",
+      "docs/troubleshooting.md",
+      "docs/security-model.md",
+      "docs/privacy.md",
+      "docs/current-autofix-baseline.md",
+      "docs/architecture/ADR-003-autofix-workflow.md",
+      "docs/doc-consistency-audit.md",
+      "SECURITY.md",
+      "CHANGELOG.md"
+    ],
+    "relative_link_documents": [
+      "README.md",
+      "docs/README_CN.md"
+    ],
+    "forbidden_stale_branches": [
+      "feat/tracegate-studio-fullstack",
+      "feature/tracegate-pr-advisory-real-data-mac",
+      "chore/win11-to-m5-handoff"
+    ],
+    "required_readme_limitations": {
+      "README.md": {
+        "windows-artifacts-unsigned": ["Windows artifacts are unsigned"],
+        "windows-gui-manual-unverified": ["await manual target-platform tests"],
+        "vector-retrieval-disabled": ["Vector embeddings are disabled"],
+        "partial-multilanguage-parser": ["bounded JS/TS/Java adapters"],
+        "small-real-pr-dataset": ["intentionally small and not statistically significant"],
+        "native-tool-calling-not-claimed": ["native OpenAI function calling is not claimed"]
+      },
+      "docs/README_CN.md": {
+        "windows-artifacts-unsigned": ["Windows 产物未签名"],
+        "windows-gui-manual-unverified": ["仍需目标平台人工验收"],
+        "vector-retrieval-disabled": ["向量 Embedding 默认关闭"],
+        "partial-multilanguage-parser": ["受约束的 JS/TS/Java 适配器"],
+        "small-real-pr-dataset": ["刻意保持小规模，不具备统计显著性"],
+        "native-tool-calling-not-claimed": ["没有把它写成 OpenAI 原生 Function Calling"]
+      }
+    },
+    "forbidden_unqualified_claim_patterns": [
+      "\\bvector (?:search|retrieval) (?:is|was) (?:enabled|used|supported|verified)\\b",
+      "向量检索(?:已启用|已使用|已支持|已验证)",
+      "\\bnative tool calling (?:is|was) (?:enabled|used|supported|verified)\\b",
+      "原生\\s*Tool Calling(?:已启用|已使用|已支持|已验证)",
+      "\\b(?:full|complete) Java (?:function )?call graph\\b",
+      "完整的?\\s*Java\\s*(?:函数)?调用图"
+    ]
+  }
+}

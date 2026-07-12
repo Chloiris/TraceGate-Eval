@@ -1,8 +1,9 @@
 # TraceGate Studio implementation status
 
 - Last updated: 2026-07-12
-- Verification source: feature branch `feat/tracegate-studio-fullstack` through
-  commit `a7466ce69441871df229a5ed1cdf32ec594ba935`
+- Current development baseline: protected `main` commit
+  `a1dcd7d755c25e0f75aac499943a07b759ec30db`
+- Current development branch: `feat/coding-agent-autofix-loop`
 - Status owner: TraceGate maintainers
 
 ## Status definitions
@@ -36,7 +37,7 @@
 | --- | --- | --- |
 | Repository audit and baseline | VERIFIED_MACOS | `docs/current-baseline.md` plus recorded commands |
 | Architecture decision | VERIFIED_MACOS | ADR boundaries were exercised by the packaged macOS app; see `docs/verification/p0-macos.md` |
-| Development branch | VERIFIED_MACOS | `feat/tracegate-studio-fullstack` created from `76a23ab` |
+| Historical Studio development branch | VERIFIED_MACOS | Historical: `feat/tracegate-studio-fullstack` was created from `76a23ab`; current work is tracked separately. |
 | Monorepo workspace and locked Node dependencies | VERIFIED_MACOS / VERIFIED_WINDOWS_CI | pnpm workspace and `pnpm-lock.yaml`; Windows frozen install passed all 30 TypeScript/Vitest tests |
 | Locked Python environment | VERIFIED_MACOS | `uv.lock`; frozen uv environment used for tests and packaging |
 | React + strict TypeScript browser client | VERIFIED_MACOS | Dashboard plus P1 product pages exercised by Chrome Playwright; see `docs/verification/p1-macos.md` |

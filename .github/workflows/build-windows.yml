@@ -167,8 +167,10 @@ jobs:
           Compress-Archive -Path "$PortableRoot/*" -DestinationPath artifacts/windows/TraceGate-Studio-portable-x86_64.zip
           Remove-Item $PortableRoot -Recurse -Force
 
+          $ProductVersion = (Get-Content docs/project-facts.yaml | ConvertFrom-Json).version
           @{
             commit = "${{ github.sha }}"
+            version = $ProductVersion
             runner = "windows-latest"
             architecture = "x86_64"
             target_triple = "x86_64-pc-windows-msvc"

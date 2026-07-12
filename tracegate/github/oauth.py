@@ -10,6 +10,8 @@ from typing import Any
 import httpx
 from pydantic import BaseModel, ConfigDict, Field, SecretStr, field_validator
 
+from tracegate import __version__
+
 
 class GitHubOAuthError(RuntimeError):
     def __init__(self, code: str, message: str) -> None:
@@ -73,7 +75,7 @@ class GitHubDeviceFlow:
             base_url="https://github.com",
             timeout=httpx.Timeout(timeout_seconds),
             follow_redirects=False,
-            headers={"Accept": "application/json", "User-Agent": "TraceGate-Studio/0.1"},
+            headers={"Accept": "application/json", "User-Agent": f"TraceGate-Studio/{__version__}"},
         )
 
     async def begin(self, scope: str = "read:user repo") -> DeviceAuthorizationSession:
