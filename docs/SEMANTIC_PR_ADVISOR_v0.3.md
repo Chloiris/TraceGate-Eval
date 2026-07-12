@@ -1,5 +1,8 @@
 # TraceGate v0.3 Semantic PR Advisor
 
+> **Historical verification record.** This preserves the `v0.3-alpha` Semantic
+> PR Advisor milestone and does not define the current Studio product version.
+
 TraceGate v0.3 adds a semantic Pull Request advisory path for real GitHub PRs.
 It upgrades the v0.2 warning-only rule skeleton with evidence retrieval,
 EvidencePacket construction, DeepSeek JSON judging, and verifier guardrails.

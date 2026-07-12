@@ -1,8 +1,8 @@
 [package]
 name = "tracegate-desktop"
-version = "0.1.0"
+version = "0.4.0"
 description = "TraceGate Studio Tauri desktop shell"
-authors = ["TraceGate Eval contributors"]
+authors = ["TraceGate contributors"]
 license = "MIT"
 edition = "2021"
 rust-version = "1.77.2"

@@ -91,6 +91,10 @@ class SettingsResponse(BaseModel):
     analysis_paused: bool
     webhook_relay_url: str | None
     webhook_relay_device_id: str | None
+    autofix_max_files: int
+    autofix_max_changed_lines: int
+    autofix_confirmation_ttl_seconds: int
+    autofix_workspace_retention_hours: int
     updated_at: datetime
 
 
@@ -121,6 +125,10 @@ class SettingsUpdate(BaseModel):
     analysis_paused: bool | None = None
     webhook_relay_url: str | None = Field(default=None, max_length=2048)
     webhook_relay_device_id: str | None = Field(default=None, max_length=128)
+    autofix_max_files: int | None = Field(default=None, ge=1, le=32)
+    autofix_max_changed_lines: int | None = Field(default=None, ge=50, le=5000)
+    autofix_confirmation_ttl_seconds: int | None = Field(default=None, ge=60, le=3600)
+    autofix_workspace_retention_hours: int | None = Field(default=None, ge=1, le=168)
 
     @field_validator("model_provider", "model_name")
     @classmethod
@@ -142,7 +150,9 @@ class SettingsUpdate(BaseModel):
         if parsed.scheme not in {"http", "https"} or not parsed.netloc:
             raise ValueError("model_base_url must be an absolute HTTP(S) URL")
         if parsed.username or parsed.password or parsed.query or parsed.fragment:
-            raise ValueError("model_base_url must not contain credentials, query, or fragment")
+            raise ValueError(
+                "model_base_url must not contain credentials, query, or fragment"
+            )
         return normalized
 
     @field_validator("webhook_relay_url")
@@ -154,11 +164,17 @@ class SettingsUpdate(BaseModel):
         if not normalized:
             return None
         parsed = urlsplit(normalized)
-        loopback_http = parsed.scheme == "http" and parsed.hostname in {"127.0.0.1", "localhost", "::1"}
+        loopback_http = parsed.scheme == "http" and parsed.hostname in {
+            "127.0.0.1",
+            "localhost",
+            "::1",
+        }
         if (parsed.scheme != "https" and not loopback_http) or not parsed.netloc:
             raise ValueError("webhook_relay_url must use HTTPS or loopback HTTP")
         if parsed.username or parsed.password or parsed.query or parsed.fragment:
-            raise ValueError("webhook_relay_url must not contain credentials, query, or fragment")
+            raise ValueError(
+                "webhook_relay_url must not contain credentials, query, or fragment"
+            )
         return normalized
 
     @field_validator("webhook_relay_device_id")
@@ -199,6 +215,10 @@ class SettingsUpdate(BaseModel):
             "automatic_analysis_include_drafts",
             "automatic_analysis_require_checks_success",
             "analysis_paused",
+            "autofix_max_files",
+            "autofix_max_changed_lines",
+            "autofix_confirmation_ttl_seconds",
+            "autofix_workspace_retention_hours",
         ):
             if name in self.model_fields_set and getattr(self, name) is None:
                 raise ValueError(f"{name} cannot be null")
@@ -441,7 +461,9 @@ class CheckRunResponse(BaseModel):
 
 class CheckRunListResponse(BaseModel):
     items: list[CheckRunResponse]
-    aggregate_status: Literal["not_available", "pending", "success", "failure", "neutral"]
+    aggregate_status: Literal[
+        "not_available", "pending", "success", "failure", "neutral"
+    ]
     synced_at: datetime | None
 
 
@@ -652,6 +674,12 @@ NotificationKind = Literal[
     "high_risk_finding",
     "analysis_completed",
     "analysis_failed",
+    "fix_proposal_ready",
+    "fix_awaiting_confirmation",
+    "fix_validation_passed",
+    "fix_validation_failed",
+    "fix_resolved",
+    "fix_needs_human_review",
     "github_authentication_failed",
     "sidecar_restart_failed",
     "test",

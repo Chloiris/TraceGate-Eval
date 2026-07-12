@@ -1,5 +1,8 @@
 # TraceGate Studio current baseline
 
+> **Historical verification record.** This file intentionally preserves the
+> pre-Studio baseline, including its original branch, SHA and test counts.
+
 - Audit date: 2026-07-10 (Asia/Shanghai)
 - Audited commit: `76a23abb8c626af85ca2fdd05cb249d7be8040af`
 - Starting branch: `main` (clean and aligned with `origin/main`)
@@ -221,3 +224,8 @@ The starting repository is a healthy, tested Python evaluation prototype with
 valuable real evidence and guardrails, but it is not yet a full-stack desktop
 coding-agent product. Studio development will preserve the benchmark package
 and build new product boundaries around it.
+
+For the current version and controlled Autofix work, use
+[`implementation-status.md`](implementation-status.md) and
+[`current-autofix-baseline.md`](current-autofix-baseline.md). This historical
+record is not the current feature list or current test total.

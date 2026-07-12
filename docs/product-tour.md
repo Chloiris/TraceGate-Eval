@@ -1,75 +1,139 @@
 # TraceGate Studio product tour
 
+This tour separates UI fixture evidence from real-model/public-PR evidence. The
+current Autofix screenshots are Playwright fixture captures. A separate real
+DeepSeek record is `VERIFIED_MACOS` for a synthetic temporary Git repository;
+public-PR Fix E2E remains `BLOCKED`.
+
 ## 1. Start with system truth
 
-Open **Overview**. The screen distinguishes ready, unconfigured, unavailable,
-and error states. Without credentials it says `GitHub 尚未连接`, `模型尚未配置`,
-and `Webhook Relay 未配置`; it does not substitute demo providers.
+Open **Overview**. Ready, unconfigured, unavailable, and error states are
+distinct. Without credentials Studio says GitHub/model/Relay is not configured
+and never substitutes a fixture provider or rule-generated semantic report.
 
-## 2. Enroll and index a repository
+Settings has secondary navigation for Appearance, Connections, Model,
+Repositories, Monitoring, Autofix limits, and Diagnostics. Credential fields
+write through the native bridge to Keychain/Credential Manager and return only
+`configured`/`missing` status.
 
-Open **Repositories**, add `owner/name`, and optionally authorize an absolute
-local Git workspace. Synchronization reads GitHub snapshots when a credential
-or public-repository path is available. **Reindex** parses the checked-out
-commit, records capability levels, writes FTS/symbol/graph rows, and binds the
-result to a commit SHA.
+## 2. Enroll, synchronize, and index
 
-## 3. Explore the Repository Map
+Open **Repositories**, add `owner/name`, and explicitly authorize an absolute
+local Git workspace. Sync persists PR metadata, snapshots, Base/Head SHA,
+commits, files/hunks, comments, checks, ETag, and rate-limit state. Reindex
+records content hashes, parser capability, symbols, relationships, and FTS data
+for the exact commit.
 
-Open **Code Map** from a repository card. Start at directory aggregation, then
-filter by path, language, directory, relationship, PR relevance, risk, or
-one/two-hop depth. Double-click a directory to collapse it. Select a node to
-inspect its commit, symbols, tests, Findings, Evidence, and Diff/VS Code/GitHub
-links. JSON, SVG, and PNG exports reflect the current persisted graph.
+An index mismatch is not repaired silently: fetch/check out the exact Head
+outside TraceGate, then reindex.
+
+## 3. Explore Repository Map
+
+Use directory aggregation, path/language/relation/PR/risk filters, one/two-hop
+exploration, MiniMap, collapse, and layout persistence. Node detail links to
+symbols, tests, Findings, Evidence, Diff, VS Code, and GitHub. JSON/SVG/PNG
+exports reflect the persisted response.
+
+Only confirmed parser/index relationships are map edges. Inferred/unknown
+observations stay labelled provenance, and response caps remain visible.
 
 ## 4. Review a Pull Request
 
-Open **PR Inbox** and select a synchronized Pull Request. Overview shows GitHub
-refs/SHAs, checks, model/index identity, context scope, duration, tokens, risk,
-and the last real analysis error.
+PR Inbox reads persisted synchronization data. The detail workspace shows:
 
-- **Files & Diff** uses Monaco with Base/Head/Diff views, hunks, Finding and
-  Evidence markers, path copy, GitHub, and bounded VS Code line opening.
-- **Review Map** combines real Git diff, confirmed static index relations, and
-  persisted Agent Evidence. Unconfirmed edges remain visibly distinct.
-- **Change Tour** shows files, symbols, purpose, prerequisite step, risk,
-  Evidence, checkpoints, confidence, and a direct Diff jump. Missing static
-  relationships are reported as incomplete or not inferred.
-- **Checks** and **History** show persisted GitHub Checks, commits, sync state,
-  and Agent Runs.
+- **Files & Diff:** Monaco Base/Head/Diff, hunks, Finding/Evidence markers,
+  GitHub and bounded VS Code jumps;
+- **Review Map:** Git changed files + confirmed static neighbors + persisted
+  Agent Evidence;
+- **Change Tour:** changed files/symbols, purpose, prerequisites, risk,
+  Evidence, confidence, checkpoints, and explicit incomplete order;
+- **Checks/History:** real persisted GitHub state and prior Agent Runs.
 
-## 5. Run and inspect the Agent
+![Fixture-backed PR detail](screenshots/p1-pr-diff-macos.png)
 
-With a real model credential and matching Head-SHA index, start analysis. The
-seven LangGraph nodes persist their steps and tool calls. **Agent Runs** streams
-state over authenticated SSE, supports cancellation and bounded retry, exports
-JSON/Markdown, and links Findings back to steps, files, tools, and Evidence.
+> Playwright repository fixture. This image verifies UI behavior only.
 
-If a model is missing or fails, the run exposes the real error. No rule result
-is presented as semantic model output.
+## 5. Inspect read-only Agent Review
 
-## 6. Inspect policy and evaluation
+Starting analysis requires a configured real provider and a Head-matching
+index. Seven LangGraph nodes persist steps and Tool Calls. Agent Runs streams
+authenticated SSE, supports cancellation/retry, and links Findings backward to
+Evidence, file ranges, Tool Calls, and Agent steps.
 
-**Registry** exposes each production Agent and Tool, schema, permission,
-timeout, call/error counts, and persistent enable/disable controls. Disabling a
-required Agent blocks new runs. Disabled Tools are rejected by the execution
-registry. `apply_patch` cannot be globally enabled and still requires write
-mode plus exact per-use confirmation; it never commits or pushes.
+The historical production-path DeepSeek review E2E proves requests,
+Tool Calls, persistence, and traceability for one public PR; it is not Autofix
+or accuracy evidence.
 
-**Eval Center** reads the checked-in 19-case real-data set and 160 ClaimBench
-runs, displays provenance hashes, unchanged metrics, confusion matrix,
-model/context comparisons, error drill-down, and JSON/CSV export.
+## 6. Generate a controlled Fix Plan
 
-## 7. Finish with desktop behavior and diagnostics
+Open a persisted Finding and choose **Generate Fix**. Studio creates a session
+bound to repository, PR, Finding, source Run, Base/Head SHA, and index. It checks
+eligibility before asking the production ModelProvider for a structured plan.
 
-The Tauri host owns the single instance, loopback Sidecar, per-launch API token,
-secure credentials, tray, close-to-hide, deep links, native notifications,
-autostart preference, and true-quit cleanup. **Diagnostics** shows redacted
-versions, storage paths, queues, rate-limit/backoff, GitHub/index/graph/model
-timings, retrieval counts, notification outcomes, and explicit empty values
-when no real run exists.
+Hard stale/sensitive/path/binary boundaries cannot be forced away. Planning
+failure stays visible, and the seven-node Review workflow remains unchanged.
 
-Platform evidence and unresolved manual checks are tracked in
-[`implementation-status.md`](implementation-status.md) and
-[`windows-manual-acceptance.md`](windows-manual-acceptance.md).
+## 7. Inspect Patch Proposal and confirmation
 
+Generation returns a structured unified diff and validation metadata. The
+server parses and bounds it, resolves every path/symlink, rejects sensitive and
+binary targets, checks exact Head/clean worktree, runs `git apply --check`, and
+computes the authoritative normalized Patch Hash.
+
+![Fixture-backed hash confirmation](screenshots/autofix-playwright-fixture-confirmation-macos.png)
+
+> Playwright Autofix fixture. This is not a live-model/public-PR patch.
+
+The user confirms that exact Patch Hash. Confirmation binds the session,
+repository, PR, Finding, Head SHA, hash, nonce, and expiry; it is single-use.
+A Head/hash change blocks apply.
+
+## 8. Apply, validate, and watch events
+
+Apply runs only in a Fix-owned detached Git worktree at the exact Head. The
+enrolled user workspace is unchanged. Validation commands are derived from
+manifests/presets as argument vectors and run with filtered environment,
+timeout, cancellation, output caps, and persisted return codes. Model-supplied
+shell text is never executed.
+
+This is command control, not an OS/container sandbox: repository tests still
+run with the local user's authority. Use a disposable environment for
+untrusted PRs.
+
+SSE resumes with `Last-Event-ID`. Validation running, failure, timeout,
+cancellation, no-test, and success remain distinct states.
+
+## 9. Reindex, re-review, and report
+
+Studio creates a transient index bound to Head + Patch Hash, re-reviews the
+actual applied diff and validation, then applies deterministic resolution
+policy. Tests passing alone cannot produce `RESOLVED`; the original Finding
+must lose verifier support and no disqualifying new risk may appear.
+
+![Fixture-backed Post-Fix report](screenshots/autofix-playwright-fixture-result-macos.png)
+
+> Playwright Autofix fixture. The separate
+> [`VERIFIED_MACOS` real-model record](verification/real-autofix-e2e-macos.md)
+> uses a synthetic temporary repository, not a public PR.
+
+The report exposes commands/return codes, re-review, final diff, residual
+Findings/risks, and one of five explicit resolutions.
+
+## 10. Export, rollback, and clean up
+
+Patch and JSON report downloads come from authoritative persisted content.
+Export does not commit or push. Rollback resets/cleans only the managed Fix
+worktree to its recorded Head. Cleanup deletes only registered worktrees under
+the Autofix root; failures and retained/orphaned workspaces appear in
+Diagnostics.
+
+## 11. Finish with policy and evaluation
+
+Registry exposes seven Review roles and 19 real Tool schemas/permissions/
+limits. Eval Center renders the checked-in 19-case public-PR set and 160
+ClaimBench rows without changing metric definitions. Diagnostics shows
+redacted provider/index/graph/model/Fix/workspace state, not secrets.
+
+Use [`implementation-status.md`](implementation-status.md) for current gates,
+[`autofix-guide.md`](autofix-guide.md) for operations, and
+[`autofix-safety.md`](autofix-safety.md) for the threat model.

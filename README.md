@@ -1,11 +1,7 @@
 <div align="center">
   <img src="apps/desktop/src-tauri/icons/icon.svg" width="88" alt="TraceGate Studio logo" />
   <h1>TraceGate Studio</h1>
-  <p><strong>Evidence-grounded AI coding agent and Pull Request review workspace</strong></p>
-  <p>
-    TraceGate connects GitHub changes, commit-bound code intelligence, controlled
-    agent tools, verifiable findings, and reproducible evaluation in one local-first desktop product.
-  </p>
+  <p><strong>Evidence-grounded PR review and controlled coding-agent Autofix, on your machine.</strong></p>
   <p>
     <a href="README.md">English</a> ·
     <a href="docs/README_CN.md">简体中文</a>
@@ -13,223 +9,249 @@
   <p>
     <a href="https://github.com/Chloiris/TraceGate-Eval/actions/workflows/ci-backend.yml"><img alt="Backend CI" src="https://github.com/Chloiris/TraceGate-Eval/actions/workflows/ci-backend.yml/badge.svg?branch=main" /></a>
     <a href="https://github.com/Chloiris/TraceGate-Eval/actions/workflows/ci-frontend.yml"><img alt="Frontend CI" src="https://github.com/Chloiris/TraceGate-Eval/actions/workflows/ci-frontend.yml/badge.svg?branch=main" /></a>
-    <a href="https://github.com/Chloiris/TraceGate-Eval/actions/workflows/ci-rust.yml"><img alt="Rust CI" src="https://github.com/Chloiris/TraceGate-Eval/actions/workflows/ci-rust.yml/badge.svg?branch=main" /></a>
     <a href="https://github.com/Chloiris/TraceGate-Eval/actions/workflows/ci-security.yml"><img alt="Security CI" src="https://github.com/Chloiris/TraceGate-Eval/actions/workflows/ci-security.yml/badge.svg?branch=main" /></a>
-    <a href="https://github.com/Chloiris/TraceGate-Eval/actions/workflows/build-windows.yml"><img alt="Windows build" src="https://github.com/Chloiris/TraceGate-Eval/actions/workflows/build-windows.yml/badge.svg?branch=main" /></a>
     <a href="LICENSE"><img alt="MIT License" src="https://img.shields.io/badge/license-MIT-0f766e.svg" /></a>
   </p>
 </div>
 
 ![TraceGate Studio Pull Request workspace](docs/screenshots/p1-pr-diff-macos.png)
 
-> Running browser product flow over an isolated E2E repository fixture. The
-> screenshot proves the UI path, not a public-repository or live-model result.
-> A separately audited real DeepSeek run is documented below.
+> The hero image comes from an isolated Playwright repository fixture. It
+> verifies the running UI path, not a public-PR or live-model result. Evidence
+> records below keep fixture, real-local, real-model, and public-PR scopes
+> separate.
 
-## Why TraceGate
+## 1. Product Overview
 
-A patch can compile and pass tests while still being unsafe: it may delete an
-active compatibility path, follow a stale incident note, trust conflicting
-history, or cite code that is no longer present at the reviewed commit.
+**TraceGate-Eval** is the repository. **TraceGate Studio** is its local-first
+desktop and full-stack product. **TraceGate Eval** is the preserved research
+and evaluation subsystem; **ClaimBench** is its controlled claim benchmark,
+and **Semantic PR Advisor** is the PR semantic-review module.
 
-TraceGate therefore asks more than _“did the patch pass?”_:
+Studio joins a React UI, authenticated FastAPI Sidecar, commit-bound code
+intelligence, observable LangGraph workflows, controlled tools, and Tauri 2.
+Version `0.4.0` adds a separate controlled Autofix path: it may propose and
+validate a patch, but it cannot silently mutate the enrolled workspace or push
+code. The feature branch has completed its full macOS matrix, native package,
+scoped real-model run, and source-bound Windows CI/package gate. Public-PR Fix
+evidence and Windows graphical acceptance remain explicitly blocked.
 
-- Is every conclusion bound to the current repository, path, line range, and
-  Head SHA?
-- Is the supporting context `active`, `stale`, `unknown`, or `conflicting`?
-- Which Agent step and Tool Call produced each Evidence row and Finding?
-- Which graph edges are statically confirmed, and which are only inferred?
-- Does a provider failure remain visible instead of becoming a synthetic
-  success report?
+## 2. Why TraceGate
 
-The result is an inspectable coding-agent workflow rather than a black-box
-review summary.
+Passing tests do not prove that a change is safe. A patch may follow stale
+incident text, delete compatibility behavior, cite the wrong commit, or pass a
+narrow suite while leaving the original risk intact. TraceGate keeps the
+questions inspectable:
 
-## Product loop
+- Which repository, Head SHA, path, line range, Evidence row, Agent step, and
+  Tool Call support a Finding?
+- Is contextual evidence `active`, `stale`, `unknown`, or `conflicting`?
+- Is a relationship statically confirmed, merely inferred, or unknown?
+- Did validation actually run, and did re-review still support the Finding?
+- Did a provider, parser, or test fail instead of being replaced by a fixture
+  or rule fallback?
+
+## 3. Product Loop
 
 ```mermaid
 flowchart LR
-  PR["GitHub Pull Request"] --> SYNC["ETag-aware sync<br/>metadata · commits · files · checks"]
-  SYNC --> INDEX["Commit-bound index<br/>parser · symbols · FTS · graph"]
-  INDEX --> AGENT["LangGraph review<br/>plan · retrieve · analyze · verify"]
-  AGENT --> TOOLS["Controlled Tool Registry<br/>read · search · diff · tests"]
-  TOOLS --> EVIDENCE["Evidence + Finding<br/>path · line · SHA · confidence"]
-  EVIDENCE --> UX["Diff · Review Map · Change Tour<br/>Agent Trace · report"]
-  UX --> HUMAN["Human review"]
+  PR["GitHub PR"] --> SYNC["ETag-aware sync"]
+  SYNC --> INDEX["Commit-bound index"]
+  INDEX --> REVIEW["Read-only review"]
+  REVIEW --> FINDING["Evidence + Finding"]
+  FINDING --> DECIDE{"User chooses"}
+  DECIDE -->|"inspect"| MAPS["Diff · Maps · Trace"]
+  DECIDE -->|"generate fix"| FIX["Controlled Autofix"]
+  FIX --> REPORT["Validation + re-review report"]
+  REPORT --> HUMAN["Human decision / export"]
 ```
 
-### What is implemented
+The review graph remains read-only. A Fix Session is created only for an
+existing persisted Finding and has its own state, audit trail, workspace, and
+failure states.
 
-| Area | Production path |
-| --- | --- |
-| GitHub ingestion | PR metadata, files, commits, comments, Checks, rate limits, ETag polling, Head-SHA deduplication, fine-grained PAT, and an implemented OAuth Device Flow whose live authorization still requires user configuration. |
-| Code intelligence | Incremental commit-bound index, Python AST, bounded JS/TS/Java adapters, ripgrep, symbols, SQLite FTS5, Repository Map, Review Map, and Change Tour. |
-| Agent runtime | Seven persisted LangGraph nodes, structured state, cancellation, bounded retry, SSE, 19 schema-validated tools, and provider/tool-mode provenance. |
-| Review experience | PR Inbox, nine-tab PR details, Monaco Diff, Findings, Evidence, Agent Trace, Agent Evidence Graph, graph-to-diff jumps, JSON/SVG/PNG exports. |
-| Evaluation | Existing TraceGate Eval, 19-case real-PR hard set, 160-run controlled ClaimBench, confusion matrix, case drill-down, model/context comparisons, and report export. |
-| Desktop | Tauri 2 shell, bundled Python Sidecar, per-launch loopback token, Keychain/Credential Manager, close-to-hide, single-instance foundation, tray commands, deep links, notifications, and autostart controls. |
-| Delivery | macOS arm64 package plus Windows x86-64 NSIS, MSI, portable ZIP, checksums, build metadata, and Sidecar health checks in GitHub Actions. |
+## 4. Review Workflow
 
-## Verified evidence
+The production review workflow has seven persisted nodes:
 
-TraceGate uses explicit verification states. `VERIFIED_WINDOWS_CI` never means
-`VERIFIED_WINDOWS_MANUAL`.
+```mermaid
+flowchart LR
+  A["Planner"] --> B["Repository Retriever"] --> C["Context Resolver"]
+  C --> D["Code Analyst"] --> E["Risk Reviewer"] --> F["Verifier"]
+  F --> G["Report Composer"]
+```
 
-| Evidence | Status | Result |
+The nodes use a 19-tool schema-validated Registry with permission, path,
+timeout, output, and enablement controls. Findings must survive application-
+side Head-SHA, file, range, and Evidence checks. The model cannot promote an
+inferred parser relationship into a confirmed static edge.
+
+## 5. Autofix Workflow
+
+Autofix is a separate 11-node workflow rather than an extension of review:
+
+```mermaid
+flowchart LR
+  A["Finding"] --> B["Fix Eligibility"] --> C["Fix Plan"]
+  C --> D["Patch Proposal"] --> E["Static Validation"]
+  E --> F["User Confirmation"] --> G["Isolated Apply"]
+  G --> H["Tests"] --> I["Reindex"] --> J["Re-review"]
+  J --> K["Resolution"]
+```
+
+Its observable node names are `LOAD_FINDING`, `CHECK_FIX_ELIGIBILITY`,
+`PLAN_FIX`, `GENERATE_PATCH`, `VALIDATE_PATCH`,
+`AWAIT_USER_CONFIRMATION`, `APPLY_PATCH`, `RUN_VALIDATION`,
+`REINDEX_CHANGES`, `RE_REVIEW`, and `FINALIZE`.
+
+The proposal is a real structured model output on the production path. It is
+untrusted until unified-diff parsing, bounded safety checks, exact Head-SHA
+checks, and `git apply --check` succeed. The five final resolutions are
+`RESOLVED`, `PARTIALLY_RESOLVED`, `NOT_RESOLVED`, `VERIFICATION_FAILED`, and
+`NEEDS_HUMAN_REVIEW`.
+
+## 6. Patch Safety Model
+
+Default behavior is **read-only** and `PROPOSE_ONLY` is available. Applying a
+proposal requires an explicit user confirmation bound to Fix Session,
+repository, PR, Finding, Head SHA, normalized patch SHA-256, nonce, and expiry.
+Changing the patch or PR Head invalidates that confirmation; it is single-use.
+
+Apply runs in a Fix-owned detached Git worktree at the exact Head SHA. The
+original enrolled workspace is not reset, cleaned, or edited. Patch paths,
+symlinks, binary targets, sensitive paths, file count, and changed-line count
+are checked before apply. Validation commands are argument vectors derived
+from repository manifests and controlled presets—not model-authored shell
+text—and run with a filtered environment, timeout, cancellation, and output
+cap.
+
+TraceGate does **not** automatically commit, push, comment on a PR, or merge.
+A passing test alone is insufficient for `RESOLVED`; required validation,
+reindex, and verifier-backed re-review must agree. Missing tests or uncertainty
+stays visible as `NEEDS_HUMAN_REVIEW` or another non-success state.
+
+See [Autofix safety](docs/autofix-safety.md) and
+[ADR-003](docs/architecture/ADR-003-autofix-workflow.md).
+
+## 7. Repository Map
+
+Repository Map starts with a commit-bound persisted index and exposes
+repository, directory, file, test, and symbol nodes. It supports directory
+aggregation, filters, one/two-hop exploration, saved layout, and JSON/SVG/PNG
+export. The response is intentionally capped for large graphs; reaching the
+cap is not evidence that every node is displayed.
+
+Only parser-confirmed edges enter the static map. Inferred and unknown
+relationships remain provenance and are never upgraded by an LLM explanation.
+
+## 8. Review Map
+
+Review Map combines the real Base-to-Head Git diff, confirmed static neighbors,
+persisted Agent Evidence, and Findings. It can jump to the corresponding Monaco
+Diff range. Absence of a static edge is presented as incomplete context, not as
+proof that no runtime dependency exists.
+
+![Fixture-backed Review Map](docs/screenshots/p1-review-map-macos.png)
+
+> Playwright fixture scope. This image verifies rendering and navigation only.
+
+## 9. Agent Trace
+
+Review persists `AgentRun`, `AgentStep`, `ToolCallRecord`, Evidence, and
+Findings. Fix persists its own session, step, Tool Call, event, proposal,
+confirmation, validation, and result records. Authenticated SSE supports resume
+with `Last-Event-ID`; final JSON/patch/report downloads are read from persisted
+authoritative state rather than reconstructed in the browser.
+
+Failures, cancellation, stale Head SHA, expired confirmation, command timeout,
+and missing tests remain first-class states. Raw secrets and unbounded provider
+or subprocess output are not trace fields.
+
+## 10. Eval Center
+
+Eval Center preserves TraceGate Eval rather than relabelling it as product
+telemetry. It renders 19 scored public-PR cases (12 active, 2 stale, 3 unknown,
+2 conflicting) and 160 controlled ClaimBench rows across five modules, four
+evidence states, and eight context groups. The public-PR set is intentionally
+small and not statistically significant.
+
+![Eval Center](docs/screenshots/p1-eval-center-macos.png)
+
+> Checked-in benchmark artifacts, not live Autofix accuracy evidence.
+
+## 11. Desktop Experience
+
+Tauri owns the native window, single-instance behavior, Sidecar lifecycle,
+random per-launch loopback token, platform credential store, tray commands,
+deep links, notifications, autostart preference, and true quit. The UI is
+shared with browser development, but browser mode does not gain native secret
+storage.
+
+The Settings screen accepts GitHub and model API credentials through the
+native bridge. Values are written directly to macOS Keychain or Windows
+Credential Manager, then cleared; the API and UI receive only
+`configured`/`missing` state.
+
+## 12. Verified Evidence
+
+| Evidence | Status | Honest scope |
 | --- | --- | --- |
-| macOS product runtime | `VERIFIED_MACOS` | React/FastAPI/SQLite/Tauri paths, packaged arm64 Sidecar health, close-to-hide, true quit, single instance, browser flows, and secure-store round-trip were exercised. |
-| Real model E2E | `VERIFIED_MACOS` | `deepseek-chat` on public [`psf/requests#7565`](https://github.com/psf/requests/pull/7565): 4 real requests, 3 completed `search_code` Tool Calls, 7 Agent Trace rows, 1 Evidence, 1 Finding, and 3,826 tokens. |
-| Automated test matrix | `VERIFIED_MACOS` / `VERIFIED_WINDOWS_CI` | Current local macOS and source-bound Windows runs each passed 212 Python, 30 TypeScript/Vitest, and 22 Rust tests; the native Windows Credential Manager mutation test passed separately 1/1. |
-| Windows x86-64 delivery | `VERIFIED_WINDOWS_CI` | The source-bound [push run](https://github.com/Chloiris/TraceGate-Eval/actions/runs/29176975492) and its companion [PR run](https://github.com/Chloiris/TraceGate-Eval/actions/runs/29176976588) built and uploaded an unsigned Setup.exe, MSI, portable ZIP, hashes, and metadata after an authenticated Sidecar health check. |
-| Controlled benchmark | `VERIFIED_MACOS` | 160 checked-in ClaimBench runs across five modules, four evidence states, and eight context groups. |
-| Real-data hard set | `VERIFIED_MACOS` | 19 scored public-PR cases: 12 active, 2 stale, 3 unknown, and 2 conflicting. The set is intentionally small and not statistically significant. |
-| Windows desktop interaction | `BLOCKED` | Installation, WebView2, tray, notifications, autostart, single-instance behavior, uninstall, and process cleanup still require a real Windows graphical desktop. |
+| Pre-Autofix macOS review path | `VERIFIED_MACOS` | Browser/API/SQLite, packaged arm64 Sidecar, bounded desktop lifecycle, and one real DeepSeek review E2E. Historical source-bound records are linked below. |
+| Pre-Autofix Windows delivery | `VERIFIED_WINDOWS_CI` | Automated tests, secure-store round trip, Sidecar health, and unsigned NSIS/MSI/portable packaging at the recorded baseline SHA. |
+| Windows graphical acceptance | `BLOCKED` | No real Windows install, WebView2, tray, notification, autostart, single-instance, cleanup, or uninstall acceptance. |
+| Autofix workflow/API/UI on macOS | `VERIFIED_MACOS` | 269 Python, 60 TypeScript/Vitest, 22 Rust tests (+1 ignored), five fixture-labelled Playwright flows, packaged Sidecar health, Tauri build, and native app launch passed. |
+| Real-model Autofix E2E | `VERIFIED_MACOS` | One real DeepSeek run reached `RESOLVED` on an explicitly labelled synthetic temporary Git repository. |
+| Autofix Windows build | `VERIFIED_WINDOWS_CI` | Source-bound run `29196292381` passed 269 Python, 60 TypeScript, 22 Rust (+1 ignored), PyInstaller Sidecar health, Tauri NSIS/MSI and portable packaging. This is not GUI acceptance. |
+| Real public-PR Autofix E2E | `BLOCKED` | No small public PR with a defensible existing defect and stable local validation was selected; no random PR is presented as success evidence. |
 
-Detailed records:
+Autofix fixture screenshots:
 
-- [Implementation status](docs/implementation-status.md)
-- [Real-model macOS E2E](docs/verification/real-model-e2e-macos.md)
-- [Windows x86-64 CI verification](docs/verification/windows-ci.md)
-- [macOS P1 verification](docs/verification/p1-macos.md)
-- [Performance measurements](docs/performance.md)
-
-The real-model run used a fresh checkout, migrated SQLite database, production
-`OpenAICompatibleProvider`, production LangGraph workflow, and the real
-read-only Tool Registry. It used no fixture, mock, cached result, or rule
-fallback. JSON compatibility tool selection was recorded explicitly; native
-OpenAI function calling is not claimed for that run.
-
-## Architecture
-
-```mermaid
-flowchart LR
-  UI["React + TypeScript UI<br/>Browser / Tauri WebView"] <-->|"Zod-validated /api/v1 + SSE"| API["FastAPI Sidecar"]
-  HOST["Tauri 2 / Rust host"] -->|"spawn · lifecycle · per-launch token"| API
-  HOST --> VAULT["macOS Keychain<br/>Windows Credential Manager"]
-  API --> DB[("SQLite default<br/>optional MySQL")]
-  API --> GH["GitHub REST<br/>optional HMAC relay"]
-  API --> IDX["Commit-bound parser<br/>index · FTS · graph"]
-  API --> WF["LangGraph review workflow"]
-  WF --> TOOLS["Controlled Tool Registry"]
-  WF --> TRACE[("Evidence · Findings · Agent Trace")]
-  API --> EVAL["TraceGate Eval · ClaimBench"]
-```
-
-### Agent and evidence pipeline
-
-```mermaid
-flowchart LR
-  I["INGEST<br/>PR snapshot"] --> P["PLAN<br/>review strategy"]
-  P --> R["RETRIEVE<br/>commit-bound context"]
-  R --> A["ANALYZE<br/>candidate findings"]
-  A --> V["VERIFY<br/>path · line · SHA"]
-  V --> O["REPORT<br/>traceable output"]
-
-  R -.-> T["Recorded Tool Calls"]
-  T -.-> E["Persisted Evidence"]
-  E -.-> V
-```
-
-### Traceability model
-
-```mermaid
-erDiagram
-  REPOSITORY ||--o{ PULL_REQUEST : contains
-  PULL_REQUEST ||--o{ PR_SNAPSHOT : captures
-  PULL_REQUEST o|--o{ ANALYSIS_RUN : reviews
-  REPOSITORY ||--o{ INDEX_VERSION : indexes
-  ANALYSIS_RUN ||--o{ AGENT_STEP : records
-  AGENT_STEP ||--o{ TOOL_CALL : invokes
-  ANALYSIS_RUN ||--o{ EVIDENCE : persists
-  ANALYSIS_RUN ||--o{ FINDING : produces
-  FINDING }o--o{ EVIDENCE : logical_citation
-```
-
-This is a logical traceability model, not a physical foreign-key diagram.
-Finding-to-Evidence citations and run/index identity are also checked at the
-application layer using repository and Head-SHA provenance.
-
-## Product gallery
-
-The product screenshots in this gallery are runtime captures, not static
-design mockups. Each capture is labelled with its data boundary.
-
-### PR Diff and evidence markers
-
-[![PR Diff](docs/screenshots/p1-pr-diff-macos.png)](docs/screenshots/p1-pr-diff-macos.png)
-
-Running browser flow over the test-only E2E repository fixture. It verifies
-navigation, Monaco Diff, and Finding/Evidence jumps; it is not presented as a
-real public-PR analysis.
-
-<details>
-<summary><strong>Eval Center — checked-in real/controlled artifacts</strong></summary>
-
-[![Eval Center](docs/screenshots/p1-eval-center-macos.png)](docs/screenshots/p1-eval-center-macos.png)
-
-Running UI over the checked-in 19-case real-PR set and 160-run controlled
-ClaimBench artifacts. It is not a live-model accuracy claim.
-</details>
-
-<details>
-<summary><strong>Agent and Tool Registry</strong></summary>
-
-[![Registry](docs/screenshots/p1-registry-macos.png)](docs/screenshots/p1-registry-macos.png)
-
-The registry renders the seven workflow roles and 19 actual schema-validated
-tools, including their permissions, limits, call counts, and execution policy.
-</details>
-
-## Code intelligence without overclaiming
-
-Repository Map and Review Map only consume confirmed static edges. Inferred or
-unknown observations remain provenance, and LLM explanations cannot upgrade
-them into parser facts.
-
-| Language | Implemented boundary |
+| Confirmation | Final report |
 | --- | --- |
-| Python | AST-backed classes/functions/methods and ranges; partial same-file, lexically visible direct calls and inheritance. |
-| JavaScript | Bounded top-level ESM/declaration adapter; no semantic references or function call graph. JSX is recognized but extraction is withheld. |
-| TypeScript | Bounded ESM/exported declaration adapter; no type-system or function-call resolution. TSX extraction is withheld. |
-| Java | Bounded imports/types/method declarations; package/type targets, file dependencies, test edges, and calls are not confirmed. Unicode-escape files withhold extraction. |
+| [![Fixture confirmation](docs/screenshots/autofix-playwright-fixture-confirmation-macos.png)](docs/screenshots/autofix-playwright-fixture-confirmation-macos.png) | [![Fixture result](docs/screenshots/autofix-playwright-fixture-result-macos.png)](docs/screenshots/autofix-playwright-fixture-result-macos.png) |
 
-See the audited [parser capability matrix](docs/parser-capability-matrix.md) for
-all 12 capabilities, `SUPPORTED`/`PARTIAL`/`UNSUPPORTED` states, and exact
-limitations.
+> Both images are Playwright fixture evidence. They are not a real model run,
+> real local repository result, or public-PR Autofix result.
 
-## Evaluation insight
+## 13. Architecture
 
-TraceGate Eval separates test execution from evidence-aware safety. The
-checked-in Stage3 result is one controlled `deepseek-v4-pro` run, not a general
-model leaderboard or a production-quality estimate.
+```mermaid
+flowchart TB
+  UI["React + TypeScript"] <-->|"Zod / REST / SSE"| API["FastAPI Sidecar"]
+  HOST["Tauri 2 / Rust"] --> API
+  HOST --> VAULT["Keychain / Credential Manager"]
+  API --> DB[("SQLite · optional MySQL")]
+  API --> GH["GitHub REST"]
+  API --> IDX["Parser · FTS · graph"]
+  API --> REVIEW["7-node Review"]
+  API --> FIX["11-node Autofix"]
+  REVIEW --> REG["Controlled Tool Registry"]
+  FIX --> REG
+  FIX --> WT["Managed isolated worktree"]
+  REVIEW --> TRACE[("Evidence · Findings · Trace")]
+  FIX --> TRACE
+```
 
-| Stage3 metric | Checked-in result |
-| --- | ---: |
-| Runs | 160 |
-| Test success | 152/160 |
-| Evidence-aware decision | 73/160 |
-| Safe success | 68/160 |
-| Destructive change | 2/160 |
-| Context pollution | 15/160 |
+Review and Fix share typed persistence and controlled primitives but have
+separate state machines. This preserves the default read-only contract and
+makes confirmation, mutation, rollback, and cleanup explicit.
 
-![Controlled context-group safe success](results/figures/context_group_safe_success.png)
+## 14. Technology Stack
 
-The key observation is deliberate: high test success did not guarantee a
-decision that respected current evidence. See [metrics](docs/metrics.md),
-[result summary](results/summary.md), and the
-[real-data card](docs/DATA_CARD_REAL_MIN.md).
+| Layer | Technology |
+| --- | --- |
+| Desktop | Tauri 2, Rust, PyInstaller Sidecar |
+| Frontend | React, strict TypeScript, React Query, Zod, Monaco, React Flow |
+| API/runtime | FastAPI, Pydantic, SQLAlchemy 2, Alembic, LangGraph |
+| Storage | SQLite by default; optional MySQL migration/profile path |
+| Code intelligence | Python AST; bounded JS/TS/Java adapters; ripgrep; FTS5 |
+| Integrations | GitHub REST/Device Flow/PAT, OpenAI-compatible model providers, optional HMAC relay |
+| Verification | pytest, Vitest, Playwright, Rust tests/clippy, guardrails, GitHub Actions |
 
-## Quick start
+## 15. Quick Start
 
-### Requirements
-
-- macOS or Linux for browser development; macOS arm64 for the native macOS package
-- Python 3.11+ and [`uv`](https://docs.astral.sh/uv/)
-- Node.js 22+ and pnpm 11+
-- Rust stable for Tauri
-- Java and Maven only for the controlled Java ClaimBench repositories
-
-### Browser development
+Requirements: Python 3.11+, `uv`, Node.js 22+, pnpm 11+, and Rust stable for
+native builds.
 
 ```bash
 git clone https://github.com/Chloiris/TraceGate-Eval.git
@@ -238,141 +260,182 @@ cd TraceGate-Eval
 ./scripts/dev.sh
 ```
 
-Open `http://127.0.0.1:5173`. The development script creates an ephemeral
-loopback API token and starts the real FastAPI service plus Vite UI.
+Open `http://127.0.0.1:5173`. Development mode starts the real authenticated
+FastAPI service and Vite UI. It does not silently switch to mock analysis.
 
-### Native macOS arm64 package
+The research CLI remains available:
+
+```bash
+uv run python -m tracegate --help
+uv run python -m tracegate data validate \
+  --dataset datasets/real_min/cases.jsonl --strict --min-cases 8
+```
+
+## 16. Model Configuration
+
+In the native app, use **Settings → Model** for provider metadata and
+**Settings → Connections** for the API key. DeepSeek and OpenAI-compatible
+endpoints use the production `OpenAICompatibleProvider`. Browser development
+reads an explicitly provided backend variable such as `DEEPSEEK_API_KEY` or
+`TRACEGATE_LLM_API_KEY`.
+
+Only configuration presence may be displayed. Never paste a key into source,
+README, `.env` committed to Git, screenshots, tests, database rows, or issue
+logs. A missing or rejected provider is a visible failure; fixtures, cached
+responses, and rule fallback cannot satisfy a real-model verification gate.
+
+## 17. GitHub Configuration
+
+Studio supports a fine-grained PAT and an implemented OAuth Device Flow. The
+PAT onboarding field is a **GitHub access token**, not a repository URL. Use
+minimum read permissions for selected repositories (`Pull requests: Read`,
+`Checks: Read`, with GitHub-provided metadata access). Live Device Flow
+authorization remains unverified in the current evidence set.
+
+Repository enrollment is a separate step. Public unauthenticated reads are
+explicit; private repository access requires a valid stored credential.
+
+## 18. Autofix Usage
+
+1. Synchronize and index the exact PR Head.
+2. Run read-only review and open a persisted Finding.
+3. Choose **Generate Fix** and inspect eligibility and the structured plan.
+4. Generate the proposal; inspect changed files, warnings, full diff, and
+   SHA-256 Patch Hash.
+5. Confirm that exact hash before expiry.
+6. Apply only to the managed isolated worktree.
+7. Run the server-selected validation commands and watch persisted SSE events.
+8. Reindex and re-review; inspect the deterministic resolution and residual
+   risks/Findings.
+9. Export the patch/report, roll back, or clean the Fix worktree.
+
+See the complete [Autofix guide](docs/autofix-guide.md). API clients must send
+the current `expected_lock_version`; stale retries receive an explicit
+conflict instead of skipping a state.
+
+## 19. Security
+
+- Loopback-only bearer-authenticated Sidecar with exact CORS and bounded
+  request/response surfaces.
+- OS secure storage for credentials; secrets excluded from database, API,
+  normal logs, screenshots, and Git.
+- Canonical path and symlink containment, sensitive-file denial, patch limits,
+  and binary rejection.
+- Repository/PR/model text treated as untrusted data and unable to alter system
+  policy or Tool permission.
+- Argument-vector validation commands, filtered environment, timeout,
+  cancellation, and bounded output.
+- Patch Hash + Head SHA confirmation binding, isolated application, visible
+  failure, bounded rollback, and managed cleanup.
+
+Read [Security model](docs/security-model.md),
+[Autofix safety](docs/autofix-safety.md), [Privacy](docs/privacy.md), and
+[Security policy](SECURITY.md).
+
+## 20. Testing
+
+```bash
+./scripts/test.sh
+pnpm test:e2e
+uv run python scripts/check_docs_consistency.py
+uv run python -m tracegate guardrails scan --strict
+```
+
+The immutable pre-Autofix baseline is 212 Python, 30 TypeScript/Vitest, 22
+passing Rust tests with one explicit native mutation test ignored, and four
+Playwright flows. Current macOS verification records 269 Python, 60
+TypeScript/Vitest, 22 Rust passing plus one ignored, and five Playwright flows.
+The Autofix Playwright flow is a labelled UI fixture; the separate real-model
+record uses a synthetic temporary Git repository.
+
+## 21. Build and Packaging
 
 ```bash
 ./scripts/build-macos.sh
 ```
 
-### Windows x86-64 package
-
-Build on a real Windows x86-64 host:
+On Windows x86-64:
 
 ```powershell
 .\scripts\bootstrap.ps1
 .\scripts\build-windows.ps1
 ```
 
-The GitHub Actions workflow additionally runs the complete checks, exercises
-the packaged Sidecar health endpoint, creates unsigned NSIS/MSI/portable
-artifacts, generates SHA-256 metadata, and uploads the result.
+The source-bound Autofix Windows workflow produced an unsigned Setup.exe, MSI,
+portable ZIP, `SHA256SUMS.txt`, and `build-info.json`; PyInstaller Sidecar
+health and both Tauri bundles passed. See the
+[Windows Autofix CI record](docs/verification/windows-autofix-ci.md). Windows
+artifacts are unsigned, and `VERIFIED_WINDOWS_CI` does not imply
+`VERIFIED_WINDOWS_MANUAL`.
 
-### Verification
+## 22. Parser Boundaries
 
-```bash
-./scripts/test.sh
-pnpm test:e2e
-uv run python -m tracegate guardrails scan --strict
-```
+| Language | Current bounded capability |
+| --- | --- |
+| Python | AST-backed definitions/ranges and partial same-file direct calls, inheritance, imports, tests, and changed-symbol mapping. |
+| JavaScript | Declaration-level ESM adapter; no semantic references or function-level call graph. JSX extraction is withheld. |
+| TypeScript | Declaration-level ESM/export adapter; no type-system/reference/call resolution. TSX extraction is withheld. |
+| Java | Declaration/import adapter; package targets, file/test edges, and call resolution are not confirmed. |
 
-### Credentials and model configuration
+The detailed [parser capability matrix](docs/parser-capability-matrix.md)
+contains all 12 audited rows and their `SUPPORTED`, `PARTIAL`, or
+`UNSUPPORTED` limits. TraceGate uses bounded JS/TS/Java adapters; it does not
+claim whole-program Java call resolution.
 
-In the Tauri application, open **Settings → Connections** to
-enter a GitHub token, model API key, or Relay token manually. Secrets are
-written directly to Keychain/Credential Manager, the input is cleared after
-save, and only `configured`/`missing` status returns to the UI. The running
-Sidecar reloads the credential without an application restart.
+## 23. Current Limitations
 
-Model Provider, Base URL, model name, temperature, output limit, timeout, and
-context scope are configured under **Settings → Model**. DeepSeek and
-OpenAI-compatible endpoints are supported. Browser development mode does not
-write secrets and instead requires explicit environment variables such as
-`DEEPSEEK_API_KEY` or `TRACEGATE_LLM_API_KEY`.
+- Real public-PR Autofix E2E is `BLOCKED`; the scoped real-model synthetic-repo
+  run does not establish a success rate or automatic-fix accuracy.
+- Validation command selection, cwd, and environment are controlled, but
+  repository tests are not OS/container sandboxed and run with the local
+  user's authority. Use a disposable environment for untrusted PRs.
+- Windows artifacts are unsigned; Windows install, WebView2, tray,
+  notifications, autostart, single-instance, process cleanup, and uninstall
+  await manual target-platform tests.
+- macOS status-item and notification-click interaction lack direct manual
+  acceptance evidence.
+- Live GitHub OAuth Device Flow authorization has not been completed.
+- Vector embeddings are disabled; labelled text, symbol, FTS5, and ripgrep
+  retrieval remain available.
+- Large graphs are capped and aggregated; backend-local graph paging is not
+  implemented.
+- The parser uses bounded JS/TS/Java adapters, not full semantic call graphs.
+- The 19-case real-PR set is intentionally small and not statistically
+  significant.
+- The historical real DeepSeek review used JSON compatibility tool selection;
+  native OpenAI function calling is not claimed.
+- Autofix does not auto-commit, auto-push, comment, open a PR, or merge.
 
-### Research CLI
+## 24. Roadmap
 
-The original evaluation and advisory commands remain available:
+Near-term gates are evidence work, not feature inflation: identify a defensible
+public-PR Fix case without lowering safety gates and complete real Windows GUI
+acceptance when a target machine is available. Signed distribution, live OAuth
+evidence, and larger statistically designed evaluation sets remain future work.
 
-```bash
-uv run python -m tracegate --help
-uv run python -m tracegate data validate \
-  --dataset datasets/real_min/cases.jsonl \
-  --strict \
-  --min-cases 8
-uv run python -m tracegate guardrails scan --strict
-```
+P4/Perforce, UE/Maya host adapters, team service, cloud synchronization, and
+automatic external mutations are not current product capabilities.
 
-See [TraceGate Eval overview](docs/PROJECT_MAP.md) and
-[Semantic PR Advisor](docs/SEMANTIC_PR_ADVISOR_v0.3.md) for the full CLI paths.
-
-## Security model
-
-- Loopback-only FastAPI with a random per-launch bearer token and exact CORS.
-- Desktop-stored credentials remain in Keychain/Credential Manager and are
-  excluded from API schemas, SQLite, browser storage, screenshots, normal logs,
-  and Git.
-- Repository access rejects traversal, out-of-root symlinks, `.env`, SSH keys,
-  and common cloud credential paths.
-- Commands use an allowlist, repository-scoped working directory, filtered
-  environment, timeout, and bounded output.
-- GitHub responses, model responses, Tool outputs, and SSE payloads are bounded.
-- HMAC verification and replay protection guard the optional webhook relay.
-- Repository text is untrusted input and cannot change system rules or expand
-  tool permissions.
-- Telemetry is off by default; source, prompts, PR content, and credentials are
-  not uploaded as telemetry.
-
-Read [Security model](docs/security-model.md), [Privacy](docs/privacy.md), and
-[`SECURITY.md`](SECURITY.md) before extending network or write capabilities.
-
-## Repository map
-
-```text
-apps/web/                     React + TypeScript product UI
-apps/desktop/src-tauri/       Tauri 2 host and platform capabilities
-packages/shared-types/        Zod contracts shared across boundaries
-packages/api-client/          Authenticated typed client and SSE parser
-tracegate/studio/             FastAPI, SQLAlchemy, migrations, sync and runtime
-tracegate/agent/              LangGraph workflow and structured state
-tracegate/tools/              Controlled Tool Registry
-tracegate/indexing/           Parser and commit-bound index
-tracegate/graph/              Repository/Review Map construction
-tracegate/metrics/            Preserved evaluation metric definitions
-tracegate/reports/            Benchmark and advisory report generation
-e2e/                          Playwright product flows
-datasets/real_min/            Small public-PR evidence dataset
-docs/                         Architecture, evidence, runbooks and status
-```
-
-## Current boundaries
-
-- Windows artifacts are unsigned; SmartScreen and code signing are not verified.
-- Windows GUI installation, tray, notification, autostart, single-instance,
-  background-process, and uninstall behavior await manual target-platform tests.
-- macOS tray construction is implemented, but direct status-item click and
-  notification-click acceptance still need manual evidence.
-- Live GitHub OAuth Device Flow authorization has not been exercised; the PAT
-  path and Device Flow implementation are tested separately.
-- Vector embeddings are disabled; labelled text/symbol/FTS/ripgrep retrieval
-  remains available.
-- Large graphs are capped and aggregated; backend-local graph paging remains
-  future work.
-- P4, UE/Maya host adapters, team service, and cloud synchronization are not
-  implemented product capabilities.
-- The 19-case real-data set is intentionally small and not statistically significant.
-
-## Documentation
+## 25. Documentation
 
 | Document | Purpose |
 | --- | --- |
-| [Architecture decision](docs/architecture/ADR-001-tracegate-studio.md) | Product boundaries and process model |
-| [Implementation status](docs/implementation-status.md) | Evidence-backed platform status |
-| [Product tour](docs/product-tour.md) | End-to-end feature walkthrough |
-| [API reference](docs/api.md) | Authenticated `/api/v1` surface |
-| [Parser matrix](docs/parser-capability-matrix.md) | Per-language static-analysis boundary |
-| [Security model](docs/security-model.md) | Threats, controls, and trust boundaries |
-| [Windows manual checklist](docs/windows-manual-acceptance.md) | Required graphical acceptance |
-| [Troubleshooting](docs/troubleshooting.md) | Development and packaging recovery |
+| [Implementation status](docs/implementation-status.md) | Evidence-backed current state and pending gates |
+| [Autofix guide](docs/autofix-guide.md) | User/API lifecycle and recovery |
+| [Autofix safety](docs/autofix-safety.md) | Patch, confirmation, command, and workspace boundaries |
+| [ADR-003](docs/architecture/ADR-003-autofix-workflow.md) | Why Review and Fix are separate |
+| [API reference](docs/api.md) | Authenticated Studio and Fix endpoints |
+| [Product tour](docs/product-tour.md) | UI walkthrough and data provenance |
+| [Parser matrix](docs/parser-capability-matrix.md) | Per-language static-analysis limits |
+| [Real Autofix E2E record](docs/verification/real-autofix-e2e-macos.md) | `VERIFIED_MACOS` synthetic temporary-repository run; public-PR scope `BLOCKED` |
+| [Windows Autofix CI record](docs/verification/windows-autofix-ci.md) | `VERIFIED_WINDOWS_CI` tests, Sidecar health, installers and hashes |
+| [Windows manual checklist](docs/windows-manual-acceptance.md) | Graphical target-platform acceptance |
+| [Documentation audit](docs/doc-consistency-audit.md) | Canonical names, facts, links, and remaining drift |
 
-## Contributing and license
+## 26. License
 
-Contributions should preserve provenance and explicit failure behavior, include
-tests and migrations for schema changes, and keep secrets/run artifacts out of
-Git. Start with [`CONTRIBUTING.md`](CONTRIBUTING.md); discuss metric-definition
-changes before implementation.
+Contributions should preserve provenance, explicit failure behavior, migration
+compatibility, and secret hygiene. Start with [CONTRIBUTING.md](CONTRIBUTING.md).
 
 TraceGate is available under the [MIT License](LICENSE). Packaged third-party
 components retain their own licenses.

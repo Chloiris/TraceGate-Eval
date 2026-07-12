@@ -165,6 +165,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          product_version="$(python -c 'import json; print(json.load(open("docs/project-facts.yaml", encoding="utf-8"))["version"])')"
           app_path="apps/desktop/src-tauri/target/release/bundle/macos/TraceGate Studio.app"
           artifact_dir="artifacts/macos"
           cp build/sidecar/dist/tracegate-backend \
@@ -175,6 +176,7 @@ jobs:
           cat > "$artifact_dir/build-info.json" <<EOF
           {
             "commit": "${{ github.sha }}",
+            "version": "$product_version",
             "runner": "macos-14",
             "architecture": "arm64",
             "target_triple": "aarch64-apple-darwin",

@@ -17,7 +17,14 @@ _SECRET_PATTERNS = (
     re.compile(r"(?i)(authorization\s*[:=]\s*bearer\s+)[^\s,;]+"),
     re.compile(r"(?i)((?:api[_-]?key|token|secret|password)\s*[:=]\s*)[^\s,;]+"),
     re.compile(r"\b(?:ghp|gho|ghu|ghs|ghr)_[A-Za-z0-9]{20,}\b"),
+    re.compile(r"\bgithub_pat_[A-Za-z0-9_]{20,}\b"),
     re.compile(r"\bsk-(?:proj-)?[A-Za-z0-9_-]{20,}\b"),
+    re.compile(r"\b(?:AKIA|ASIA)[A-Z0-9]{16}\b"),
+    re.compile(
+        r"-----BEGIN (?:RSA |EC |OPENSSH |DSA )?PRIVATE KEY-----.*?"
+        r"-----END (?:RSA |EC |OPENSSH |DSA )?PRIVATE KEY-----",
+        re.DOTALL,
+    ),
 )
 
 

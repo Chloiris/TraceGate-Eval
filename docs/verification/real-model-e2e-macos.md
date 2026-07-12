@@ -1,5 +1,8 @@
 # Real-model macOS E2E verification
 
+> **Historical verification record.** This immutable record proves one review
+> workflow run; it is not evidence of the new Autofix workflow.
+
 - Status: `VERIFIED_MACOS`
 - Measured at: 2026-07-11T01:54:08Z
 - Platform: macOS arm64

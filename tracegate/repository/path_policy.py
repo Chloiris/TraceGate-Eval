@@ -23,6 +23,10 @@ _SKIPPED_DIRECTORIES = {
     "__pycache__",
 }
 _SENSITIVE_NAMES = {
+    ".gitconfig",
+    ".npmrc",
+    ".pypirc",
+    "authorized_keys",
     "credentials",
     "credentials.json",
     "id_dsa",
@@ -32,8 +36,24 @@ _SENSITIVE_NAMES = {
     "known_hosts",
     "netrc",
     ".netrc",
+    "secrets",
+    "secrets.json",
 }
-_SENSITIVE_PARTS = {".ssh", ".aws", ".azure", ".kube", "gcloud"}
+_SENSITIVE_PARTS = {".git", ".ssh", ".aws", ".azure", ".gnupg", ".kube", "gcloud"}
+_SENSITIVE_SUFFIXES = {
+    ".cer",
+    ".crt",
+    ".db",
+    ".der",
+    ".key",
+    ".keystore",
+    ".log",
+    ".p12",
+    ".pem",
+    ".pfx",
+    ".sqlite",
+    ".sqlite3",
+}
 
 
 def _contains_parent_reference(path: PurePath) -> bool:
@@ -107,5 +127,10 @@ class RepositoryBoundary:
         if any(part in _SENSITIVE_PARTS for part in lowered):
             raise RepositoryPathError("sensitive credential directory is forbidden")
         name = lowered[-1]
-        if name == ".env" or name.startswith(".env.") or name in _SENSITIVE_NAMES:
+        if (
+            name == ".env"
+            or name.startswith(".env.")
+            or name in _SENSITIVE_NAMES
+            or PurePath(name).suffix in _SENSITIVE_SUFFIXES
+        ):
             raise RepositoryPathError("sensitive credential file is forbidden")

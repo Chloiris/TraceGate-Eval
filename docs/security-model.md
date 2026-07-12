@@ -1,6 +1,6 @@
 # TraceGate Studio security model
 
-- Last reviewed: 2026-07-10
+- Last reviewed: 2026-07-12
 - Applies to: browser development mode, Tauri desktop shell, Python Sidecar,
   GitHub integration, model providers, repository tools and webhook relay
 - Default posture: local-first, least privilege, deny by default
@@ -17,6 +17,8 @@ the authoritative delivery state remains `docs/implementation-status.md`.
 - repository index, findings, evidence, agent traces and evaluation results;
 - local database, logs, exports and application settings;
 - tool permission state and write-mode decisions;
+- Fix Plans, Patch Proposals, confirmation nonces/hashes, managed worktrees,
+  validation output, re-review and Post-Fix reports;
 - Sidecar token, port and process identity.
 
 ## Trust boundaries
@@ -33,6 +35,8 @@ flowchart LR
     GH -. "untrusted text and patches" .-> API
     REPO -. "untrusted files and instructions" .-> API
     LLM -. "untrusted output" .-> API
+    API --> FIX["Controlled Fix state machine"]
+    FIX --> WT["Managed isolated worktree"]
 ```
 
 README files, issues, PR descriptions, comments, source comments, strings,
@@ -49,7 +53,14 @@ untrusted data. They cannot change system policy or grant tool permission.
 | Sensitive-file read | Deny `.env`, SSH, cloud credentials, keychains and configurable patterns | VERIFIED_MACOS |
 | Prompt injection | Treat repository/PR/model text as quoted evidence; policy is out of prompt control | VERIFIED_MACOS |
 | Arbitrary command execution | Argument-vector allowlist, repository cwd, timeout, output cap and filtered env | VERIFIED_MACOS |
-| Destructive patching | Write tool disabled by default; show patch/diff; separate confirmation for external mutations | VERIFIED_MACOS |
+| Destructive patching | Review read-only by default; static patch checks; exact Head/Patch Hash confirmation; isolated worktree; no automatic external mutation | IN_PROGRESS |
+| Patch replacement/replay | SHA-256 normalized patch binding, nonce hash, TTL, optimistic lock and single-use consumption | IN_PROGRESS |
+| PR Head changes during Fix | Recheck current Head through validation, reindex, re-review and finalization; invalidate proposal and mark session stale | VERIFIED_MACOS |
+| User workspace damage | Apply/reset/clean/rollback only inside a registered Fix-owned worktree | IN_PROGRESS |
+| Validation command injection | Manifest/preset-derived argument vectors, no shell/model command, executable/script allowlist | IN_PROGRESS |
+| Validation secret/output leakage | Filtered environment, synthetic HOME, timeout/cancel, bounded summaries | IN_PROGRESS |
+| False repair claim | Required validation + transient reindex + verifier/re-review + deterministic resolution | IN_PROGRESS |
+| Worktree residue | Persistent cleanup state, managed-root validation, retention and diagnostics | IN_PROGRESS |
 | Credential disclosure | Platform secure storage, redacted logs/API/traces and narrow provider adapters | VERIFIED_MACOS |
 | Cross-repository leakage | Repository ID/root attached to every run, tool call and evidence lookup | VERIFIED_MACOS |
 | Stale evidence | Bind run, index and evidence to base/head SHA; verifier rejects mismatches | VERIFIED_MACOS |
@@ -107,6 +118,77 @@ override verifier policy. Structured output is schema-checked; cited files,
 lines, symbols and evidence IDs are verified against the current index before a
 finding is accepted.
 
+## Controlled Autofix boundary
+
+The existing seven-node Review workflow remains read-only. A user must create
+a Fix Session from an existing persisted Finding before the separate 11-node
+Fix workflow can run. The session binds repository, PR, Finding, source Run,
+base/head SHA and index identity.
+
+### Malicious PR text and prompt injection
+
+PR descriptions, comments, source comments/strings, README instructions,
+fixtures and generated code are quoted untrusted evidence. They cannot enable
+write mode, alter system/Verifier rules, widen a repository path, select an
+arbitrary executable, disable a Tool check, read a credential, or assert final
+resolution. Structured model output is validated again by application code.
+
+### Model-generated patch
+
+Patch text is untrusted. Before confirmation the server normalizes and hashes
+it, parses a bounded unified diff, verifies the structured changed-file list,
+rejects absolute/traversal/quoted/combined/binary targets, resolves symlinks,
+applies sensitive-file and size limits, checks exact Head/clean managed
+worktree, classifies high-risk changes, and runs `git apply --check`.
+
+The default settings allow at most eight files and 800 changed lines. Settings
+may adjust bounded product limits but cannot disable canonical path,
+sensitive-file, hash, exact-Head, isolation, or confirmation controls.
+
+### Patch replacement, expiry, and stale Head
+
+Confirmation binds Fix Session, repository, PR, Finding, exact Head SHA,
+SHA-256 of normalized patch, nonce hash and expiry. Apply recomputes/verifies
+identity and consumes confirmation once. Proposal/hash change, TTL expiry,
+replay, optimistic-lock mismatch, or current PR Head change blocks apply; a
+Head change marks the session stale rather than applying to different code.
+
+### Isolated mutation and user workspace protection
+
+Apply uses a detached Git worktree below the managed Autofix root at the exact
+Head SHA. Validation, reindex, re-review, rollback and cleanup remain rooted
+there. The enrolled source workspace is never reset, cleaned or edited; its
+uncommitted changes are not a disposable recovery mechanism.
+
+### Controlled validation
+
+Validation commands originate from repository manifests, existing scripts and
+controlled presets. Model-proposed shell text is advisory only. The executor
+uses argument vectors without a shell, a worktree-scoped cwd, executable/script
+allowlists, filtered environment, synthetic managed HOME, timeout,
+cancellation/process termination, and bounded stdout/stderr summaries.
+
+Missing tests, timeout, cancellation, nonzero required return code, output
+truncation or verifier failure remains explicit. Tests passing alone cannot
+yield `RESOLVED`; reindex, re-review and deterministic policy are required.
+
+### Commit/push and failure boundaries
+
+Autofix does not automatically commit, push, comment, open a PR, merge, or
+rewrite remote history. Exports are local patch/report files. Every failed or
+stale state, residual Finding/risk, rollback result and cleanup failure is
+persisted/visible rather than converted into a success report.
+
+### Rollback and cleanup
+
+Rollback hard-resets and cleans only a registered Fix worktree to its recorded
+Head. Cleanup validates containment below the managed root and active state.
+Residual/expired worktrees are visible in diagnostics; retention cleanup is
+bounded and does not silently claim successful deletion.
+
+The detailed transaction threat model and regression matrix are in
+[`autofix-safety.md`](autofix-safety.md).
+
 ## GitHub and webhook security
 
 Fine-grained credentials use the minimum repository permissions. Public
@@ -148,6 +230,11 @@ installers are labelled unsigned; code-signing status is never inferred.
 - Rust tests for deep links, lifecycle state and platform paths;
 - secret/dependency/code scanning in CI;
 - manual Windows install/tray/notification/process acceptance on real hardware.
+- Autofix tests for sensitive paths (`.env`, SSH/cloud credentials), traversal,
+  absolute paths, symlink escape, binary/size limits, Patch Hash replacement,
+  expired/reused confirmation, stale Head, prompt injection, policy/Tool-file
+  mutation, command injection, timeout/cancel/output caps, isolated source
+  protection, deterministic non-success, rollback and cleanup.
 
 Known gaps are kept visible in `docs/implementation-status.md`; a green build
 does not close a manual platform item.

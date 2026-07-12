@@ -1,6 +1,8 @@
 import { expect, test } from "@playwright/test";
 import { readFile } from "node:fs/promises";
 
+import { annotateAutofixFixtureScreenshot, installAutofixUiFixture } from "./autofix-fixture";
+
 test("loads authenticated real service and benchmark state", async ({ page }) => {
   await page.goto("/");
   await expect(page.getByRole("heading", { name: "部分能力尚未配置" })).toBeVisible();
@@ -110,4 +112,75 @@ test("shows explicit retry failure and actual registry permissions", async ({ pa
   await expect(patchCard.getByRole("button", { name: "必须逐次确认" })).toBeDisabled();
   await expect(page.getByText("WRITE_CONFIRMATION", { exact: true })).toBeVisible();
   await page.screenshot({ path: "docs/screenshots/p1-registry-macos.png", fullPage: true });
+});
+
+test("runs the complete controlled autofix UI fixture without presenting it as public-PR evidence", async ({ page, request }) => {
+  const response = await request.get("http://127.0.0.1:8876/api/v1/pull-requests", {
+    headers: { Authorization: "Bearer tracegate-playwright-token-0123456789-abcdef" },
+  });
+  expect(response.ok()).toBeTruthy();
+  const payload = await response.json() as { items: Array<{ id: string; repository_id: string; base_sha: string; head_sha: string }> };
+  const pullRequest = payload.items[0];
+  expect(pullRequest).toBeTruthy();
+  if (!pullRequest) throw new Error("The Playwright repository fixture did not create a Pull Request");
+  await installAutofixUiFixture(page, {
+    repositoryId: pullRequest.repository_id,
+    pullRequestId: pullRequest.id,
+    baseSha: pullRequest.base_sha,
+    headSha: pullRequest.head_sha,
+  });
+
+  await page.goto("/");
+  await page.getByRole("button", { name: /审查队列.*拉取请求审查与分析/ }).click();
+  await page.getByText("#17 · Double the calculated total").click();
+  await page.getByRole("tab", { name: "Findings" }).click();
+  await page.getByRole("button", { name: "启动受控修复" }).click();
+  await expect(page.getByRole("tab", { name: "Fix / 自动修复", selected: true })).toBeVisible();
+  await annotateAutofixFixtureScreenshot(page);
+
+  await page.getByRole("button", { name: "检查资格并规划" }).click();
+  await expect(page.getByRole("heading", { name: "计划已就绪" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Restore the original return-value contract" })).toBeVisible();
+
+  await page.getByRole("button", { name: "生成并静态校验补丁" }).click();
+  await expect(page.getByRole("heading", { name: "等待用户确认" })).toBeVisible();
+  await expect(page.getByText("f1".repeat(32)).first()).toBeVisible();
+  await page.getByRole("button", { name: "核对并确认补丁" }).click();
+  await expect(page.getByRole("dialog", { name: "确认这一个精确补丁" })).toBeVisible();
+  await expect(page.getByRole("dialog", { name: "确认这一个精确补丁" }).getByText("Playwright UI fixture only")).toBeVisible();
+  await page.screenshot({ path: "docs/screenshots/autofix-playwright-fixture-confirmation-macos.png", fullPage: true });
+  await page.getByRole("checkbox").check();
+  await page.getByRole("button", { name: "确认该 Hash 并授权隔离应用" }).click();
+
+  await expect(page.getByRole("button", { name: "应用到隔离工作区" })).toBeEnabled();
+  await page.getByRole("button", { name: "应用到隔离工作区" }).click();
+  await expect(page.getByRole("heading", { name: "补丁已隔离应用" })).toBeVisible();
+  await page.getByRole("button", { name: "运行受控验证" }).click();
+  await expect(page.getByRole("heading", { name: "验证已完成" })).toBeVisible();
+  const validationResult = page.locator(".validation-results details").first();
+  await expect(validationResult.getByText("PASSED", { exact: true })).toBeVisible();
+  await validationResult.locator("summary").click();
+  await expect(validationResult.getByText("1 passed in 0.04s")).toBeVisible();
+  await page.getByRole("button", { name: "重建索引并重新审查" }).click();
+  const resolvedHeading = page.getByRole("heading", { name: "RESOLVED" });
+  await expect(resolvedHeading).toBeVisible();
+  await expect(page.getByText("Public callers were not evaluated by this Playwright fixture")).toBeVisible();
+  await resolvedHeading.scrollIntoViewIfNeeded();
+  await page.screenshot({ path: "docs/screenshots/autofix-playwright-fixture-result-macos.png" });
+
+  const [patchDownload] = await Promise.all([
+    page.waitForEvent("download"),
+    page.getByRole("button", { name: "导出 .patch" }).click(),
+  ]);
+  expect(patchDownload.suggestedFilename()).toBe("tracegate-fix-71000000-0000-4000-8000-000000000001.patch");
+  const [reportDownload] = await Promise.all([
+    page.waitForEvent("download"),
+    page.getByRole("button", { name: "导出报告" }).click(),
+  ]);
+  expect(reportDownload.suggestedFilename()).toBe("tracegate-fix-71000000-0000-4000-8000-000000000001-report.json");
+
+  await page.getByRole("button", { name: "回滚隔离工作区" }).click();
+  await expect(page.getByRole("heading", { name: "已回滚" })).toBeVisible();
+  await page.getByRole("button", { name: "清理工作区" }).click();
+  await expect(page.getByText("DELETED")).toBeVisible();
 });

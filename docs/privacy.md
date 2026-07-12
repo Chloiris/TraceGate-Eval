@@ -1,6 +1,6 @@
 # TraceGate Studio privacy
 
-- Last updated: 2026-07-10
+- Last updated: 2026-07-12
 - Product stage: development alpha
 
 TraceGate Studio is designed as a local-first application. This document
@@ -15,12 +15,20 @@ Depending on enabled features, TraceGate may store:
 - GitHub repository and Pull Request metadata;
 - commit-bound file/symbol indexes and graph relationships;
 - analysis runs, tool traces, evidence and findings;
+- Fix sessions, structured plans, Patch Proposals/hashes, confirmation state,
+  validation commands and bounded output summaries, transient worktree index,
+  re-review and Post-Fix reports;
 - evaluation reports imported from this repository;
 - non-secret settings, logs and diagnostic records.
 
 The desktop default database is SQLite in the platform application-data
 directory. Local repository files remain in their original workspace; indexes
 contain bounded excerpts only where needed for retrieval and traceability.
+
+Autofix applies changes only in a separate managed Git worktree. The worktree
+contains a local checkout and generated patch until rollback/cleanup/retention
+removes it. Its path and cleanup state may appear in local diagnostics; source
+contents do not become telemetry.
 
 ## Data sent to GitHub
 
@@ -32,6 +40,10 @@ credential required for that operation. The UI never receives the credential.
 Posting a review, comment, commit or push is not part of read-only analysis and
 requires a separate confirmation path.
 
+Version `0.4.0` Autofix has no automatic GitHub write path: it does not commit,
+push, comment, open a Pull Request, or merge. Exporting a patch/report creates a
+local user-controlled file only.
+
 ## Data sent to model providers
 
 No model call occurs until a provider is configured and an analysis requiring
@@ -39,6 +51,12 @@ that provider is started. The user selects the permitted source-code scope.
 A request may contain the task, changed hunks, selected source excerpts,
 symbols, Git/PR evidence and safety instructions. The configured provider's own
 privacy and retention terms apply.
+
+Autofix model requests may additionally contain the original Finding/Evidence,
+structured Fix Plan context, bounded target-file contents, the proposed/applied
+diff, validation summaries, and re-review context. The Patch itself is treated
+as untrusted output and persists locally for confirmation and audit. Users
+should minimize repository/model scope and review provider retention terms.
 
 When no model is configured, TraceGate reports “模型尚未配置”. It does not send
 data, create a synthetic semantic result, or substitute a keyword rule and call
@@ -66,9 +84,11 @@ not configured.
 ## Retention and deletion
 
 Users can remove an enrolled repository and delete its local index, PR
-snapshots, runs, evidence and findings. Logs and backups use bounded retention.
-Exports are user-created files and remain until the user deletes them. Removing
-local TraceGate data does not delete data already held by GitHub or a configured
+snapshots, runs, evidence and findings. Fix worktrees use a bounded configured
+retention period (default 24 hours) and can be rolled back/cleaned explicitly;
+cleanup failure stays visible. Logs and backups use bounded retention. Exports
+are user-created files and remain until the user deletes them. Removing local
+TraceGate data does not delete data already held by GitHub or a configured
 model provider.
 
 Before deletion ships, it must be transactional where possible and report any
@@ -87,8 +107,7 @@ defence-in-depth control, not permission to commit secrets to a repository.
 
 ## Current limitations
 
-TraceGate Studio is under implementation. The existing TraceGate Eval
-repository contains public benchmark artifacts and a lightweight dashboard; it
-does not yet implement every storage, secure-credential, deletion or retention
-control described above. Actual verification status is recorded in
-`docs/implementation-status.md`.
+TraceGate Studio is pre-1.0. Autofix final real-model and cross-platform
+verification remains pending; no public-PR fix success or automatic-fix
+accuracy is claimed. The current implementation and retention/deletion gates
+are recorded in [`implementation-status.md`](implementation-status.md).

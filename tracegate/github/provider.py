@@ -9,6 +9,8 @@ from typing import Any
 import httpx
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from tracegate import __version__
+
 
 _REPOSITORY_PART = re.compile(r"^[A-Za-z0-9_.-]{1,100}$")
 MAX_RESPONSE_BYTES = 8 * 1024 * 1024
@@ -211,7 +213,7 @@ class GitHubProvider:
         headers = {
             "Accept": "application/vnd.github+json",
             "X-GitHub-Api-Version": "2022-11-28",
-            "User-Agent": "TraceGate-Studio/0.1",
+            "User-Agent": f"TraceGate-Studio/{__version__}",
         }
         if token:
             headers["Authorization"] = f"Bearer {token}"

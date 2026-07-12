@@ -172,7 +172,7 @@ def create_app(*, admin_token: str | None = None, github_secret: str | None = No
     resolved_admin_token = admin_token or os.environ.get("TRACEGATE_RELAY_ADMIN_TOKEN", "")
     resolved_github_secret = github_secret or os.environ.get("TRACEGATE_RELAY_GITHUB_SECRET", "")
     state = RelayState(admin_token=resolved_admin_token, github_secret=resolved_github_secret)
-    app = FastAPI(title="TraceGate Webhook Relay", version="0.1.0")
+    app = FastAPI(title="TraceGate Webhook Relay", version="0.4.0")
     app.state.relay = state
 
     @app.exception_handler(RelayError)

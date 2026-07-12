@@ -12,6 +12,7 @@ import pytest
 from fastapi.testclient import TestClient
 from pydantic import SecretStr
 
+from tracegate import __version__
 from tracegate.config import PROJECT_ROOT
 from tracegate.studio.app import SECURITY_HEADERS, create_app
 from tracegate.studio.config import StudioSettings
@@ -69,7 +70,7 @@ def test_health_reports_database_and_security_headers(client: TestClient) -> Non
     assert response.json() == {
         "status": "ok",
         "service": "tracegate-studio",
-        "version": "0.1.0",
+        "version": __version__,
         "api_version": "v1",
         "database": {
             "state": "ready",
@@ -585,6 +586,20 @@ def test_notification_records_capture_actual_delivery_outcome(client: TestClient
     assert delivered.status_code == 201
     assert delivered.json()["status"] == "delivered"
     assert delivered.json()["error_message"] is None
+
+    fix_delivered = client.post(
+        "/api/v1/notifications",
+        headers=auth_headers(),
+        json={
+            "kind": "fix_awaiting_confirmation",
+            "status": "delivered",
+            "title": "TraceGate · Fix awaiting confirmation",
+            "body": "Review the hash-bound patch proposal",
+            "deep_link": "tracegate://fix/00000000-0000-4000-8000-000000000002",
+        },
+    )
+    assert fix_delivered.status_code == 201
+    assert fix_delivered.json()["kind"] == "fix_awaiting_confirmation"
 
     failed = client.post(
         "/api/v1/notifications",

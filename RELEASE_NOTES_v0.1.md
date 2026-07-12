@@ -1,5 +1,9 @@
 # TraceGate Eval v0.1 Release Notes
 
+> **Historical verification record.** This preserves the original TraceGate Eval
+> research milestone and its contemporary measurements; it is not the current
+> TraceGate Studio product version or capability status.
+
 ## Post-Merge Real-Data Advisory Update
 
 `main` now includes the first minimal real-data Pull Request advisory smoke path.

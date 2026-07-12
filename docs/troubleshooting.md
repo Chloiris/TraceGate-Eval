@@ -70,3 +70,89 @@ client, seed/fixture, and UI together. Then run:
 pnpm test:e2e
 ```
 
+## Generate Fix is unavailable
+
+Autofix starts only from a persisted Finding whose repository, PR, source Run,
+Head SHA, index and Evidence still match. Check the Finding's verifier status,
+sync the PR, fetch/check out its exact Head outside TraceGate, and reindex.
+Unsupported/binary/sensitive targets and insufficient Evidence remain explicit
+eligibility failures; `force_eligibility` cannot disable hard boundaries.
+
+## Patch generation failed
+
+Open Fix Session detail and the Agent/Fix trace. A production proposal requires
+a configured real model, valid structured output, matching Finding/base/head,
+a valid unified diff, bounded paths/files/lines, and successful
+`git apply --check`. Provider HTTP errors and schema/patch errors remain real
+failures—do not replace them with a fixture, cached response, or rule patch.
+
+## Confirmation expired or the Patch Hash changed
+
+Generate/review the current proposal again and confirm the exact full SHA-256
+shown by the server. Confirmation is single-use and bound to session,
+repository, PR, Finding, Head SHA, Patch Hash, nonce, and expiry. Do not retry
+apply with an old hash. If the PR Head changed, the session is stale and must
+not be revived against different code.
+
+## The API says `expected_lock_version` is stale
+
+Another request or browser tab advanced the session. Reload
+`GET /api/v1/fix-sessions/{id}`, inspect its server `allowed_actions`, and send
+the returned lock version. Never increment it locally or skip a state.
+
+## Patch apply failed
+
+Confirm that the Fix session is in isolated-workspace mode, the managed
+worktree exists at the recorded Head, it is clean, and the stored patch still
+matches its hash. TraceGate intentionally refuses to apply to the enrolled
+workspace. Export the patch/report before cleanup when diagnosis is needed.
+
+## Validation reports `NO_TEST_COMMAND_AVAILABLE`
+
+TraceGate did not find a recognized real test command in repository manifests
+or controlled presets. Lint/typecheck do not count as tests, and a model-
+suggested shell string is not executed. Add or expose a real repository test
+script outside TraceGate, then start a new properly reviewed session; otherwise
+the correct outcome remains `NEEDS_HUMAN_REVIEW`.
+
+## Validation timed out, was cancelled, or truncated output
+
+Detail stores the argument vector, purpose/source, return code/error code,
+duration, truncation flag, and bounded stdout/stderr summaries. The output cap
+does not change the return status. Fix the repository test/runtime condition or
+adjust only the bounded product setting; never convert timeout/cancel to pass.
+
+## Tests passed but the result is not `RESOLVED`
+
+This is expected when reindex/re-review is incomplete, the original Finding
+still has verifier support, new risk appears, or Evidence/parser certainty is
+insufficient. Passing tests cover only their assertions. Review the residual
+Findings/risks and Post-Fix report instead of overriding the deterministic
+resolution.
+
+## Rollback or cleanup failed
+
+Rollback and delete are restricted to registered paths below the managed
+Autofix root. Do not manually point them at the source workspace. Open
+Diagnostics or `GET /api/v1/fix-workspaces` for `CLEANUP_FAILED`, retained, or
+orphaned entries. Preserve the redacted report/log, stop active validation,
+then retry the server action. Manual deletion should be a last resort after
+verifying the path is a Fix-owned worktree.
+
+## Fix events repeat after reconnect
+
+Reconnect using the last persisted `Last-Event-ID`. The typed client
+deduplicates sequence/event IDs; a custom client must do the same. A cursor
+from a different Fix Session returns an explicit conflict. Do not treat SSE
+heartbeats as workflow events.
+
+## The original repository appears modified
+
+Stop immediately and compare the enrolled source path with the Fix Session's
+managed `workspace_path`. Expected Autofix changes exist only below the managed
+Autofix root. Save redacted `git status`/path evidence without source content
+or credentials and report a security issue if TraceGate wrote to the enrolled
+workspace. Do not run reset/clean in the source repository.
+
+More detail: [Autofix guide](autofix-guide.md) and
+[Autofix safety](autofix-safety.md).

@@ -104,7 +104,9 @@ def classify(path: Path, keyword: str, line_text: str) -> str:
         return "allowed_documentation"
     failure_boundaries = {
         "tracegate/agent/workflow.py",
+        "tracegate/agent/fix_workflow.py",
         "tracegate/studio/api.py",
+        "tracegate/studio/fix_manager.py",
         "tracegate/studio/run_manager.py",
         "tracegate/tools/registry.py",
     }
@@ -251,8 +253,9 @@ def render_fallback_audit(findings: list[ScanFinding], audit_result: dict[str, A
         lines.append("")
     lines.extend(["## Findings", ""])
     for item in findings:
+        safe_text = item.text.replace("[", "&#91;").replace("]", "&#93;")
         lines.append(
-            f"- `{item.path}:{item.line}` `{item.keyword}` `{item.classification}`: {item.text}"
+            f"- `{item.path}:{item.line}` `{item.keyword}` `{item.classification}`: {safe_text}"
         )
     lines.append("")
     return "\n".join(lines)

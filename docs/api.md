@@ -54,6 +54,15 @@ Core endpoints:
 | `PUT /api/v1/tools/{name}` | Persistently enable/disable a Tool; write-confirmation Tools cannot be globally enabled. |
 | `GET/POST /api/v1/notifications` | Read or record actual OS handoff/failure outcomes; an attempted notification is not called displayed. |
 | `POST /api/v1/webhooks/github` | Optional direct HMAC-SHA256 GitHub delivery with durable deduplication. |
+| `GET/POST /api/v1/fix-sessions` | List/create Finding-bound controlled Fix Sessions. |
+| `GET /api/v1/fix-sessions/{id}` | Full state, eligibility, plan, proposal, confirmation, validation, persisted Fix Steps/Tool Calls, re-review, result and server-authoritative allowed actions. |
+| `POST /api/v1/fix-sessions/{id}/{action}` | Stateful `plan`, `generate`, `confirm`, `apply`, `validate`, `re-review`, `cancel`, or `rollback` actions with optimistic lock checks. |
+| `GET /api/v1/fix-sessions/{id}/patch` | Authoritative unified diff/hash/file view or `.patch` download. |
+| `GET /api/v1/fix-sessions/{id}/report` | Authoritative Post-Fix result or JSON download. |
+| `GET /api/v1/fix-sessions/{id}/events` | Persisted/resumable SSE using `Last-Event-ID`. |
+| `DELETE /api/v1/fix-sessions/{id}/workspace` | Delete only the registered managed Fix worktree. |
+| `GET /api/v1/fix-workspaces` | Redacted managed-worktree diagnostics and expiry state. |
+| `DELETE /api/v1/fix-workspaces/{id}` | Idempotently clean one selected persisted/orphaned worktree after managed-root and activity checks. |
 
 Errors use a non-success HTTP status and an `{ "error": { "code",
 "message" } }` body. Missing GitHub/model/relay capabilities remain explicit;
@@ -62,6 +71,113 @@ the API does not switch to fixture data or a normal-looking report.
 The separate optional Webhook Relay, device pairing, authenticated SSE, Docker
 profile and TLS requirements are documented in
 [webhook-relay.md](webhook-relay.md).
+
+## Controlled Autofix API
+
+The Autofix routes are `VERIFIED_MACOS` by the full local matrix and scoped
+real-model run. Fresh Windows CI remains a separate gate. They never make
+Review writable, and they expose no commit/push/comment/merge operation.
+
+### Transaction identity
+
+`POST /api/v1/fix-sessions` accepts an existing Finding and an explicit mode:
+
+```json
+{
+  "finding_id": "00000000-0000-0000-0000-000000000000",
+  "permission_mode": "APPLY_IN_ISOLATED_WORKSPACE"
+}
+```
+
+`PROPOSE_ONLY` is the non-mutating alternative. The server resolves and stores
+repository, PR, source Agent Run, base/head SHA, and index identity; clients do
+not supply those authoritative values.
+
+Every subsequent action contains the latest `expected_lock_version`:
+
+```json
+{
+  "expected_lock_version": 3
+}
+```
+
+Confirmation and apply additionally require the full server-reported hash:
+
+```json
+{
+  "expected_lock_version": 5,
+  "patch_hash": "0000000000000000000000000000000000000000000000000000000000000000"
+}
+```
+
+The all-zero value above is a shape example only. It cannot confirm a different
+persisted proposal. Hash, Head SHA, expiry, transaction binding and single-use
+state are verified server-side.
+
+### Lifecycle routes
+
+| Route | Precondition / result |
+| --- | --- |
+| `POST /fix-sessions/{id}/plan` | Created/eligible session; checks Finding/Head/index/Evidence and creates structured plan. `force_eligibility` cannot bypass hard safety rules. |
+| `POST /fix-sessions/{id}/generate` | `PLAN_READY`; requests a structured model patch, runs static safety + `git apply --check`, then waits for confirmation. |
+| `POST /fix-sessions/{id}/confirm` | Exact current Patch Hash and Head; creates an expiring, single-use confirmation. |
+| `POST /fix-sessions/{id}/apply` | Valid confirmation and isolated-workspace mode; applies only to the registered worktree. |
+| `POST /fix-sessions/{id}/validate` | `PATCH_APPLIED`; resolves/runs controlled commands and persists return codes/summaries. |
+| `POST /fix-sessions/{id}/re-review` | `VALIDATION_COMPLETE`; transient reindex, re-review, deterministic resolution and report. |
+| `POST /fix-sessions/{id}/cancel` | Requests/persists cancellation where state permits. |
+| `POST /fix-sessions/{id}/rollback` | Resets/cleans only the managed Fix worktree. |
+| `DELETE /fix-sessions/{id}/workspace` | Removes only the registered managed worktree after state/lock checks. |
+
+All paths above are below `/api/v1`.
+
+### Detail and authoritative artifacts
+
+Detail includes `status`, `current_node`, `permission_mode`, Head/index/
+workspace identity, `lock_version`, token/latency/retry values, redacted error,
+and server `allowed_actions`. Nested fields include:
+
+- `eligibility` and structured `plan`;
+- proposal summary and `patch_inspection` (not a duplicate untrusted hash);
+- current confirmation state;
+- `validation_plan`, ordered `validation_runs`, and ordered persisted Fix
+  `steps` with bounded Tool Call argument/output summaries and durations;
+- `re_review` and deterministic final `result`.
+
+Use `GET /fix-sessions/{id}/patch?download=true` for the persisted diff. The
+server recomputes integrity and returns `X-TraceGate-Patch-Hash`. Add `path=`
+without download to request bounded original/modified content for one changed
+path when the managed worktree exists.
+
+Use `GET /fix-sessions/{id}/report?download=true` for the persisted JSON report
+and related artifact metadata. A browser-composed summary is never the
+authoritative export.
+
+### SSE
+
+`GET /fix-sessions/{id}/events` emits persisted event envelopes:
+
+```text
+id: <persisted-event-id>
+event: workflow_step
+data: {"event_id":"...","sequence":4,"fix_session_id":"...","type":"workflow_step","data":{...}}
+```
+
+Clients reconnect with `Last-Event-ID`. The server validates that a nonnumeric
+cursor belongs to the selected session, returns events in sequence, caps each
+database page, emits heartbeats, and closes after terminal state. The typed
+client bounds input, supports CRLF/multiline SSE, and deduplicates resumed
+events.
+
+### Stable failures
+
+Representative failure codes include stale lock/state, Patch Hash or persisted
+integrity mismatch, expired/invalid/consumed confirmation, stale PR Head,
+unsafe path/patch, failed `git apply --check`, forbidden/no-test validation,
+timeout/cancellation, and unavailable workflow/provider. Non-success never
+returns a normal-looking report.
+
+See [Autofix guide](autofix-guide.md) and
+[Autofix safety](autofix-safety.md).
 
 ## Legacy TraceGate Eval Web/API Prototype
 

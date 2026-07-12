@@ -1,94 +1,117 @@
-# Evidence-backed resume bullets
+# Evidence-backed project bullets
 
-Use only bullets matching the role. Each bullet names its code, test, visual,
-or run evidence. Windows bullets are limited to CI build/test/package evidence;
-real-model claims are limited to the single recorded macOS production-path run.
+Use only statements whose evidence has completed its named gate. Autofix
+design/code bullets below do not imply a successful real-model public-PR fix;
+Windows bullets are limited to automated CI/build evidence.
 
-## AI product full-stack internship
+## AI product full-stack development
 
-- Built a local-first Pull Request review product with React/TypeScript,
-  FastAPI, SQLAlchemy/Alembic, SQLite, LangGraph, and Tauri, including typed
-  authenticated APIs, SSE, diagnostics, settings, and desktop Sidecar
-  lifecycle. **Evidence:** `apps/web/src`, `tracegate/studio`,
-  `apps/desktop/src-tauri`; `tests/test_studio_api.py`; `e2e/studio.spec.ts`;
-  `artifacts/macos/TraceGate-Studio-macos-arm64.zip`.
-- Delivered Repository/Review Maps, Change Tour, Monaco Diff, Agent Trace, and
-  evidence-backed navigation using real Git/index/database state rather than
-  demo data. **Evidence:** `tracegate/graph/repository_map.py`,
-  `tracegate/studio/api.py`, `apps/web/src/pages`; 4 passing Chrome E2E flows;
-  `screenshots/p1-review-map-macos.png`.
-- Produced a native Windows x86_64 PyInstaller Sidecar plus unsigned NSIS, MSI,
-  and portable Tauri packages in GitHub Actions, with authenticated Sidecar
-  health, build metadata, and downloaded SHA-256 verification. **Evidence:**
-  `docs/verification/windows-ci.md`; workflow runs `29163495677` and
-  `29163496649`; artifact ID `8251618586`. This bullet does not claim Windows
-  installation or GUI acceptance.
+- Built a local-first Pull Request intelligence workspace with React/strict
+  TypeScript, FastAPI, SQLAlchemy/Alembic, SQLite, LangGraph, and Tauri 2,
+  including authenticated REST/SSE, secure desktop credentials, diagnostics,
+  code maps, Monaco Diff, Agent Trace, and Sidecar lifecycle. **Basis:**
+  `apps/web/src`, `tracegate/studio`, `apps/desktop/src-tauri`;
+  `tests/test_studio_api.py`; `e2e/studio.spec.ts`;
+  [`verification/p1-macos.md`](verification/p1-macos.md).
+- Added an end-to-end Fix experience from persisted Finding through plan,
+  diff/hash review, confirmation, validation stream, re-review report,
+  export/rollback, and session history using shared Zod schemas and typed API
+  clients. **Basis:** `apps/web/src/components/FixExperience.tsx`,
+  `packages/shared-types/src`, `packages/api-client/src`;
+  `apps/web/src/components/FixExperience.test.tsx`;
+  fixture-only screenshots in `screenshots/autofix-playwright-fixture-*.png`.
+  **Gate:** final full suite remains pending.
 
-## Coding Agent engineering internship
+## Coding Agent engineering
 
-- Implemented a seven-node observable LangGraph review workflow with
-  cancellation, bounded retry, commit-bound context, structured model output,
-  persisted Agent/Tool traces, and verifier-gated Findings. **Evidence:**
-  `tracegate/agent/workflow.py`, `tracegate/models/provider.py`,
-  `tests/test_agent_workflow.py`, `tests/test_model_provider.py`.
-- Built a 19-tool schema/permission Registry with traversal and sensitive-file
-  boundaries, restricted command execution, execution-time enable/disable
-  policy, and exact-confirmation patch mode that never commits or pushes.
-  **Evidence:** `tracegate/tools/registry.py`, `tests/test_tool_registry.py`,
-  `screenshots/p1-registry-macos.png`.
+- Designed a separate 11-node controlled Coding Agent repair workflow so the
+  existing seven-node review path stays read-only; persisted Fix sessions,
+  steps, Tool Calls, events, proposals, confirmations, validation, transient
+  index identity, re-review, and deterministic resolution. **Basis:**
+  `tracegate/agent/fix_workflow.py`, `tracegate/studio/models.py`, migration
+  `20260712_0006`, `tests/test_fix_workflow.py`,
+  [`architecture/ADR-003-autofix-workflow.md`](architecture/ADR-003-autofix-workflow.md).
+- Implemented SHA-256 Patch Hash + exact Head-SHA confirmation with TTL,
+  single-use consumption, optimistic locking, and server-authoritative
+  patch/report exports. **Basis:** `tracegate/autofix/confirmation.py`,
+  `tracegate/autofix/patch_safety.py`, `tracegate/studio/fix_api.py`,
+  `tests/test_autofix_api.py`.
+- Isolated model-generated mutations in detached Git worktrees and built
+  bounded patch/path/symlink/sensitive-file checks, manifest-derived
+  argument-vector validation, environment filtering, timeout/cancellation,
+  rollback, and cleanup that never auto-commit or push. **Basis:**
+  `tracegate/autofix/workspace.py`, `tracegate/autofix/validation.py`,
+  `tests/test_autofix_safety.py`, [`autofix-safety.md`](autofix-safety.md).
 
-## Python AI application development internship
+## Agent Workflow engineering
 
+- Implemented observable, cancellable LangGraph workflows with distinct Review
+  and Fix state machines, durable node/Tool/event traces, idempotent actions,
+  stale-client compare-and-swap protection, and resumable `Last-Event-ID` SSE.
+  **Basis:** `tracegate/agent/workflow.py`,
+  `tracegate/agent/fix_workflow.py`, `tracegate/studio/fix_manager.py`,
+  `tracegate/studio/fix_api.py`; workflow/API tests.
+- Kept model output subordinate to application policy: strict Pydantic
+  structures, commit/Evidence/path verification, static patch validation,
+  controlled tools, and deterministic post-fix resolution prevent a prompt
+  from authorizing write or declaring success. **Basis:**
+  `tracegate/autofix/schemas.py`, `tracegate/autofix/eligibility.py`,
+  `tracegate/autofix/resolution.py`; Autofix safety/workflow tests.
+
+## Python AI application development
+
+- Built an OpenAI-compatible structured model path with bounded retry,
+  token/latency accounting, compatibility Tool selection, provider provenance,
+  explicit no-fallback failure, and secure Keychain/environment configuration.
+  **Basis:** `tracegate/models/provider.py`, workflow modules,
+  `tests/test_model_provider.py`; historical production-path Review record
+  [`verification/real-model-e2e-macos.md`](verification/real-model-e2e-macos.md).
 - Designed a versioned FastAPI/SQLAlchemy data layer for GitHub PR snapshots,
-  commits, files, hunks, checks, indexes, graphs, model profiles, Agent runs,
-  Evidence, Findings, notifications, and rate-limit/latency diagnostics.
-  **Evidence:** `tracegate/studio/models.py`, migration `20260710_0004`,
-  `tests/test_studio_database.py`, `tests/test_studio_api.py`.
-- Integrated finite-retry OpenAI-compatible structured output, SSE streaming,
-  native/compatibility Tool selection, token/latency accounting, context-scope
-  control, and secure configuration without persisting API keys. **Evidence:**
-  `tracegate/models/provider.py`, `tracegate/studio/run_manager.py`,
-  `tests/test_model_provider.py`, `tests/test_studio_run_manager.py`; one
-  production-path `deepseek-chat` run on `psf/requests#7565` completed 4 real
-  requests and persisted 3 Tool Calls, 1 Evidence, 1 Finding, and 7 Agent Trace
-  rows (`docs/verification/real-model-e2e-macos.md`).
+  commit-bound index/graph, Agent/Evidence/Finding traceability, and the Fix
+  transaction, with SQLite upgrade/fresh/idempotency and offline MySQL DDL
+  coverage. **Basis:** `tracegate/studio/models.py`,
+  `tracegate/studio/migrations`, `tests/test_studio_database.py`,
+  `tests/test_autofix_api.py`.
 
-## Agent Eval internship
+## Test development and Agent Eval
 
-- Productized TraceGate Eval’s 19 scored real-PR cases and 160 ClaimBench runs
-  into an Eval Center with artifact hashes, unchanged safety metrics, confusion
-  matrix, case drill-down, model/context comparisons, and report export.
-  **Evidence:** `tracegate/studio/eval_bridge.py`,
-  `apps/web/src/pages/EvalCenterPage.tsx`, `tests/test_studio_api.py`,
-  `screenshots/p1-eval-center-macos.png`.
-- Preserved explicit active/stale/unknown/conflicting evidence semantics and
-  commit-bound verification so passing tests alone cannot count as safe agent
-  behavior. **Evidence:** `tracegate/evidence_packet.py`, `tracegate/verifier.py`,
-  existing benchmark reports, 163 passing Python tests in the recorded Windows
-  CI run.
+- Productized 19 scored public-PR cases and 160 controlled ClaimBench rows into
+  an Eval Center with provenance hashes, unchanged metrics, confusion matrix,
+  case drill-down, model/context comparison, and export. **Basis:**
+  `tracegate/studio/eval_bridge.py`,
+  `apps/web/src/pages/EvalCenterPage.tsx`, benchmark artifacts and API/E2E
+  tests. The 19-case set is intentionally small and not statistically
+  significant.
+- Built cross-layer Autofix regression coverage for malicious patches,
+  traversal/symlinks/sensitive files, confirmation replacement/expiry/stale
+  Head, command injection/timeouts/cancellation, isolated rollback/cleanup,
+  migration, API/SSE resume, typed clients, and fixture-labelled UI flow.
+  **Basis:** `tests/test_autofix_safety.py`, `tests/test_fix_workflow.py`,
+  `tests/test_autofix_api.py`, shared/API-client/Vitest/Playwright tests.
+  **Gate:** use final counts only after the complete branch matrix passes.
+- Automated canonical version/product/fact/README/Autofix-boundary and
+  repository-wide Markdown-link checks so historical evidence stays immutable
+  while current claims cannot silently drift. **Basis:**
+  `docs/project-facts.yaml`, `scripts/check_docs_consistency.py`,
+  `tests/test_docs_consistency.py`.
 
-## Test development internship
+## Cross-platform delivery
 
-- Built cross-layer verification covering 163 Python tests, 30
-  TypeScript/Vitest tests, 22 passing Rust tests with 1 explicit native
-  secure-store mutation test ignored, strict TypeScript/ESLint, Rust
-  fmt/clippy, and 4 Chrome E2E product flows. **Evidence:** `scripts/test.sh`,
-  `e2e/studio.spec.ts`, `docs/verification/windows-ci.md`, and the macOS
-  verification records.
-- Added reproducible production-path performance smoke tests for 100/1000-file
-  indexing and Repository/Review Maps; recorded method, environment, caps, UI
-  readiness, idle CPU, and blocked measurements without invented values.
-  **Evidence:** `scripts/benchmark_studio.py`, `docs/performance-results.json`,
-  `docs/performance.md`.
+- Built native macOS arm64 and Windows x86-64 PyInstaller Sidecars and Tauri
+  packaging workflows with authenticated health checks, checksums, build
+  metadata, and unsigned Windows NSIS/MSI/portable artifacts. **Basis:** build
+  workflows/scripts and historical source-bound records
+  [`verification/p1-macos.md`](verification/p1-macos.md) and
+  [`verification/windows-ci.md`](verification/windows-ci.md). This does not
+  claim Windows installation or GUI acceptance, and fresh Autofix artifacts
+  are pending.
 
-## Claims not to use yet
+## Claims not supported yet
 
-- “Shipped, signed, or manually verified a Windows installer” — CI produced
-  unsigned NSIS/MSI/portable artifacts, but no Windows installation or GUI
-  acceptance run exists.
-- “Verified native notification clicks on macOS/Windows” — code/tests exist,
-  but current manual OS interaction evidence is incomplete.
-- “Improved model accuracy” — the single real DeepSeek E2E proves the production
-  request/persistence path, not an accuracy gain or comparative experiment.
-- “Production GitHub OAuth verified end to end” — adapter and secure-storage
-  code are tested, but no live authorization was performed in this pass.
+- A real public-PR Autofix success, fix accuracy, success rate, or comparative
+  model quality.
+- Signed or manually verified Windows installer/GUI behavior.
+- Enterprise users, commercial deployment, production readiness, or scale.
+- Native Tool Calling for the recorded DeepSeek compatibility-mode run.
+- Complete Java, JavaScript, or TypeScript semantic/function call graphs.
+- Automatic commit, push, external PR creation/comment, or merge.

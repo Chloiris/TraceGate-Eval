@@ -1,4 +1,11 @@
-import { useDiagnostics, useUpdateStatus } from "../api/queries";
+import { useState } from "react";
+
+import {
+  useCleanupFixWorkspace,
+  useDiagnostics,
+  useFixWorkspaces,
+  useUpdateStatus,
+} from "../api/queries";
 import { ErrorState, LoadingState } from "../components/RequestState";
 import { StatusCard } from "../components/StatusCard";
 import { errorMessage } from "../lib/errors";
@@ -12,6 +19,9 @@ export function DiagnosticsContent({ embedded = false }: { embedded?: boolean })
   const { locale, text } = useI18n();
   const diagnostics = useDiagnostics();
   const updateStatus = useUpdateStatus();
+  const fixWorkspaces = useFixWorkspaces();
+  const cleanupFixWorkspace = useCleanupFixWorkspace();
+  const [cleanupTarget, setCleanupTarget] = useState<string | null>(null);
   if (diagnostics.isPending) return <LoadingState label={text("正在读取脱敏诊断信息…", "Reading redacted diagnostics…")} />;
   if (diagnostics.isError) return <ErrorState title={text("诊断信息不可用", "Diagnostics unavailable")} message={errorMessage(diagnostics.error)} onRetry={() => void diagnostics.refetch()} />;
   const data = diagnostics.data;
@@ -50,6 +60,90 @@ export function DiagnosticsContent({ embedded = false }: { embedded?: boolean })
           <div><dt>Telemetry</dt><dd>{data.telemetry_enabled ? text("已开启", "Enabled") : text("关闭（默认）", "Off (default)")}</dd></div>
         </dl>
         <details><summary>{text("已授权工作区", "Authorized workspaces")}</summary><ul className="plain-list">{data.workspace_paths.map((path) => <li className="mono" key={path}>{path}</li>)}</ul></details>
+      </section>
+      <section className="panel fix-workspace-diagnostics">
+        <div className="section-heading">
+          <div>
+            <span className="eyebrow">AUTOFIX RECOVERY</span>
+            <h2>{text("隔离修复工作区", "Isolated Fix workspaces")}</h2>
+          </div>
+          <button
+            className="button button-secondary button-small"
+            type="button"
+            disabled={fixWorkspaces.isFetching}
+            onClick={() => void fixWorkspaces.refetch()}
+          >
+            {text("刷新工作区", "Refresh workspaces")}
+          </button>
+        </div>
+        <p className="field-note">
+          {text(
+            "这里只列出 TraceGate 托管目录中的隔离 worktree。清理不会提交、推送或修改原仓库；过期时间由设置中的保留时长决定。",
+            "Only isolated worktrees under TraceGate's managed root appear here. Cleanup never commits, pushes, or modifies the source repository; expiry follows the configured retention window.",
+          )}
+        </p>
+        {fixWorkspaces.isPending ? <p>{text("正在检查残留工作区…", "Checking residual workspaces…")}</p> : null}
+        {fixWorkspaces.isError ? (
+          <p className="inline-error" role="alert">
+            {text("无法读取隔离工作区", "Unable to read isolated workspaces")}: {errorMessage(fixWorkspaces.error)}
+          </p>
+        ) : null}
+        {fixWorkspaces.data && fixWorkspaces.data.items.length === 0 ? (
+          <p className="inline-success">{text("没有残留的隔离修复工作区。", "No residual isolated Fix workspaces.")}</p>
+        ) : null}
+        {fixWorkspaces.data && fixWorkspaces.data.items.length > 0 ? (
+          <div className="fix-workspace-list">
+            {fixWorkspaces.data.items.map((workspace) => {
+              const confirming = cleanupTarget === workspace.fix_session_id;
+              const busy = cleanupFixWorkspace.isPending;
+              return (
+                <article className="fix-workspace-card" key={`${workspace.repository_id}:${workspace.fix_session_id}`}>
+                  <div className="fix-workspace-card-header">
+                    <div>
+                      <strong className="mono">{workspace.fix_session_id}</strong>
+                      <span>{workspace.cleanup_status}</span>
+                    </div>
+                    {workspace.expired ? (
+                      <span className="status-badge status-warning">{text("已过期", "Expired")}</span>
+                    ) : (
+                      <span className="status-badge">{text("保留中", "Retained")}</span>
+                    )}
+                  </div>
+                  <code className="fix-workspace-path">{workspace.path}</code>
+                  <p className="field-note">
+                    {text("最后活动", "Last active")}: {new Date(workspace.last_active_at).toLocaleString(locale)} · {text("保留策略", "Retention policy")}: {fixWorkspaces.data.retention_hours}h
+                  </p>
+                  {confirming ? (
+                    <div className="fix-workspace-cleanup-confirmation" role="group" aria-label={text("确认清理隔离工作区", "Confirm isolated workspace cleanup")}>
+                      <p>{text("确认只删除上方这一份隔离 worktree？原仓库和 Fix 记录会保留。", "Delete only this isolated worktree? The source repository and Fix record remain intact.")}</p>
+                      <div className="form-actions">
+                        <button className="button button-secondary button-small" type="button" disabled={busy} onClick={() => setCleanupTarget(null)}>{text("取消", "Cancel")}</button>
+                        <button
+                          className="button button-danger button-small"
+                          type="button"
+                          disabled={busy}
+                          onClick={() => cleanupFixWorkspace.mutate(
+                            { fixSessionId: workspace.fix_session_id },
+                            { onSuccess: () => setCleanupTarget(null) },
+                          )}
+                        >
+                          {busy ? text("正在清理…", "Cleaning…") : text("确认清理", "Confirm cleanup")}
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <button className="button button-secondary button-small" type="button" disabled={busy} onClick={() => setCleanupTarget(workspace.fix_session_id)}>{text("清理", "Clean up")}</button>
+                  )}
+                </article>
+              );
+            })}
+          </div>
+        ) : null}
+        {cleanupFixWorkspace.isError ? (
+          <p className="inline-error" role="alert">
+            {text("工作区清理失败", "Workspace cleanup failed")}: {errorMessage(cleanupFixWorkspace.error)}
+          </p>
+        ) : null}
       </section>
       <section className="panel">
         <span className="eyebrow">OBSERVABILITY</span><h2>{text("最近持久化指标", "Latest persisted metrics")}</h2>

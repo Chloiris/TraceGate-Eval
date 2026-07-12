@@ -1,5 +1,8 @@
 # TraceGate Eval Web/API v0.1 Release Notes
 
+> **Historical verification record.** This describes the legacy Eval Web/API
+> prototype at that milestone, not the current TraceGate Studio API surface.
+
 ## What Was Added
 
 - Added a lightweight FastAPI service under `tracegate/web/`.

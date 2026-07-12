@@ -1,77 +1,82 @@
-# TraceGate Studio interview demo (6–8 minutes)
+# TraceGate Studio 3–5 minute demo
 
-## Before the call
+## Before the demo
+
+Use a disposable authorized repository and redact every token/path/log. Choose
+one of these scopes and say it on screen:
+
+- **Playwright fixture:** reliable UI demonstration; not a model/public-PR run.
+- **Real local repository + real model:** production plumbing evidence; not a
+  public-PR result unless it actually uses a public PR.
+- **Public PR + real model:** only when the Finding, exact Head, permission, and
+  validation command are defensible and recorded.
 
 ```bash
-./scripts/bootstrap.sh
 ./scripts/test.sh
 pnpm test:e2e
 ./scripts/dev.sh
 ```
 
-Use a disposable public repository or the checked-in E2E preparation script;
-never expose a private repository, token, prompt, or local log during a screen
-share. If no model key is available, keep the UI in the honest `模型尚未配置`
-state and use the persisted failed-run trace to explain the boundary.
+If no model is configured, demonstrate explicit failure. Do not use a fixture,
+mock, cache, or rule fallback and call it a real semantic run.
 
-## Story
+## Live story
 
-1. **Why (45 seconds).** Normal coding-agent evaluation rewards tests passing.
-   TraceGate asks whether an agent used current, stale, unknown, or conflicting
-   engineering evidence safely. Show Eval Center: 19 real PR cases and 160
-   ClaimBench runs are read from checked-in artifacts with hashes.
-2. **Local trust boundary (45 seconds).** Show Diagnostics/Settings. The API is
-   loopback + bearer authenticated, provider secrets stay in Keychain/
-   Credential Manager, telemetry is off, and missing providers are explicit.
-3. **Repository truth (60 seconds).** Enroll a real local Git workspace, run the
-   incremental index, then open Repository Map. Explain commit/content-hash
-   binding, parser capability levels, the 800-node view cap, and JSON/SVG/PNG
-   export.
-4. **PR review loop (2 minutes).** Open PR Inbox and the selected PR. In Files &
-   Diff show the local Monaco editor. Jump Finding → exact diff line, then open
-   Review Map and Change Tour. Emphasize that edges come from Git/static index/
-   persisted Evidence; the model cannot invent dependencies.
-5. **Observable Agent (90 seconds).** Open Agent Runs. Walk through the seven
-   LangGraph nodes, ToolCalls, permissions, bounded retry/cancellation and the
-   Agent Evidence Graph. Show `apply_patch` disabled by default and explain the
-   exact write confirmation gate.
-6. **Desktop/cross-platform (60 seconds).** Show the Tauri tray menu, native
-   capability bridge, Sidecar lifecycle and the Windows build workflow. State
-   clearly that macOS packaging was run locally and Windows CI produced and
-   hash-verified unsigned NSIS, MSI, and portable packages. Do not present that
-   CI result as Windows installation, tray, notification, autostart, or GUI
-   acceptance; those remain a manual checklist.
+1. **Sync and truth (20 seconds).** Open PR Inbox. Show repository, PR,
+   Base/Head SHA, sync/check state, and exact index identity.
+2. **Review (25 seconds).** Run/read the seven-node read-only Agent Review.
+   Jump from a Finding to its Evidence and exact Monaco Diff range.
+3. **Generate Fix Plan (20 seconds).** Click **Generate Fix**. Explain that the
+   new 11-node Fix graph is separate from Review and begins with eligibility.
+4. **Patch Proposal (30 seconds).** Show affected files, risk warnings, full
+   Unified Diff, `git apply --check`, and normalized SHA-256 Patch Hash.
+5. **User confirmation (20 seconds).** Confirm the displayed hash. Explain
+   session/repository/PR/Finding/Head/hash/expiry binding and single use.
+6. **Isolated apply (20 seconds).** Apply to the managed worktree. In a second
+   terminal, show the original workspace `git status` unchanged.
+7. **Validation (30 seconds).** Watch SSE progress. Show the manifest-derived
+   argument-vector command and real return code. If it fails, keep the failure
+   and explain why it cannot become `RESOLVED`.
+8. **Reindex + re-review (30 seconds).** Show transient index identity and the
+   verifier's assessment of the original Finding/new risks.
+9. **Final report (25 seconds).** Show resolution, final diff, residual
+   Findings/risks, token/latency, Tool Call and command evidence.
+10. **Export + rollback (20 seconds).** Download authoritative `.patch` and
+    JSON report; roll back and clean only the Fix worktree. Repeat that Studio
+    never auto-commits, pushes, comments, opens a PR, or merges.
+
+## Required closing boundary
+
+Say exactly what was shown. For fixture mode:
+
+> “This run proves the deterministic UI/API/state-machine path over a test
+> fixture. It is not a live-model or public-PR Autofix result.”
+
+For one real-model run:
+
+> “This run proves the scoped production request, Tool, patch, isolation,
+> validation, re-review, persistence, and report path. It does not establish a
+> general fix-success rate or Windows GUI behavior.”
+
+## Failure branch worth showing
+
+Use a fixture-labelled validation failure to show that:
+
+- return code/output/error are persisted;
+- the state does not become `RESOLVED`;
+- report/export/rollback remain available;
+- the user workspace stays unchanged.
+
+Never simulate a green result merely to finish the demo.
 
 ## Evidence ready for slides
 
-- [PR Diff screenshot](screenshots/p1-pr-diff-macos.png)
-- [Review Map screenshot](screenshots/p1-review-map-macos.png)
-- [Eval Center screenshot](screenshots/p1-eval-center-macos.png)
-- [Registry screenshot](screenshots/p1-registry-macos.png)
-- [macOS verification](verification/p1-macos.md)
-- [Real-model macOS E2E](verification/real-model-e2e-macos.md)
-- [Windows CI verification](verification/windows-ci.md)
+- [PR Diff fixture screenshot](screenshots/p1-pr-diff-macos.png)
+- [Autofix confirmation fixture screenshot](screenshots/autofix-playwright-fixture-confirmation-macos.png)
+- [Autofix result fixture screenshot](screenshots/autofix-playwright-fixture-result-macos.png)
+- [Implementation status](implementation-status.md)
+- [Autofix safety](autofix-safety.md)
+- [Scoped real-model Autofix E2E status](verification/real-autofix-e2e-macos.md)
+- [Historical real-model Review E2E](verification/real-model-e2e-macos.md)
+- [Historical Windows CI](verification/windows-ci.md)
 - [Windows manual checklist](windows-manual-acceptance.md)
-
-## Safe answers to likely questions
-
-- **“Is the semantic result real?”** One production-path DeepSeek run is
-  `VERIFIED_MACOS`: `psf/requests#7565` completed all six required stages
-  with 4 real model requests, 3 completed Tool Calls, 1 persisted Evidence,
-  1 Finding, and 7 Agent Trace rows. This proves execution/traceability, not
-  model accuracy. Without a configured provider, analysis still fails
-  explicitly; production does not substitute a test double or rule fallback.
-- **“Is the Java graph precise?”** No. Python is AST-backed but explicitly
-  bounded to the implemented symbol/reference subset; JS/TS/Java are
-  intentionally labelled partial or unsupported per capability. The UI shows
-  the parser capability rather than inflating it.
-- **“Did Windows pass?”** Yes for the exact automated build boundary: push run
-  [29163495677](https://github.com/Chloiris/TraceGate-Eval/actions/runs/29163495677)
-  and PR run
-  [29163496649](https://github.com/Chloiris/TraceGate-Eval/actions/runs/29163496649)
-  succeeded and the unsigned artifact was downloaded and hash-checked. No for
-  Windows GUI/manual acceptance, which still requires installation, tray,
-  notification, autostart, single-instance, WebView2, and uninstall checks.
-- **“Can the Agent edit or push?”** Read-only analysis is the default. Patch is
-  disabled until a scoped exact confirmation; commit/comment/push are not
-  automatic actions.

@@ -1,5 +1,8 @@
 # TraceGate v0.2-alpha Release Notes
 
+> **Historical verification record.** `v0.2-alpha` is a preserved TraceGate Eval
+> research milestone; its dataset values are not rewritten as Studio versions.
+
 TraceGate v0.2-alpha introduces a hard real-data mini benchmark layer on top of
 the existing active real-data smoke cases.
 
