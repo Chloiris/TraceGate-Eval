@@ -4,6 +4,7 @@ import asyncio
 import json
 import os
 import signal
+import sys
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -362,7 +363,13 @@ class ValidationExecutor:
             ("./gradlew", "test"),
         }
         values = tuple(argv)
-        if not any(values[: len(prefix)] == prefix for prefix in prefixes):
+        current_python_pytest = (
+            Path(argv[0]).resolve(strict=False) == Path(sys.executable).resolve(strict=False)
+            and values[1:3] == ("-m", "pytest")
+        )
+        if not current_python_pytest and not any(
+            values[: len(prefix)] == prefix for prefix in prefixes
+        ):
             raise AutofixError(
                 "fix_validation_forbidden", "Validation command is not allowed"
             )

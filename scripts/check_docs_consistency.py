@@ -542,7 +542,7 @@ def discover_markdown_documents(root: Path) -> list[str]:
     """Return every repository Markdown document, excluding generated/vendor trees."""
     excluded_parts = {".git", ".venv", "node_modules", "target", "dist", "build"}
     return sorted(
-        str(path.relative_to(root))
+        path.relative_to(root).as_posix()
         for path in root.rglob("*.md")
         if not excluded_parts.intersection(path.relative_to(root).parts)
     )

@@ -12,6 +12,7 @@ from pathlib import Path
 from tracegate.repository import RepositoryBoundary
 
 from .errors import AutofixError
+from .patch_safety import prepare_patch_bytes
 
 
 _SAFE_IDENTIFIER = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$")
@@ -289,10 +290,8 @@ class FixWorkspaceManager:
                     "--whitespace=nowarn",
                     "-",
                 ],
-                input=patch,
+                input=prepare_patch_bytes(patch, workspace.boundary),
                 capture_output=True,
-                text=True,
-                errors="replace",
                 timeout=30,
                 env=environment,
                 check=False,
@@ -300,7 +299,8 @@ class FixWorkspaceManager:
             if applied.returncode != 0:
                 raise AutofixError(
                     "fix_patch_unsafe",
-                    applied.stderr[:2_000].strip() or "Patch projection failed",
+                    applied.stderr.decode("utf-8", errors="replace")[:2_000].strip()
+                    or "Patch projection failed",
                 )
 
             def show(specification: str) -> str | None:

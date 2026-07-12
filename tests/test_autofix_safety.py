@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -96,6 +97,37 @@ def test_patch_hash_is_normalized_and_patch_is_statically_checked(tmp_path: Path
     assert inspection.changed_lines == 2
     assert inspection.additions == 1
     assert inspection.deletions == 1
+
+
+def test_patch_apply_preserves_uniform_crlf_without_ignoring_context(
+    tmp_path: Path,
+) -> None:
+    repository = tmp_path / "repository"
+    head = initialize_repository(repository)
+    source = repository / "src" / "service.py"
+    source.write_bytes(
+        b"def total(value: int) -> int:\r\n    return value * 2\r\n"
+    )
+    subprocess.run(
+        ["git", "config", "core.autocrlf", "false"], cwd=repository, check=True
+    )
+    subprocess.run(["git", "add", "src/service.py"], cwd=repository, check=True)
+    subprocess.run(["git", "commit", "-qm", "store crlf"], cwd=repository, check=True)
+    head = subprocess.run(
+        ["git", "rev-parse", "HEAD"],
+        cwd=repository,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+
+    validator = PatchSafetyValidator(RepositoryBoundary(repository))
+    validator.validate(service_patch(), expected_head_sha=head)
+    validator.apply(service_patch(), expected_head_sha=head)
+
+    changed = source.read_bytes()
+    assert b"return value + 2\r\n" in changed
+    assert b"\n" not in changed.replace(b"\r\n", b"")
 
 
 @pytest.mark.parametrize(
@@ -274,7 +306,7 @@ async def test_validation_cancellation_is_explicit(tmp_path: Path) -> None:
         encoding="utf-8",
     )
     command = ValidationCommand(
-        argv=["python", "-m", "pytest", "-q", "test_wait.py"],
+        argv=[sys.executable, "-m", "pytest", "-q", "test_wait.py"],
         command_purpose="cancellation test",
         required=True,
         timeout=30,

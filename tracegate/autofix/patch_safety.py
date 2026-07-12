@@ -5,7 +5,7 @@ import os
 import re
 import subprocess
 from dataclasses import dataclass
-from pathlib import PurePosixPath
+from pathlib import Path, PurePosixPath
 
 from tracegate.repository import RepositoryBoundary, RepositoryPathError
 
@@ -83,6 +83,7 @@ _LOCKFILE_NAMES = {
     "uv.lock",
     "yarn.lock",
 }
+_MAX_EOL_INSPECTION_BYTES = 1_048_576
 
 
 def normalize_patch(patch: str) -> str:
@@ -96,6 +97,79 @@ def normalize_patch(patch: str) -> str:
 
 def compute_patch_hash(patch: str) -> str:
     return hashlib.sha256(normalize_patch(patch).encode("utf-8")).hexdigest()
+
+
+def prepare_patch_bytes(patch: str, boundary: RepositoryBoundary) -> bytes:
+    """Preserve a target file's uniform LF/CRLF convention without relaxing context.
+
+    Model and API patches are normalized to LF for a stable confirmation hash. Git
+    blobs may legitimately contain CRLF, especially on Windows. Rather than asking
+    ``git apply`` to ignore whitespace, adapt only hunk-body line terminators to the
+    existing target file and keep every context byte otherwise exact.
+    """
+    normalized = normalize_patch(patch)
+    output: list[bytes] = []
+    previous_path: str | None = None
+    target_eol = b"\n"
+    in_hunk = False
+
+    for line in normalized.splitlines(keepends=True):
+        stripped = line.removesuffix("\n")
+        matched = _DIFF_PATH.match(stripped)
+        if matched:
+            path = _clean_diff_path(matched.group(1))
+            if stripped.startswith("--- "):
+                previous_path = path
+                in_hunk = False
+            else:
+                target_path = path or previous_path
+                target_eol = _target_line_ending(boundary, target_path)
+                in_hunk = False
+            output.append(line.encode("utf-8"))
+            continue
+        if stripped.startswith("@@"):
+            in_hunk = True
+            output.append(line.encode("utf-8"))
+            continue
+        if stripped.startswith("diff --git "):
+            previous_path = None
+            target_eol = b"\n"
+            in_hunk = False
+            output.append(line.encode("utf-8"))
+            continue
+        if in_hunk and stripped.startswith((" ", "+", "-")):
+            output.append(stripped.encode("utf-8") + target_eol)
+            continue
+        output.append(line.encode("utf-8"))
+    return b"".join(output)
+
+
+def _target_line_ending(
+    boundary: RepositoryBoundary, relative_path: str | None
+) -> bytes:
+    if relative_path is None:
+        return b"\n"
+    path = boundary.resolve(relative_path, allow_missing=True)
+    if not path.is_file():
+        return b"\n"
+    with path.open("rb") as handle:
+        raw = handle.read(_MAX_EOL_INSPECTION_BYTES + 1)
+    if len(raw) > _MAX_EOL_INSPECTION_BYTES:
+        raise AutofixError(
+            "fix_patch_unsafe",
+            f"Patch target exceeds the newline-safety inspection limit: {relative_path}",
+        )
+    without_crlf = raw.replace(b"\r\n", b"")
+    if b"\r" in without_crlf or (b"\r\n" in raw and b"\n" in without_crlf):
+        raise AutofixError(
+            "fix_patch_unsafe",
+            f"Patch target has mixed or unsupported line endings: {relative_path}",
+        )
+    return b"\r\n" if b"\r\n" in raw else b"\n"
+
+
+def _decode_git_error(value: bytes) -> str:
+    return value.decode("utf-8", errors="replace")[:2_000].strip()
 
 
 def _clean_diff_path(raw_path: str) -> str | None:
@@ -287,12 +361,11 @@ class PatchSafetyValidator:
         if require_clean and self._git("status", "--porcelain").stdout.strip():
             raise AutofixError("fix_workspace_unavailable", "Fix workspace is not clean before patch validation")
 
+        prepared = prepare_patch_bytes(normalized, self.boundary)
         process = subprocess.run(
             ["git", "-C", str(self.boundary.root), "apply", "--check", "--whitespace=nowarn", "-"],
-            input=normalized,
+            input=prepared,
             capture_output=True,
-            text=True,
-            errors="replace",
             timeout=30,
             env=_filtered_git_environment(),
             check=False,
@@ -300,7 +373,7 @@ class PatchSafetyValidator:
         if process.returncode != 0:
             raise AutofixError(
                 "fix_patch_unsafe",
-                process.stderr[:2_000].strip() or "git apply --check rejected the patch",
+                _decode_git_error(process.stderr) or "git apply --check rejected the patch",
             )
         return PatchInspection(
             patch_hash=hashlib.sha256(normalized.encode("utf-8")).hexdigest(),
@@ -317,12 +390,11 @@ class PatchSafetyValidator:
         head = self._git("rev-parse", "HEAD").stdout.strip()
         if head != expected_head_sha:
             raise AutofixError("fix_head_stale", "Fix workspace Head SHA changed before apply")
+        prepared = prepare_patch_bytes(normalized, self.boundary)
         process = subprocess.run(
             ["git", "-C", str(self.boundary.root), "apply", "--whitespace=nowarn", "-"],
-            input=normalized,
+            input=prepared,
             capture_output=True,
-            text=True,
-            errors="replace",
             timeout=30,
             env=_filtered_git_environment(),
             check=False,
@@ -330,7 +402,7 @@ class PatchSafetyValidator:
         if process.returncode != 0:
             raise AutofixError(
                 "fix_patch_apply_failed",
-                process.stderr[:2_000].strip() or "git apply rejected the confirmed patch",
+                _decode_git_error(process.stderr) or "git apply rejected the confirmed patch",
             )
 
     def _git(self, *arguments: str) -> subprocess.CompletedProcess[str]:
