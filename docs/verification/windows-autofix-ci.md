@@ -87,6 +87,29 @@ contains the original source-bound Windows proof. Its recorded hashes and
 timestamps remain immutable historical evidence; they were not rewritten as
 post-merge values.
 
+Original source-bound fields retained from that record:
+
+- Event / final state: `pull_request` / `completed` / `success`
+- Started / completed: `2026-07-12T14:28:00Z` / `2026-07-12T14:48:28Z`
+- Job: `Unsigned Windows x86_64 installers` — `success`
+- Runner target: `windows-latest`, `x86_64-pc-windows-msvc`
+- Artifact size: 111,275,006 bytes
+- Build-info PR merge SHA: `42dca4ac37e4e8da5b8251e0088c922b5fe6e51d`
+- Local download directory (ignored by Git):
+  `artifacts/github/windows-run-29196292381/`
+
+| Historical source-bound file | Original SHA-256 |
+| --- | --- |
+| `TraceGate-Studio-Setup.exe` | `bb3e0a7bbb838a2d7a73a0cc2c0c51324592119764ebaa30fcb6e059ee43235e` |
+| `TraceGate-Studio.msi` | `2d2407ac2ad07449ec0bdcd1847144f68699d2ef7a9c0b12f59cd6d0f256ba02` |
+| `TraceGate-Studio-portable-x86_64.zip` | `a4a954060c87e3c9a251b531a1f905e40fa4f985bc1e2c114e1da9a67d379bcc` |
+| `build-info.json` | `90b86339cfb775f6e912ea36125cad00f81e03b3dfdbb4b57041c96f14f7be1b` |
+
+The historical `SHA256SUMS.txt` was revalidated after download. Its Windows
+CRLF was normalized only in the macOS verifier stream; the downloaded
+Artifact was not modified. The portable ZIP contains
+`tracegate-backend.exe` and `tracegate-studio.exe`.
+
 Two earlier source-bound attempts also remain visible failure evidence:
 
 1. [Run 29195425601](https://github.com/Chloiris/TraceGate-Eval/actions/runs/29195425601)
