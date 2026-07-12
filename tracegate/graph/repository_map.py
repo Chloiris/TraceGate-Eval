@@ -93,10 +93,11 @@ def _resolve_import_path(
                 }
             )
     elif language == "java":
-        if imported.endswith(".*"):
-            return None
-        suffix = imported.replace(".", "/") + ".java"
-        candidates = {path for path in available_paths if path.endswith(suffix)}
+        # The bounded Java adapter does not persist package declarations, so a
+        # path suffix cannot prove that an explicit import targets that file.
+        # Keep the syntactic import in ParsedFile but emit no confirmed graph
+        # dependency until package/type validation exists.
+        return None
     else:
         return None
     matches = sorted(candidates & available_paths)
