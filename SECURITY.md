@@ -41,6 +41,13 @@ available. These are response targets, not a warranty.
 - Tauri capability escalation or Sidecar process takeover;
 - cross-repository data leakage;
 - unsafe archive, patch or repository parsing.
+- Patch Hash/Head-SHA confirmation replacement, replay, expiry or race bypass;
+- Autofix writing/resetting/cleaning outside its registered managed worktree;
+- validation command injection, arbitrary shell execution, environment-secret
+  inheritance, timeout/cancellation or output-cap bypass;
+- a malicious PR/source instruction enabling write, modifying policy/Tool
+  permissions, or forcing a false `RESOLVED` result;
+- rollback/cleanup deleting an enrolled workspace or unrelated path.
 
 ## Safe research rules
 
@@ -49,5 +56,6 @@ degrade shared services, publish secrets, or run destructive payloads. Stop once
 the boundary has been demonstrated and preserve redacted evidence.
 
 The current threat model and control status are documented in
-`docs/security-model.md`. Privacy behaviour is documented in
-`docs/privacy.md`.
+[`docs/security-model.md`](docs/security-model.md). The Autofix-specific model
+is in [`docs/autofix-safety.md`](docs/autofix-safety.md), and privacy behavior
+is documented in [`docs/privacy.md`](docs/privacy.md).

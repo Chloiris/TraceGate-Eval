@@ -176,6 +176,12 @@ scope-shadowed Python calls and omission of inferred relations from static
 maps. These tests validate parser/index semantics; they do not claim that the
 minimal fixture projects are full application build matrices.
 
+Autofix reindex uses the same production parser and the same matrix. A Patch
+does not increase parser confidence: body-only JS/TS/Java edits can still lack
+changed-symbol mapping, and an LLM re-review cannot create a confirmed static
+edge. This uncertainty can contribute to `NEEDS_HUMAN_REVIEW`; it must not be
+hidden merely because a test command passed.
+
 Verification command:
 
 ```bash

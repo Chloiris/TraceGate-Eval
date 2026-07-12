@@ -1,5 +1,10 @@
 # TraceGate Studio controlled Autofix baseline
 
+> Point-in-time pre-Autofix implementation record. Statements such as “there
+> are no Fix tables” describe the clean starting commit below, not the current
+> feature branch. Use [`implementation-status.md`](implementation-status.md)
+> for current state.
+
 - Baseline captured: 2026-07-12
 - Starting protected `main` HEAD: `a1dcd7d755c25e0f75aac499943a07b759ec30db`
 - Working branch: `feat/coding-agent-autofix-loop`

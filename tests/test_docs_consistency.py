@@ -11,7 +11,9 @@ from scripts.check_docs_consistency import (
     ROOT,
     check_current_document_claims,
     check_historical_markers,
+    check_readme_structure_and_autofix,
     check_relative_links,
+    discover_markdown_documents,
     load_facts,
     run_checks,
     validate_facts_schema,
@@ -33,6 +35,19 @@ def test_project_facts_schema_rejects_version_and_registry_drift() -> None:
     assert any("tool_registry.tool_count" in error for error in errors)
 
 
+def test_project_facts_schema_rejects_autofix_node_endpoint_and_resolution_drift() -> None:
+    facts = deepcopy(load_facts(ROOT))
+    facts["autofix_workflow"]["node_count"] = 10
+    facts["autofix_workflow"]["resolutions"] = ["RESOLVED"]
+    facts["autofix_api"]["endpoint_count"] += 1
+
+    errors = validate_facts_schema(facts)
+
+    assert any("exactly 11 nodes" in error for error in errors)
+    assert any("resolutions" in error for error in errors)
+    assert any("autofix_api.endpoint_count" in error for error in errors)
+
+
 def test_relative_link_check_covers_markdown_and_html(tmp_path: Path) -> None:
     (tmp_path / "README.md").write_text(
         "[missing](docs/missing.md)\n<img src=\"images/missing.png\" />\n",
@@ -43,6 +58,20 @@ def test_relative_link_check_covers_markdown_and_html(tmp_path: Path) -> None:
 
     assert len(errors) == 2
     assert all("missing relative link" in error for error in errors)
+
+
+def test_markdown_discovery_scans_nested_docs_but_skips_vendor_trees(tmp_path: Path) -> None:
+    (tmp_path / "docs").mkdir()
+    (tmp_path / "node_modules").mkdir()
+    (tmp_path / "README.md").write_text("# root\n", encoding="utf-8")
+    (tmp_path / "docs" / "guide.md").write_text("# guide\n", encoding="utf-8")
+    (tmp_path / "node_modules" / "vendor.md").write_text("# vendor\n", encoding="utf-8")
+
+    assert discover_markdown_documents(tmp_path) == ["README.md", "docs/guide.md"]
+
+
+def test_current_readmes_keep_parallel_26_sections_and_autofix_boundaries() -> None:
+    assert check_readme_structure_and_autofix(ROOT, load_facts(ROOT)) == []
 
 
 def test_historical_document_requires_explicit_marker(tmp_path: Path) -> None:

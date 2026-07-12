@@ -36,6 +36,56 @@
       "Report Composer"
     ]
   },
+  "autofix_workflow": {
+    "version": "tracegate-autofix-langgraph-v1",
+    "status": "VERIFIED_MACOS",
+    "node_count": 11,
+    "nodes": [
+      "LOAD_FINDING",
+      "CHECK_FIX_ELIGIBILITY",
+      "PLAN_FIX",
+      "GENERATE_PATCH",
+      "VALIDATE_PATCH",
+      "AWAIT_USER_CONFIRMATION",
+      "APPLY_PATCH",
+      "RUN_VALIDATION",
+      "REINDEX_CHANGES",
+      "RE_REVIEW",
+      "FINALIZE"
+    ],
+    "resolutions": [
+      "RESOLVED",
+      "PARTIALLY_RESOLVED",
+      "NOT_RESOLVED",
+      "VERIFICATION_FAILED",
+      "NEEDS_HUMAN_REVIEW"
+    ],
+    "verification_note": "Full local suite, fixture-labelled Playwright, real DeepSeek synthetic-repository E2E, packaged Sidecar health, Tauri build and native macOS app launch are verified; public-PR Autofix and Windows GUI acceptance remain blocked."
+  },
+  "autofix_api": {
+    "status": "VERIFIED_MACOS",
+    "endpoint_count": 17,
+    "endpoints": [
+      "POST /api/v1/fix-sessions",
+      "GET /api/v1/fix-sessions",
+      "GET /api/v1/fix-sessions/{id}",
+      "POST /api/v1/fix-sessions/{id}/plan",
+      "POST /api/v1/fix-sessions/{id}/generate",
+      "POST /api/v1/fix-sessions/{id}/confirm",
+      "POST /api/v1/fix-sessions/{id}/apply",
+      "POST /api/v1/fix-sessions/{id}/validate",
+      "POST /api/v1/fix-sessions/{id}/re-review",
+      "POST /api/v1/fix-sessions/{id}/cancel",
+      "POST /api/v1/fix-sessions/{id}/rollback",
+      "DELETE /api/v1/fix-sessions/{id}/workspace",
+      "GET /api/v1/fix-sessions/{id}/patch",
+      "GET /api/v1/fix-sessions/{id}/report",
+      "GET /api/v1/fix-sessions/{id}/events",
+      "GET /api/v1/fix-workspaces",
+      "DELETE /api/v1/fix-workspaces/{id}"
+    ],
+    "sse_resume_header": "Last-Event-ID"
+  },
   "tool_registry": {
     "tool_count": 19,
     "tools": [
@@ -75,7 +125,29 @@
       "ignored": 1
     },
     "playwright": 4,
-    "note": "These are the executable pre-Autofix baseline counts. Final current counts must be replaced after the Autofix test matrix runs."
+    "current_autofix": {
+      "status": "VERIFIED_MACOS",
+      "source_sha": "db627662dc8cfac311fd33069f48a0dcb987d5a6",
+      "python": 268,
+      "typescript": 60,
+      "rust": {
+        "passed": 22,
+        "ignored": 1
+      },
+      "playwright": 5,
+      "focused_test_files": [
+        "tests/test_autofix_safety.py",
+        "tests/test_fix_workflow.py",
+        "tests/test_autofix_api.py",
+        "tests/test_studio_database.py",
+        "tests/test_docs_consistency.py",
+        "packages/shared-types/tests/schemas.test.ts",
+        "packages/api-client/tests/client.test.ts",
+        "apps/web/src/components/FixExperience.test.tsx",
+        "e2e/studio.spec.ts"
+      ]
+    },
+    "note": "Historical numbers remain source-bound to main a1dcd7d. Current Autofix counts come from ./scripts/test.sh plus pnpm test:e2e on 2026-07-12 and are bound to the implementation source commit shown above; later documentation-only commits do not alter the tested runtime."
   },
   "benchmark_counts": {
     "real_pr_cases": 19,
@@ -176,7 +248,7 @@
     "verified": {
       "macos_arm64": {
         "status": "VERIFIED_MACOS",
-        "scope": "Browser, API, packaged Sidecar and bounded desktop lifecycle; native tray/status-item and notification-click acceptance remain excluded."
+        "scope": "API, packaged Sidecar health, Tauri app build, native app launch, authenticated Sidecar connection, Settings and Autofix Diagnostics; tray/status-item and notification-click acceptance remain excluded."
       },
       "windows_x86_64_ci": {
         "status": "VERIFIED_WINDOWS_CI",
@@ -263,8 +335,8 @@
     },
     {
       "id": "autofix-no-auto-push",
-      "status": "IMPLEMENTED_UNVERIFIED",
-      "summary": "Controlled Autofix must not automatically commit, push, comment or modify the original workspace."
+      "status": "VERIFIED_MACOS",
+      "summary": "Controlled Autofix does not automatically commit, push, comment or modify the original workspace; the real-model synthetic-repository run recorded all four boundaries."
     },
     {
       "id": "native-tool-calling-not-claimed",
@@ -272,9 +344,14 @@
       "summary": "The recorded real DeepSeek E2E used JSON compatibility tool selection and is not evidence of native Function Calling."
     },
     {
-      "id": "public-pr-autofix-e2e-pending",
+      "id": "public-pr-autofix-e2e-blocked",
       "status": "BLOCKED",
-      "summary": "The baseline has no verified real public-PR Autofix E2E; final status requires new production-path evidence."
+      "summary": "No small public PR with a defensible existing defect and stable local validation was selected; the verified real-model run uses an explicitly labelled synthetic temporary Git repository."
+    },
+    {
+      "id": "validation-is-not-os-sandboxed",
+      "status": "IMPLEMENTED_UNVERIFIED",
+      "summary": "Validation command selection, cwd, environment, timeout and output are controlled, but repository test code still executes with the local user's authority; use a disposable VM/container for untrusted PRs."
     }
   ],
   "verification_documents": [
@@ -307,6 +384,12 @@
       "status": "VERIFIED_WINDOWS_CI",
       "scope": "Source-bound Windows CI evidence prior to Autofix",
       "historical": true
+    },
+    {
+      "path": "docs/verification/real-autofix-e2e-macos.md",
+      "status": "VERIFIED_MACOS",
+      "scope": "Production-path real DeepSeek Review + Autofix on an explicitly labelled synthetic temporary Git repository; public-PR Fix E2E remains BLOCKED",
+      "historical": false
     }
   ],
   "documentation_policy": {
@@ -335,6 +418,9 @@
       "docs/security-model.md",
       "docs/privacy.md",
       "docs/current-autofix-baseline.md",
+      "docs/autofix-guide.md",
+      "docs/autofix-safety.md",
+      "docs/verification/real-autofix-e2e-macos.md",
       "docs/architecture/ADR-003-autofix-workflow.md",
       "docs/doc-consistency-audit.md",
       "SECURITY.md",

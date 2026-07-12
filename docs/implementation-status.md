@@ -1,177 +1,160 @@
 # TraceGate Studio implementation status
 
 - Last updated: 2026-07-12
-- Current development baseline: protected `main` commit
-  `a1dcd7d755c25e0f75aac499943a07b759ec30db`
+- Product version: `0.4.0`
+- Protected starting `main`: `a1dcd7d755c25e0f75aac499943a07b759ec30db`
 - Current development branch: `feat/coding-agent-autofix-loop`
-- Status owner: TraceGate maintainers
+- Tested implementation source SHA: `db627662dc8cfac311fd33069f48a0dcb987d5a6`
+- Canonical facts: [`project-facts.yaml`](project-facts.yaml)
+
+This is the current-facing status page. Older source-bound evidence keeps its
+original SHA/run and carries a **Historical verification record** marker.
 
 ## Status definitions
 
-- `NOT_STARTED`: no implementation exists.
-- `IN_PROGRESS`: implementation or verification is actively incomplete.
-- `IMPLEMENTED_UNVERIFIED`: code exists but has not run on the target platform.
-- `VERIFIED_MACOS`: run and verified on the current macOS arm64 environment.
-- `VERIFIED_WINDOWS_CI`: built or automatically tested on a Windows runner.
-- `VERIFIED_WINDOWS_MANUAL`: installed and manually operated in a real Windows
-  graphical desktop environment.
-- `BLOCKED`: an external requirement currently prevents progress and the
-  blocker is recorded.
+- `PENDING`: a required run or dynamic evidence has not been produced yet.
+- `IN_PROGRESS`: implementation and verification are actively incomplete.
+- `IMPLEMENTED_UNVERIFIED`: code exists, but the named runtime/platform gate
+  has not run.
+- `VERIFIED_MACOS`: the stated scope ran on the source-bound macOS record.
+- `VERIFIED_WINDOWS_CI`: the stated automated scope ran on a Windows runner.
+- `VERIFIED_WINDOWS_MANUAL`: a human completed the stated check on a real
+  Windows graphical desktop.
+- `BLOCKED`: an external prerequisite is unavailable and documented.
 
 `VERIFIED_WINDOWS_CI` never implies `VERIFIED_WINDOWS_MANUAL`.
 
-## Preserved TraceGate baseline
+## Current controlled Autofix
 
-| Feature | Status | Evidence / note |
+| Capability | Status | Code/test/evidence boundary |
 | --- | --- | --- |
-| Existing suite plus Studio tests | VERIFIED_MACOS / VERIFIED_WINDOWS_CI | Source-bound Windows CI passed 212 Python tests, 30 TypeScript/Vitest tests (5 shared types + 7 API client + 18 web), and 22 Rust tests (1 explicit native secure-store mutation ignored); macOS also passed 4 Chrome Playwright flows; original Eval coverage remains intact; see `verification/windows-ci.md` |
-| ClaimBench controlled benchmark | VERIFIED_MACOS | Existing tests and checked-in 160-run reports; metric definitions unchanged |
-| Real-PR hard benchmark | VERIFIED_MACOS | Existing tests and checked-in 19 scored cases |
-| EvidencePacket and redaction | VERIFIED_MACOS | Existing `tests/test_pr_advisor.py` |
-| Semantic verifier/guardrails | VERIFIED_MACOS | Existing tests; strict scan reports 0 dangerous runtime paths |
-| Real DeepSeek semantic execution | VERIFIED_MACOS | One Keychain-injected `deepseek-chat` run on `psf/requests#7565` completed all six required stages with 7 persisted Agent Trace rows, 4 real model requests, 3 Tool Calls, 1 Evidence and 1 Finding without logging the key; Run ID `f3273e5e-ef34-4370-800d-63ee107fd7a4`; see `verification/real-model-e2e-macos.md` |
+| Separate Fix workflow | `VERIFIED_MACOS` | `tracegate/agent/fix_workflow.py` defines 11 observable nodes; all 11 persisted as completed in the real-model run. Review remains seven-node/read-only. |
+| Finding eligibility | `VERIFIED_MACOS` | Verifies Finding/Run/PR/repository/index/Evidence, Head SHA, path/range and sensitive/binary constraints; failed real runs demonstrated explicit rejection. |
+| Structured Fix Plan | `VERIFIED_MACOS` | Production DeepSeek `ModelProvider.complete_structured` plus one persisted real `read_file` Registry Tool Call. |
+| Structured Patch Proposal | `VERIFIED_MACOS` | Real patch, identity bindings, risks, validation metadata and token/latency accounting are in the scoped run record. |
+| Static patch safety | `VERIFIED_MACOS` | Path/symlink/sensitive/binary/mode/rename/limit checks, exact Head, clean worktree and `git apply --check`; malformed real outputs failed closed. |
+| Hash-bound confirmation | `VERIFIED_MACOS` | Session/repository/PR/Finding/Head/Patch Hash/nonce/expiry binding and single-use consumption; exact E2E Hash recorded. |
+| Isolated apply | `VERIFIED_MACOS` | Detached worktree at exact Head; the real run proved the enrolled source workspace remained byte-clean and unchanged. |
+| Controlled validation | `VERIFIED_MACOS` | Three resolver-approved argv commands passed and persisted. Command selection is controlled, but repository test code is not OS/container sandboxed. |
+| Reindex and re-review | `VERIFIED_MACOS` | Transient index uses the actual worktree state hash and full diff; real production-provider re-review completed. |
+| Deterministic resolution | `VERIFIED_MACOS` | `RESOLVED` additionally requires a changed Finding-path content hash and a passing path-related directed test; model re-review is advisory. |
+| Persistence/migration | `VERIFIED_MACOS` | Alembic `20260712_0006`, fresh/upgrade/idempotency/downgrade-upgrade SQLite and offline MySQL DDL tests passed. |
+| Authenticated API/SSE | `VERIFIED_MACOS` | 17 method/path contracts, optimistic locking, idempotency, typed Agent Trace, exports, diagnostics cleanup and resumable `Last-Event-ID` SSE passed. |
+| Frontend Fix experience | `VERIFIED_MACOS` | Typed Finding → plan → patch projection → confirmation → validation → report/history/trace UI; Vitest and five fixture-labelled Playwright flows passed. |
+| Rollback/cleanup | `VERIFIED_MACOS` | Real run recorded rollback and deletion; native Diagnostics showed no residual managed workspace. |
+| Real-model Autofix E2E | `VERIFIED_MACOS` | Real DeepSeek reached `RESOLVED` on an explicitly labelled synthetic temporary Git repository; public-PR Fix E2E is `BLOCKED`. |
+| macOS package with Autofix | `VERIFIED_MACOS` | PyInstaller Sidecar health, Tauri `.app`, native authenticated launch, Settings/Diagnostics and unsigned arm64 ZIP SHA were verified locally. |
+| Windows CI with Autofix | `PENDING` | Requires final source-bound Python/TS/Rust/security/Sidecar/package run and artifact record. |
+| Windows Autofix GUI/manual | `BLOCKED` | No real Windows graphical target is available. |
 
-## P0: foundation and desktop loop
+Focused test sources are `tests/test_autofix_safety.py`,
+`tests/test_fix_workflow.py`, `tests/test_autofix_api.py`, database/migration
+tests, shared schemas, typed client, `FixExperience` Vitest, and the
+fixture-labelled Playwright flow. File presence is not a pass claim; aggregate
+counts below are copied from the completed matrix.
 
-| Feature | Status | Evidence / next gate |
+## Review and evidence product
+
+| Capability | Current evidence |
+| --- | --- |
+| Seven-node read-only LangGraph review | `VERIFIED_MACOS`; production workflow persists Run/Step/Tool/Evidence/Finding and exposes cancellation/retry/SSE. |
+| Tool Registry | 19 production schema-validated tools with read/command/write-confirmation permissions and execution-time enablement. |
+| Real model review E2E | `VERIFIED_MACOS` historical record: `deepseek-chat` on `psf/requests#7565`, 4 real requests, 3 completed Tool Calls, 1 Evidence, 1 Finding, 7 Agent Trace rows, 3,826 tokens. This is review evidence, not Autofix evidence. |
+| GitHub sync | ETag/rate-limit state, PR snapshots, Head-SHA dedup, files/commits/comments/checks and explicit unavailable states are implemented/tested. Live OAuth Device Flow authorization remains unverified. |
+| Commit-bound code intelligence | Python AST plus bounded JS/TS/Java adapters, incremental index, ripgrep/symbol/FTS5 retrieval, Repository Map, Review Map, Change Tour. Vector embedding is disabled. |
+| Eval Center | 19 scored public-PR cases and 160 checked-in ClaimBench rows with artifact provenance; the real-PR set is intentionally small. |
+
+## Desktop and platform evidence
+
+| Platform/capability | Status | Scope |
 | --- | --- | --- |
-| Repository audit and baseline | VERIFIED_MACOS | `docs/current-baseline.md` plus recorded commands |
-| Architecture decision | VERIFIED_MACOS | ADR boundaries were exercised by the packaged macOS app; see `docs/verification/p0-macos.md` |
-| Historical Studio development branch | VERIFIED_MACOS | Historical: `feat/tracegate-studio-fullstack` was created from `76a23ab`; current work is tracked separately. |
-| Monorepo workspace and locked Node dependencies | VERIFIED_MACOS / VERIFIED_WINDOWS_CI | pnpm workspace and `pnpm-lock.yaml`; Windows frozen install passed all 30 TypeScript/Vitest tests |
-| Locked Python environment | VERIFIED_MACOS | `uv.lock`; frozen uv environment used for tests and packaging |
-| React + strict TypeScript browser client | VERIFIED_MACOS | Dashboard plus P1 product pages exercised by Chrome Playwright; see `docs/verification/p1-macos.md` |
-| Typed API client and shared types | VERIFIED_MACOS / VERIFIED_WINDOWS_CI | Zod-validated client; Windows CI passed 12 package tests plus 18 web tests |
-| FastAPI `/api/v1` service | VERIFIED_MACOS | Authenticated API tests and real browser/desktop process |
-| Local API authentication and CORS | VERIFIED_MACOS | Auth/CORS tests plus Tauri-origin runtime verification |
-| SQLAlchemy 2 persistence | VERIFIED_MACOS | Studio models and API persistence tests |
-| SQLite default database | VERIFIED_MACOS | Real onboarding/settings persistence and database tests |
-| Alembic migration and SQLite migration test | VERIFIED_MACOS | `20260710_0001` through `20260711_0005`; fresh, idempotent, offline MySQL DDL and upgrade-with-data tests |
-| Structured/redacted rotating logs | VERIFIED_MACOS | Packaged Sidecar wrote redacted JSONL with 5 MiB/3-backup limits and clean shutdown events |
-| System status API | VERIFIED_MACOS | Explicit ready/not-configured/unavailable states tested and rendered |
-| Diagnostics API/page | VERIFIED_MACOS | Redacted runtime/storage/queue/update state plus GitHub/index/graph/model/retrieval/notification metrics are API-tested and browser-rendered |
-| Non-secret settings persistence | VERIFIED_MACOS | Theme/language/background choices persist; API never accepts a secret |
-| macOS secure credential storage | VERIFIED_MACOS | Native Keychain round-trip passed and deleted its verification entry |
-| Windows Credential Manager secure storage | VERIFIED_WINDOWS_CI | The ordinary Rust suite passed 22 tests with the mutation test ignored, then run `29176975492` explicitly reran `native_secure_store_round_trip -- --ignored` and passed its native write/read/delete cycle 1/1; this is automated runner evidence, not Windows GUI/manual acceptance |
-| Python Sidecar entry and health check | VERIFIED_MACOS | Independent and packaged authenticated health checks passed |
-| macOS arm64 PyInstaller Sidecar | VERIFIED_MACOS | Native Mach-O artifact built, authenticated-health-checked and bundled on 2026-07-10 |
-| Tauri 2 shell | VERIFIED_MACOS | Latest packaged `.app` launched with one Tauri owner and real Sidecar; logs show migration, `api_ready`, graceful shutdown and no orphan process |
-| macOS menu-bar tray and restore | IMPLEMENTED_UNVERIFIED | Rust construction/dispatch tests pass; direct status-item clicking was unavailable |
-| Close-to-hide | VERIFIED_MACOS | Window closed while desktop and Sidecar processes remained alive |
-| True quit stops Sidecar | VERIFIED_MACOS | Desktop plus PyInstaller bootloader/worker all disappeared after Quit |
-| Single-instance foundation | VERIFIED_MACOS | Repeated native launch retained one application/Sidecar owner |
-| Browser development mode | VERIFIED_MACOS | Browser UI exercised against real authenticated API |
-| Windows x86_64 build workflow | VERIFIED_WINDOWS_CI | Push run [29176975492](https://github.com/Chloiris/TraceGate-Eval/actions/runs/29176975492) and PR run [29176976588](https://github.com/Chloiris/TraceGate-Eval/actions/runs/29176976588) succeeded for commit `a7466ce69441871df229a5ed1cdf32ec594ba935`; see `verification/windows-ci.md` |
-| Windows Sidecar health check in CI | VERIFIED_WINDOWS_CI | PyInstaller produced `tracegate-backend.exe` and the Windows runner passed its authenticated loopback health check |
-| Windows NSIS Setup.exe artifact | VERIFIED_WINDOWS_CI | Unsigned `TraceGate-Studio-Setup.exe` was produced, hashed, uploaded, and downloaded for hash/format inspection; this is not installation evidence |
-| Windows MSI artifact | VERIFIED_WINDOWS_CI | Unsigned `TraceGate-Studio.msi` was produced, hashed, uploaded, and downloaded for hash/format inspection; this is not installation evidence |
-| Windows portable archive | VERIFIED_WINDOWS_CI | `TraceGate-Studio-portable-x86_64.zip` contains `tracegate-studio.exe` and `tracegate-backend.exe`; archive hash verified after download |
-| Windows desktop manual acceptance | BLOCKED | No real Windows graphical environment/evidence is available |
+| macOS arm64 baseline product path | `VERIFIED_MACOS` | Historical browser/API/SQLite, packaged Sidecar, secure-store and bounded desktop lifecycle evidence at the pre-Autofix source SHA. Direct status-item and notification-click acceptance remain excluded. |
+| Windows x86-64 baseline CI | `VERIFIED_WINDOWS_CI` | Historical run `29185555800`, artifact `8258026173`: automated tests, Credential Manager round trip, authenticated Sidecar health, unsigned Setup.exe/MSI/portable ZIP, checksums, build metadata. |
+| macOS Autofix package | `VERIFIED_MACOS` | `TraceGate Studio.app` launched natively and connected to its authenticated packaged Sidecar; ZIP SHA-256 `bbb08229fdcdd7f1757c87a066bc80112974b7297e72bd1f4f13e318ae2af527`. |
+| Windows Autofix CI/package | `PENDING` | Fresh workflow/artifact required after push. |
+| Windows installation and GUI | `BLOCKED` | Installer, WebView2, tray, notifications, autostart, single instance, hidden monitoring, true quit, uninstall and residue require the real target checklist. |
 
-## P1: coding-agent product loop
+Historical artifact identifiers above are not version `0.4.0` Autofix delivery
+evidence. New run URLs and artifact names must be source-bound in the final
+verification report.
 
-| Feature | Status | Evidence / next gate |
-| --- | --- | --- |
-| Real LangGraph workflow | VERIFIED_MACOS | LangGraph 1.2.8 runs seven real persisted nodes; `tests/test_agent_workflow.py` |
-| Structured observable Agent state | VERIFIED_MACOS | Run, Step and ToolCall rows plus typed detail/SSE APIs verified locally |
-| Cancellation and bounded retry | VERIFIED_MACOS | RunManager, workflow cancellation and explicit retry behavior are tested; Playwright proves missing-model retry failure |
-| Pydantic Tool Registry | VERIFIED_MACOS | 19 schema-validated registered tools; registry API/UI and unit tests |
-| Safe repository path boundary | VERIFIED_MACOS | Canonical, traversal, symlink and credential-path tests in `tests/test_repository_security.py` |
-| Restricted command tool | VERIFIED_MACOS | Argument allowlist, filtered environment, timeout and output limits; forbidden command test |
-| Write-mode gated patch tool | VERIFIED_MACOS | Defaults disabled, exact confirmation required, real temp-repo patch test, never commits/pushes |
-| GitHubProvider abstraction | VERIFIED_MACOS | Bounded async REST provider with PR/files/commits/comments/checks tests |
-| GitHub connection state | VERIFIED_MACOS | API and Chrome show “GitHub 尚未连接” without substituting data |
-| ETag-aware PR polling | VERIFIED_MACOS | Durable ETag/rate-limit sync plus background monitor and unit tests |
-| PR snapshots and Head-SHA deduplication | VERIFIED_MACOS | Snapshot uniqueness, ETag and analysis dedup are database/API tested |
-| PR Inbox | VERIFIED_MACOS | Persisted fixture-backed inbox exercised in isolated Chrome Playwright |
-| PR details and typed tabs | VERIFIED_MACOS | Nine persisted fixture-backed tabs exercised in isolated Chrome Playwright; unavailable Checks remain explicit |
-| Monaco Diff with finding/evidence jumps | VERIFIED_MACOS | Local/offline Monaco and Finding→Diff flow verified by Playwright screenshot/test |
-| Unified CodeParser interface | VERIFIED_MACOS | Audited 12-row Python/JS/TS/Java matrix with real temporary Git fixtures; Python AST is bounded and JS/TS/Java remain explicit declaration-level partial adapters; see `docs/parser-capability-matrix.md` |
-| Incremental commit-bound index | VERIFIED_MACOS | Content hash/change/deletion and Head SHA binding tests |
-| ripgrep/symbol/FTS5 hybrid retrieval | VERIFIED_MACOS | Sources remain labeled; vector retrieval explicitly disabled |
-| Repository Map backend | VERIFIED_MACOS | Persisted parsed/indexed relationships and commit/index binding tests |
-| Repository Map React Flow UI | VERIFIED_MACOS | Directory-first aggregation, 800-node cap, filters, MiniMap, collapse, save/restore and measured layout ADR-002; backend-local graph paging remains future work |
-| Review Map backend | VERIFIED_MACOS | Real Git diff + static graph + persisted Agent Evidence API test |
-| Review Map UI rendering | VERIFIED_MACOS | Review Map rendering is exercised in isolated Chrome Playwright |
-| Review Map direct node ↔ Diff navigation | IMPLEMENTED_UNVERIFIED | UI foundations exist, but current Playwright evidence verifies Finding→Diff only; direct map-node navigation has not completed acceptance |
-| Finding schema/storage foundation | VERIFIED_MACOS | Required traceability fields, filters and UI are persisted/API-tested |
-| Evidence storage foundation | VERIFIED_MACOS | Commit/hash/source payload and Finding linkage verified |
-| Agent Trace API/SSE/UI | VERIFIED_MACOS | Authenticated SSE parser, run detail, steps/tools and UI tests |
-| Eval Center / ClaimBench integration | VERIFIED_MACOS | Real 19-case/160-run artifacts, hashes, drill-down and export rendered in Chrome |
-| Desktop notifications implementation | IMPLEMENTED_UNVERIFIED | Official Tauri notification plugin, bounded native command, HostBridge and settings test action compile/test on macOS; actual OS display/click and Windows remain manual gates |
-| Complete tray menu and monitoring controls | IMPLEMENTED_UNVERIFIED | All required Rust menu actions dispatch to real frontend sync/pause/navigation operations; direct status-item acceptance is still unavailable |
+## Executable baseline and current totals
 
-## P2: product enhancements
+The clean starting `main` ran:
 
-| Feature | Status | Evidence / next gate |
-| --- | --- | --- |
-| Change Tour | VERIFIED_MACOS | Static relationship/evidence ordering API plus files/symbols/purpose/prerequisite/risk/Evidence/checkpoints UI; low-confidence wording verified in Chrome |
-| Agent Evidence Graph | VERIFIED_MACOS | Dedicated run-owned task→step→tool→evidence→finding API/React Flow graph is covered by API and Chrome E2E |
-| Webhook relay with HMAC/deduplication | VERIFIED_MACOS | Separate FastAPI relay has one-use repository-scoped pairing, authenticated SSE, HMAC/replay tests and hardened compose; container/TLS deployment is unverified |
-| Optional MySQL 8 profile | IMPLEMENTED_UNVERIFIED | PyMySQL profile, dialect-aware migrations/retrieval, MySQL 8.4 CI service and smoke script exist; offline SQL compiles but Docker is unavailable locally |
-| Agent and Tool Registry screens | VERIFIED_MACOS | Seven workflow nodes and 19 actual tools, persistent toggles and execution-time enforcement; API/unit/Chrome toggle tests |
-| MCP client adapter | VERIFIED_MACOS | MCP 2025-11-25 stdio negotiation/list/call with executable/tool allowlists, filtered env and bounded fixture tests |
-| Deep links | IMPLEMENTED_UNVERIFIED | Scheme/parser/single-instance delivery and real frontend repo/PR/run routing tests exist; OS URL invocation is not verified |
-| Autostart toggle | IMPLEMENTED_UNVERIFIED | Official Tauri autostart manager and native settings bridge compile/test; defaults off and real login behavior remains manual by platform |
-| Update interface reservation | VERIFIED_MACOS | Authenticated typed API reports an explicitly unconfigured signed-update channel; it never offers an unsigned payload |
-| English localization | VERIFIED_MACOS | Persisted locale switches the shell, status primitives, Dashboard, Onboarding, repositories, PR Inbox/detail, maps, runs, Eval, Registry, Diagnostics and Settings; English render has a Vitest integration check |
-| Graph JSON export | VERIFIED_MACOS | Repository Map downloads the current typed API payload in the browser flow |
-| Graph PNG/SVG export | VERIFIED_MACOS | Standalone deterministic SVG is unit-tested; Chrome E2E downloads PNG and verifies its binary signature |
-| GitHub OAuth Device Flow / App | IMPLEMENTED_UNVERIFIED | Rust Device Flow state is memory-only, validates official URI/polling semantics and writes tokens directly to Keychain/Credential Manager; no live GitHub authorization was performed |
+| Suite | Historical pre-Autofix result |
+| --- | ---: |
+| Python | 212 passed |
+| Shared types | 5 passed |
+| API client | 7 passed |
+| Web/Vitest | 18 passed |
+| Rust | 22 passed; 1 explicit native mutation test ignored |
+| Playwright | 4 flows in the recorded baseline |
 
-## Latest local performance evidence
+Current macOS branch totals from `./scripts/test.sh` and `pnpm test:e2e`:
 
-The reproducible smoke record in `docs/performance.md` measured 100/1000-file
-production index/graph paths, Review Map, a 157 ms browser data-ready wall-clock
-upper bound, and five 0.1% idle Python-worker CPU samples. A subsequent real
-DeepSeek PR-analysis run measured 12,362 ms end-to-end and 11,998 ms of model
-latency; see `verification/real-model-e2e-macos.md`. Windows performance
-remains outside the current Mac verification boundary.
+| Suite | Current result |
+| --- | ---: |
+| Python | 268 passed |
+| Shared types | 15 passed |
+| API client | 17 passed |
+| Web/Vitest | 28 passed |
+| Rust | 22 passed; 1 explicit native mutation test ignored |
+| Playwright | 5 passed |
 
-## P3: explicitly deferred interfaces
+Docs consistency, lint, typecheck, Rust fmt/clippy and native packaging also
+passed. Remote Windows totals remain pending until the source-bound workflow.
 
-| Feature | Status | Evidence / note |
-| --- | --- | --- |
-| P4 Provider | NOT_STARTED | Do not advertise without real `p4` CLI implementation/tests |
-| UE WebView host | NOT_STARTED | Adapter interface only is allowed |
-| Maya WebView host | NOT_STARTED | Adapter interface only is allowed |
-| Multi-user/team service | NOT_STARTED | Out of P0/P1 focus |
-| Cloud synchronization | NOT_STARTED | Out of P0/P1 focus |
+## Parser and graph boundary
 
-## Platform evidence
+The authoritative 12-row matrix is
+[`parser-capability-matrix.md`](parser-capability-matrix.md). Python is
+AST-backed but bounded. JavaScript/TypeScript/Java are declaration-level
+partial adapters; semantic references and JS/TS/Java function call graphs are
+not claimed. Repository Map and Review Map consume only confirmed static
+edges. LLM text cannot change static confidence.
 
-### macOS arm64
+## Security and mutation boundary
 
-P0 browser, API, SQLite/Alembic, packaged Sidecar, Tauri shell, prior
-close-hide/single-instance/true-quit evidence, and the latest process/Sidecar
-startup/shutdown are `VERIFIED_MACOS`. The latest build is
-`artifacts/macos/TraceGate-Studio-macos-arm64.zip` with SHA-256
-`bd29c2b7c587cdb4d285e91423a2d1535866dc073f013959508da24a807d0324`.
-The current UI automation surface could not inspect a new app window/status
-item, so direct tray restore and notification click remain
-`IMPLEMENTED_UNVERIFIED`.
+Review is read-only by default. Autofix:
 
-### Windows x86_64 CI
+- requires a user-created Fix Session from an existing Finding;
+- binds confirmation to exact Head SHA and Patch Hash;
+- applies only in a managed isolated worktree;
+- runs only resolver-approved argument-vector validation commands;
+- makes the user acknowledge that repository test code still runs with local
+  user authority and is not OS/container sandboxed;
+- never auto-commits, pushes, comments, opens a PR, or merges;
+- cannot mark failed/absent tests or uncertain re-review as `RESOLVED`;
+- keeps failure, stale state, rollback, cleanup, and residual risks visible.
 
-Commit `a7466ce69441871df229a5ed1cdf32ec594ba935` passed the push and Pull
-Request Windows workflows on `windows-latest`. The runner passed 212 Python,
-30 TypeScript/Vitest, and 22 Rust tests (with 1 native secure-store test ignored
-in the ordinary suite), then passed that native Credential Manager round-trip
-in a separate explicit 1/1 invocation, authenticated the PyInstaller Sidecar
-health endpoint, and produced unsigned NSIS, MSI, and portable packages.
-Artifact `TraceGate-Studio-Windows-x86_64-unsigned-a7466ce69441871df229a5ed1cdf32ec594ba935`
-(ID `8255326332`) contains the packages, `SHA256SUMS.txt`, `build-info.json`,
-and `test-summary.txt`. Exact runs, hashes, retention, and download evidence are
-recorded in [`verification/windows-ci.md`](verification/windows-ci.md).
+See [`autofix-safety.md`](autofix-safety.md).
 
-### Windows graphical manual acceptance
+## Explicitly deferred interfaces
 
-No manual evidence exists. Installation, WebView2, tray, notification,
-autostart, single-instance, background process and uninstall checks remain
-`BLOCKED` or `IMPLEMENTED_UNVERIFIED`; none are `VERIFIED_WINDOWS_MANUAL`.
+| Feature | Status |
+| --- | --- |
+| P4/Perforce provider | `NOT_STARTED` |
+| UE WebView host | `NOT_STARTED` |
+| Maya WebView host | `NOT_STARTED` |
+| Multi-user/team service | `NOT_STARTED` |
+| Cloud synchronization | `NOT_STARTED` |
+| Automatic external commit/push/comment/merge | Out of scope by safety decision |
+
+## Dynamic evidence required before release claim
+
+- final feature commit and Draft PR URL;
+- complete local test totals and timings;
+- real-model Autofix scope, model, Fix Session ID, Tool Calls, token/latency,
+  Patch Hash, changed files/lines, commands/return codes, re-review, resolution,
+  authoritative files, rollback/cleanup;
+- macOS Sidecar/Tauri build and runtime result;
+- Windows workflow URL, per-job status, artifact name/ID/paths/hashes;
+- explicit statement that Windows CI is not Windows GUI manual acceptance.
 
 ## Status update rule
 
-Every update to this file must point to at least one test, build artifact,
-runtime log, screenshot, API response, database record, CI run, or Git commit.
-Code review alone may advance a feature only to `IMPLEMENTED_UNVERIFIED`.
+Every promotion must cite a test, migration result, runtime record, screenshot
+with provenance, API/database evidence, artifact, workflow run, or Git commit.
+Code review alone can reach only `IMPLEMENTED_UNVERIFIED`; a fixture screenshot
+cannot become real-model/public-PR evidence.

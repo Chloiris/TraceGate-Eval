@@ -32,6 +32,14 @@ date, steps, result and screenshots/logs for every item below.
 | 18 | No background process remains after uninstall | BLOCKED | Process list |
 | 19 | Windows paths handle spaces and non-ASCII text | BLOCKED | Test path and run log |
 | 20 | Logs/database use the expected AppData directory | BLOCKED | Paths and redacted directory listing |
+| 21 | Finding opens the Fix experience | BLOCKED | Screenshot with fixture/real-run scope |
+| 22 | Patch Hash confirmation remains visible and usable | BLOCKED | Screenshot and redacted session/event record |
+| 23 | Managed Autofix worktree is created under AppData, not the source workspace | BLOCKED | Redacted paths and before/after source `git status` |
+| 24 | Validation progress/SSE survives normal window navigation | BLOCKED | Screen recording and redacted event IDs |
+| 25 | Validation failure cannot display `RESOLVED` | BLOCKED | Failure report and return code |
+| 26 | Patch/report download paths work with spaces and non-ASCII text | BLOCKED | Exported filenames/hashes |
+| 27 | Rollback restores only the Fix worktree | BLOCKED | Worktree diff before/after and unchanged source status |
+| 28 | Cleanup removes only the registered Fix worktree | BLOCKED | Before/after paths and diagnostics |
 
 ## Test record template
 
@@ -56,3 +64,7 @@ Issue link:
 Only a completed record from a real Windows graphical environment may advance
 an item to `VERIFIED_WINDOWS_MANUAL`. A Windows runner result remains
 `VERIFIED_WINDOWS_CI`.
+
+Autofix source-bound Windows CI is also separate from this checklist. Even if
+Python/TypeScript/Rust tests, Sidecar health and packages pass, the 8 Autofix
+interaction rows above remain `BLOCKED` until performed in a real Windows GUI.

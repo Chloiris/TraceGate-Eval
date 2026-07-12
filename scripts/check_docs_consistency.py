@@ -24,6 +24,8 @@ from urllib.parse import unquote
 ROOT = Path(__file__).resolve().parents[1]
 FACTS_RELATIVE_PATH = Path("docs/project-facts.yaml")
 STATUS_VALUES = {
+    "PENDING",
+    "IN_PROGRESS",
     "IMPLEMENTED_UNVERIFIED",
     "VERIFIED_MACOS",
     "VERIFIED_WINDOWS_CI",
@@ -45,6 +47,8 @@ REQUIRED_FACT_KEYS = {
     "version_history",
     "baseline",
     "review_workflow",
+    "autofix_workflow",
+    "autofix_api",
     "tool_registry",
     "test_counts",
     "benchmark_counts",
@@ -73,6 +77,69 @@ MARKDOWN_LINK = re.compile(r"!?\[[^\]]*\]\(([^)\n]+)\)")
 HTML_LINK = re.compile(r"(?:href|src)=[\"']([^\"']+)[\"']")
 SEMVER = re.compile(r"^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$")
 SHA40 = re.compile(r"^[0-9a-f]{40}$")
+README_SECTION_TITLES = [
+    "Product Overview",
+    "Why TraceGate",
+    "Product Loop",
+    "Review Workflow",
+    "Autofix Workflow",
+    "Patch Safety Model",
+    "Repository Map",
+    "Review Map",
+    "Agent Trace",
+    "Eval Center",
+    "Desktop Experience",
+    "Verified Evidence",
+    "Architecture",
+    "Technology Stack",
+    "Quick Start",
+    "Model Configuration",
+    "GitHub Configuration",
+    "Autofix Usage",
+    "Security",
+    "Testing",
+    "Build and Packaging",
+    "Parser Boundaries",
+    "Current Limitations",
+    "Roadmap",
+    "Documentation",
+    "License",
+]
+README_CN_SECTION_TITLES = [
+    "产品概览",
+    "为什么需要 TraceGate",
+    "产品闭环",
+    "Review 工作流",
+    "Autofix 工作流",
+    "Patch 安全模型",
+    "Repository Map",
+    "Review Map",
+    "Agent Trace",
+    "Eval Center",
+    "桌面体验",
+    "已验证证据",
+    "架构",
+    "技术栈",
+    "快速开始",
+    "模型配置",
+    "GitHub 配置",
+    "Autofix 使用方法",
+    "安全",
+    "测试",
+    "构建与打包",
+    "解析器边界",
+    "当前限制",
+    "路线图",
+    "文档",
+    "许可证",
+]
+AUTOFIX_RESOLUTIONS = [
+    "RESOLVED",
+    "PARTIALLY_RESOLVED",
+    "NOT_RESOLVED",
+    "VERIFICATION_FAILED",
+    "NEEDS_HUMAN_REVIEW",
+]
 
 
 def _mapping(value: Any, label: str, errors: list[str]) -> dict[str, Any]:
@@ -138,6 +205,26 @@ def validate_facts_schema(facts: dict[str, Any]) -> list[str]:
     nodes = _sequence(review.get("nodes"), "review_workflow.nodes", errors)
     if review.get("node_count") != len(nodes) or len(set(nodes)) != len(nodes):
         errors.append("review_workflow.node_count must equal the unique node list length")
+
+    autofix = _mapping(facts.get("autofix_workflow"), "autofix_workflow", errors)
+    fix_nodes = _sequence(autofix.get("nodes"), "autofix_workflow.nodes", errors)
+    if autofix.get("node_count") != len(fix_nodes) or len(set(fix_nodes)) != len(fix_nodes):
+        errors.append("autofix_workflow.node_count must equal the unique node list length")
+    if autofix.get("node_count") != 11:
+        errors.append("autofix_workflow must contain exactly 11 nodes")
+    if autofix.get("status") not in STATUS_VALUES:
+        errors.append("autofix_workflow.status is invalid")
+    if autofix.get("resolutions") != AUTOFIX_RESOLUTIONS:
+        errors.append("autofix_workflow.resolutions do not match the deterministic policy")
+
+    autofix_api = _mapping(facts.get("autofix_api"), "autofix_api", errors)
+    fix_endpoints = _sequence(autofix_api.get("endpoints"), "autofix_api.endpoints", errors)
+    if autofix_api.get("endpoint_count") != len(fix_endpoints) or len(set(fix_endpoints)) != len(fix_endpoints):
+        errors.append("autofix_api.endpoint_count must equal the unique endpoint list length")
+    if autofix_api.get("status") not in STATUS_VALUES:
+        errors.append("autofix_api.status is invalid")
+    if autofix_api.get("sse_resume_header") != "Last-Event-ID":
+        errors.append("autofix_api.sse_resume_header must be Last-Event-ID")
 
     registry = _mapping(facts.get("tool_registry"), "tool_registry", errors)
     tools = _sequence(registry.get("tools"), "tool_registry.tools", errors)
@@ -360,6 +447,8 @@ def check_runtime_facts(root: Path, facts: dict[str, Any]) -> list[str]:
     sys.path.insert(0, str(root))
     try:
         from tracegate.agent.workflow import NODE_NAMES, PROMPT_VERSION, WORKFLOW_VERSION
+        from tracegate.agent.fix_workflow import FIX_NODE_NAMES, FIX_WORKFLOW_VERSION
+        from tracegate.autofix.schemas import FixResolution
         from tracegate.indexing import PARSER_CAPABILITY_MATRIX
         from tracegate.tools.registry import create_read_only_registry
     finally:
@@ -371,6 +460,13 @@ def check_runtime_facts(root: Path, facts: dict[str, Any]) -> list[str]:
         errors.append("project facts review nodes do not match the production workflow")
     if WORKFLOW_VERSION != review["version"] or PROMPT_VERSION != review["prompt_version"]:
         errors.append("project facts review workflow/prompt versions do not match production")
+    autofix = facts["autofix_workflow"]
+    if list(FIX_NODE_NAMES) != autofix["nodes"] or len(FIX_NODE_NAMES) != autofix["node_count"]:
+        errors.append("project facts Autofix nodes do not match the production workflow")
+    if FIX_WORKFLOW_VERSION != autofix["version"]:
+        errors.append("project facts Autofix workflow version does not match production")
+    if [resolution.value for resolution in FixResolution] != autofix["resolutions"]:
+        errors.append("project facts Autofix resolutions do not match production")
     tool_names = [descriptor.name for descriptor in create_read_only_registry().descriptors()]
     registry = facts["tool_registry"]
     if tool_names != registry["tools"] or len(tool_names) != registry["tool_count"]:
@@ -439,6 +535,83 @@ def check_relative_links(root: Path, documents: list[str]) -> list[str]:
             resolved = (path.parent / target).resolve()
             if not resolved.exists():
                 errors.append(f"{relative} has a missing relative link: {raw_reference}")
+    return errors
+
+
+def discover_markdown_documents(root: Path) -> list[str]:
+    """Return every repository Markdown document, excluding generated/vendor trees."""
+    excluded_parts = {".git", ".venv", "node_modules", "target", "dist", "build"}
+    return sorted(
+        str(path.relative_to(root))
+        for path in root.rglob("*.md")
+        if not excluded_parts.intersection(path.relative_to(root).parts)
+    )
+
+
+def check_readme_structure_and_autofix(root: Path, facts: dict[str, Any]) -> list[str]:
+    errors: list[str] = []
+    documents = {
+        "README.md": README_SECTION_TITLES,
+        "docs/README_CN.md": README_CN_SECTION_TITLES,
+    }
+    autofix = facts["autofix_workflow"]
+    for relative, expected_titles in documents.items():
+        text = (root / relative).read_text(encoding="utf-8")
+        headings = re.findall(r"^## (\d+)\. (.+)$", text, re.MULTILINE)
+        numbers = [int(number) for number, _ in headings]
+        titles = [title for _, title in headings]
+        if numbers != list(range(1, 27)) or titles != expected_titles:
+            errors.append(f"{relative} must contain the canonical 26-section structure")
+        missing_nodes = [node for node in autofix["nodes"] if node not in text]
+        if missing_nodes:
+            errors.append(f"{relative} is missing Autofix nodes: {', '.join(missing_nodes)}")
+        missing_resolutions = [value for value in autofix["resolutions"] if value not in text]
+        if missing_resolutions:
+            errors.append(f"{relative} is missing Autofix resolutions: {', '.join(missing_resolutions)}")
+    required_boundaries = {
+        "README.md": (
+            "Default behavior is **read-only**",
+            "does **not** automatically commit, push",
+            "Fix-owned detached Git worktree",
+            "Real public-PR Autofix E2E",
+        ),
+        "docs/README_CN.md": (
+            "默认行为是**只读**",
+            "**不会**自动 Commit、Push",
+            "由 Fix 管理的 detached Git Worktree",
+            "真实公共 PR Autofix E2E",
+        ),
+    }
+    for relative, phrases in required_boundaries.items():
+        text = (root / relative).read_text(encoding="utf-8")
+        for phrase in phrases:
+            if phrase not in text:
+                errors.append(f"{relative} does not state required Autofix boundary: {phrase!r}")
+    evidence = (root / "docs/verification/real-autofix-e2e-macos.md").read_text(
+        encoding="utf-8"
+    )
+    pending_record = (
+        "- Status: `PENDING`" in evidence
+        and "not yet executed/recorded" in evidence
+    )
+    verified_record = all(
+        marker in evidence
+        for marker in (
+            "- Scoped status: `VERIFIED_MACOS`",
+            "- Public-PR Fix E2E: `BLOCKED`",
+            "synthetic test fixture",
+            "Logical real-model requests | 7",
+            "Tool Calls | 4",
+            "Resolution | `RESOLVED`",
+            "fixture_used=true",
+            "public PR",
+        )
+    )
+    if not pending_record and not verified_record:
+        errors.append(
+            "real Autofix E2E record must be an explicit PENDING template or a "
+            "scoped VERIFIED_MACOS record with public-PR BLOCKED and fixture boundaries"
+        )
     return errors
 
 
@@ -549,7 +722,8 @@ def run_checks(root: Path = ROOT) -> list[str]:
     errors.extend(check_versions(root, facts))
     errors.extend(check_naming(root, facts))
     errors.extend(check_runtime_facts(root, facts))
-    errors.extend(check_relative_links(root, policy["relative_link_documents"]))
+    errors.extend(check_relative_links(root, discover_markdown_documents(root)))
+    errors.extend(check_readme_structure_and_autofix(root, facts))
     errors.extend(
         check_historical_markers(
             root, policy["historical_documents"], policy["historical_marker"]
@@ -575,6 +749,7 @@ def main(argv: list[str] | None = None) -> int:
     print(
         "documentation consistency: PASS "
         f"(version={facts['version']}, review_nodes={facts['review_workflow']['node_count']}, "
+        f"autofix_nodes={facts['autofix_workflow']['node_count']}, "
         f"tools={facts['tool_registry']['tool_count']})"
     )
     return 0

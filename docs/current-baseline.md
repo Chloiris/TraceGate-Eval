@@ -224,3 +224,8 @@ The starting repository is a healthy, tested Python evaluation prototype with
 valuable real evidence and guardrails, but it is not yet a full-stack desktop
 coding-agent product. Studio development will preserve the benchmark package
 and build new product boundaries around it.
+
+For the current version and controlled Autofix work, use
+[`implementation-status.md`](implementation-status.md) and
+[`current-autofix-baseline.md`](current-autofix-baseline.md). This historical
+record is not the current feature list or current test total.
