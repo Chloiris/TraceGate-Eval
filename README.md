@@ -32,9 +32,11 @@ Studio joins a React UI, authenticated FastAPI Sidecar, commit-bound code
 intelligence, observable LangGraph workflows, controlled tools, and Tauri 2.
 Version `0.4.0` adds a separate controlled Autofix path: it may propose and
 validate a patch, but it cannot silently mutate the enrolled workspace or push
-code. The feature branch has completed its full macOS matrix, native package,
-scoped real-model run, and source-bound Windows CI/package gate. Public-PR Fix
-evidence and Windows graphical acceptance remain explicitly blocked.
+code. PR [#17](https://github.com/Chloiris/TraceGate-Eval/pull/17) is merged
+into `main`; the source-bound implementation completed its full macOS matrix,
+native package, scoped real-model run, and automated Windows CI/package gates.
+Public-PR Fix evidence and Windows graphical acceptance remain explicitly
+blocked.
 
 ## 2. Why TraceGate
 
@@ -201,7 +203,7 @@ Credential Manager, then cleared; the API and UI receive only
 | Windows graphical acceptance | `BLOCKED` | No real Windows install, WebView2, tray, notification, autostart, single-instance, cleanup, or uninstall acceptance. |
 | Autofix workflow/API/UI on macOS | `VERIFIED_MACOS` | 269 Python, 60 TypeScript/Vitest, 22 Rust tests (+1 ignored), five fixture-labelled Playwright flows, packaged Sidecar health, Tauri build, and native app launch passed. |
 | Real-model Autofix E2E | `VERIFIED_MACOS` | One real DeepSeek run reached `RESOLVED` on an explicitly labelled synthetic temporary Git repository. |
-| Autofix Windows build | `VERIFIED_WINDOWS_CI` | Source-bound run `29196292381` passed 269 Python, 60 TypeScript, 22 Rust (+1 ignored), PyInstaller Sidecar health, Tauri NSIS/MSI and portable packaging. This is not GUI acceptance. |
+| Autofix Windows build | `VERIFIED_WINDOWS_CI` | Post-merge `main` Run [`29197940209`](https://github.com/Chloiris/TraceGate-Eval/actions/runs/29197940209) passed 269 Python, 60 TypeScript, 22 Rust (+1 ignored), PyInstaller Sidecar health, Tauri NSIS/MSI and portable packaging. This is not GUI acceptance. |
 | Real public-PR Autofix E2E | `BLOCKED` | No small public PR with a defensible existing defect and stable local validation was selected; no random PR is presented as success evidence. |
 
 Autofix fixture screenshots:

@@ -20,7 +20,8 @@ Windows bullets are limited to automated CI/build evidence.
   `packages/shared-types/src`, `packages/api-client/src`;
   `apps/web/src/components/FixExperience.test.tsx`;
   fixture-only screenshots in `screenshots/autofix-playwright-fixture-*.png`.
-  **Gate:** final full suite remains pending.
+  **Evidence:** source-bound matrix completed at 269 Python, 60 TypeScript,
+  22 Rust passed (+1 ignored), and five Playwright flows.
 
 ## Coding Agent engineering
 
@@ -88,7 +89,7 @@ Windows bullets are limited to automated CI/build evidence.
   migration, API/SSE resume, typed clients, and fixture-labelled UI flow.
   **Basis:** `tests/test_autofix_safety.py`, `tests/test_fix_workflow.py`,
   `tests/test_autofix_api.py`, shared/API-client/Vitest/Playwright tests.
-  **Gate:** use final counts only after the complete branch matrix passes.
+  **Evidence:** the complete source-bound matrix passed with the counts above.
 - Automated canonical version/product/fact/README/Autofix-boundary and
   repository-wide Markdown-link checks so historical evidence stays immutable
   while current claims cannot silently drift. **Basis:**
@@ -103,8 +104,9 @@ Windows bullets are limited to automated CI/build evidence.
   workflows/scripts and historical source-bound records
   [`verification/p1-macos.md`](verification/p1-macos.md) and
   [`verification/windows-ci.md`](verification/windows-ci.md). This does not
-  claim Windows installation or GUI acceptance, and fresh Autofix artifacts
-  are pending.
+  claim Windows installation or GUI acceptance. The latest automated Autofix
+  artifact is recorded in
+  [`verification/windows-autofix-ci.md`](verification/windows-autofix-ci.md).
 
 ## Claims not supported yet
 

@@ -17,10 +17,65 @@
     ],
     "historical_note": "The v0.2-alpha and v0.3-alpha tags are preserved research and Semantic PR Advisor milestones; their recorded values are not rewritten as product package versions."
   },
-  "baseline": {
+  "pre_autofix_baseline": {
+    "record_kind": "Historical verification record",
     "main_sha": "a1dcd7d755c25e0f75aac499943a07b759ec30db",
-    "development_branch": "feat/coding-agent-autofix-loop",
+    "feature_branch": "feat/coding-agent-autofix-loop",
+    "feature_branch_status": "merged",
     "captured_on": "2026-07-12"
+  },
+  "tested_implementation": {
+    "record_kind": "source-bound implementation evidence",
+    "source_sha": "69402dd7d570b64a36fba883f98b540f8a893ee5",
+    "test_date": "2026-07-12",
+    "test_commands": [
+      "./scripts/test.sh",
+      "pnpm test:e2e"
+    ],
+    "real_autofix_e2e_status": "VERIFIED_MACOS",
+    "real_autofix_e2e_scope": "Real DeepSeek Review + Autofix on an explicitly labelled synthetic temporary Git repository; not public-PR Autofix evidence."
+  },
+  "merged_delivery": {
+    "status": "merged",
+    "pull_request": 17,
+    "pull_request_url": "https://github.com/Chloiris/TraceGate-Eval/pull/17",
+    "feature_branch": "feat/coding-agent-autofix-loop",
+    "feature_branch_status": "merged",
+    "pr_head_sha": "74e457704f431bc21ad5b1d29fbfc475fa077be7",
+    "pr_merge_ref_sha": "456c0914cd214961b9c4265b239e74eb00a6e390",
+    "main_sha": "35bc8caf66dcc61b6f1559e26405980b4ff1ae5d",
+    "merged_at": "2026-07-12T15:18:37Z"
+  },
+  "latest_windows_ci": {
+    "status": "VERIFIED_WINDOWS_CI",
+    "workflow_run_id": 29197940209,
+    "workflow_run_url": "https://github.com/Chloiris/TraceGate-Eval/actions/runs/29197940209",
+    "event": "push",
+    "branch": "main",
+    "main_sha": "35bc8caf66dcc61b6f1559e26405980b4ff1ae5d",
+    "job_name": "Unsigned Windows x86_64 installers",
+    "job_status": "success",
+    "artifact_id": 8261706447,
+    "artifact_name": "TraceGate-Studio-Windows-x86_64-unsigned-35bc8caf66dcc61b6f1559e26405980b4ff1ae5d",
+    "artifact_digest": "sha256:e0091e0b3771b823a5d6d0bf729c9c641cc29ab5618a5548a7d932179809cf55",
+    "files": [
+      "TraceGate-Studio-Setup.exe",
+      "TraceGate-Studio.msi",
+      "TraceGate-Studio-portable-x86_64.zip",
+      "SHA256SUMS.txt",
+      "build-info.json",
+      "test-summary.txt"
+    ],
+    "sha256": {
+      "TraceGate-Studio-Setup.exe": "bc1eef1f0faed9f157da8c1689d3368e23b519232a8d38c6cda10395dfedc519",
+      "TraceGate-Studio.msi": "9e9b4342e1adda47f44e9a2a2c1501d4e2a83ad03a8666029bf22bdc557753fe",
+      "TraceGate-Studio-portable-x86_64.zip": "8f83957941cdc51f50172149e96ff2f66653681aa8fdc65292bdd4d0b2b52d5b",
+      "build-info.json": "ce4ee4368ec1e601a5a902fa3dc23c6ca38eefea3071520931f22bccb7bb3206"
+    },
+    "unsigned": true,
+    "manual_gui_acceptance": "BLOCKED",
+    "authenticode": "UNVERIFIED",
+    "smartscreen": "UNVERIFIED"
   },
   "review_workflow": {
     "version": "tracegate-langgraph-v1",
@@ -110,10 +165,10 @@
       "search_symbol"
     ]
   },
-  "test_counts": {
+  "historical_test_counts": {
     "record_kind": "historical_baseline",
     "source_sha": "a1dcd7d755c25e0f75aac499943a07b759ec30db",
-    "python_collected": 212,
+    "python": 212,
     "typescript": {
       "shared_types": 5,
       "api_client": 7,
@@ -125,29 +180,36 @@
       "ignored": 1
     },
     "playwright": 4,
-    "current_autofix": {
-      "status": "VERIFIED_MACOS",
-      "source_sha": "69402dd7d570b64a36fba883f98b540f8a893ee5",
-      "python": 269,
-      "typescript": 60,
-      "rust": {
-        "passed": 22,
-        "ignored": 1
-      },
-      "playwright": 5,
-      "focused_test_files": [
-        "tests/test_autofix_safety.py",
-        "tests/test_fix_workflow.py",
-        "tests/test_autofix_api.py",
-        "tests/test_studio_database.py",
-        "tests/test_docs_consistency.py",
-        "packages/shared-types/tests/schemas.test.ts",
-        "packages/api-client/tests/client.test.ts",
-        "apps/web/src/components/FixExperience.test.tsx",
-        "e2e/studio.spec.ts"
-      ]
+    "note": "Historical verification record. These pre-Autofix numbers remain source-bound to main a1dcd7d and are not rewritten as current test results."
+  },
+  "current_test_counts": {
+    "record_kind": "source-bound current implementation matrix",
+    "status": "VERIFIED_MACOS",
+    "source_sha": "69402dd7d570b64a36fba883f98b540f8a893ee5",
+    "python": 269,
+    "typescript": {
+      "shared_types": 15,
+      "api_client": 17,
+      "web": 28,
+      "total": 60
     },
-    "note": "Historical numbers remain source-bound to main a1dcd7d. Current Autofix counts come from ./scripts/test.sh plus pnpm test:e2e on 2026-07-12 and are bound to the implementation source commit shown above; later documentation-only commits do not alter the tested runtime."
+    "rust": {
+      "passed": 22,
+      "ignored": 1
+    },
+    "playwright": 5,
+    "focused_test_files": [
+      "tests/test_autofix_safety.py",
+      "tests/test_fix_workflow.py",
+      "tests/test_autofix_api.py",
+      "tests/test_studio_database.py",
+      "tests/test_docs_consistency.py",
+      "packages/shared-types/tests/schemas.test.ts",
+      "packages/api-client/tests/client.test.ts",
+      "apps/web/src/components/FixExperience.test.tsx",
+      "e2e/studio.spec.ts"
+    ],
+    "note": "Current runtime counts come from ./scripts/test.sh plus pnpm test:e2e on 2026-07-12 and remain bound to the tested implementation source SHA; later documentation-only commits do not alter the tested runtime."
   },
   "benchmark_counts": {
     "real_pr_cases": 19,
@@ -262,7 +324,7 @@
   },
   "delivery_artifacts": {
     "baseline_source_sha": "a1dcd7d755c25e0f75aac499943a07b759ec30db",
-    "macos_arm64": {
+    "historical_macos_arm64": {
       "status": "VERIFIED_MACOS",
       "unsigned": true,
       "workflow_run_id": 29185555819,
@@ -275,7 +337,7 @@
         "build-info.json"
       ]
     },
-    "windows_x86_64": {
+    "historical_windows_x86_64": {
       "status": "VERIFIED_WINDOWS_CI",
       "unsigned": true,
       "workflow_run_id": 29185555800,
@@ -291,7 +353,7 @@
       ],
       "note": "The cited baseline run produced the MSI; the workflow copies it only when Tauri emits it."
     },
-    "autofix_windows_x86_64": {
+    "historical_autofix_windows_x86_64": {
       "status": "VERIFIED_WINDOWS_CI",
       "unsigned": true,
       "source_sha": "69402dd7d570b64a36fba883f98b540f8a893ee5",
@@ -306,7 +368,7 @@
         "build-info.json",
         "test-summary.txt"
       ],
-      "note": "Automated unsigned Windows evidence only; manual graphical acceptance remains BLOCKED."
+      "note": "Historical source-bound automated Windows evidence only; latest post-merge main evidence is latest_windows_ci. Manual graphical acceptance remains BLOCKED."
     }
   },
   "current_limitations": [
@@ -411,7 +473,7 @@
     {
       "path": "docs/verification/windows-autofix-ci.md",
       "status": "VERIFIED_WINDOWS_CI",
-      "scope": "Source-bound Autofix Windows tests, Sidecar health, Tauri NSIS/MSI and portable packaging; no GUI/manual acceptance",
+      "scope": "Latest post-merge main Windows tests, Sidecar health, Tauri NSIS/MSI and portable packaging plus clearly separated historical source-bound records; no GUI/manual acceptance",
       "historical": false
     }
   ],
@@ -455,6 +517,7 @@
       "docs/README_CN.md"
     ],
     "forbidden_stale_branches": [
+      "feat/coding-agent-autofix-loop",
       "feat/tracegate-studio-fullstack",
       "feature/tracegate-pr-advisory-real-data-mac",
       "chore/win11-to-m5-handoff"

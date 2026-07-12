@@ -2,10 +2,20 @@
 
 - Audit opened: 2026-07-12
 - Starting code baseline: `a1dcd7d755c25e0f75aac499943a07b759ec30db`
-- Active branch: `feat/coding-agent-autofix-loop`
+- Current product branch: `main`
+- Current main SHA before this finalization PR:
+  `35bc8caf66dcc61b6f1559e26405980b4ff1ae5d`
+- Merged delivery: PR [#17](https://github.com/Chloiris/TraceGate-Eval/pull/17)
+- Historical feature branch: `feat/coding-agent-autofix-loop` — merged
+- Finalization branch: `chore/post-merge-delivery-finalization`
+- Latest post-merge Windows Run:
+  [29197940209](https://github.com/Chloiris/TraceGate-Eval/actions/runs/29197940209)
+- Latest Windows Artifact: `8261706447` —
+  `TraceGate-Studio-Windows-x86_64-unsigned-35bc8caf66dcc61b6f1559e26405980b4ff1ae5d`
 - Product version selected after tag audit: `0.4.0`
-- Status: macOS implementation, full local matrix, native package, scoped
-  real-model Autofix and source-bound Windows CI/package evidence complete
+- Status: PR #17 merged; macOS implementation, full source-bound matrix, native
+  package, scoped real-model Autofix, and automated Windows CI/package evidence
+  complete
 
 ## Canonical naming
 
@@ -30,7 +40,7 @@
 | Workflow/Tool count | Seven Review nodes and 19 tools were not centrally checked. | Runtime imports now validate Review nodes/tools plus 11 Fix nodes and five resolutions against project facts. |
 | API | Autofix lifecycle/API/SSE/export behavior was absent. | Added and tested 17 method/path facts, including authenticated diagnostic workspace cleanup, plus typed API/SSE/export guide coverage. |
 | Capabilities | Some summaries could be read as full polyglot semantics, vector retrieval, or native Tool Calling. | READMEs and checker preserve bounded JS/TS/Java adapters, disabled embeddings, compatibility-mode tool-selection boundary, and no whole-program Java call resolution. |
-| Branch/SHA/run | Current-facing files referenced merged feature branches and several noncanonical run snapshots. | Current status uses the active branch/starting main; immutable evidence keeps original values only in documents marked **Historical verification record** or explicit historical/source-bound rows. Final feature SHA/run is pending. |
+| Branch/SHA/run | Current-facing files referenced a merged feature branch as current and stopped at source-bound PR runs. | Current status now separates pre-Autofix baseline, tested implementation source, PR head, PR CI merge ref, final main merge commit, and post-merge `main` Windows evidence. Immutable evidence keeps its original values only in documents marked **Historical verification record** or explicit historical/source-bound rows. |
 | Windows | Automated packaging and GUI acceptance were easy to conflate. | All current docs state `VERIFIED_WINDOWS_CI` does not imply `VERIFIED_WINDOWS_MANUAL`; Autofix adds fresh CI and eight GUI checks without claiming completion. |
 | Screenshots | Existing P1 images were not always labelled by data source; Autofix images did not exist at baseline. | Gallery now labels P1 and two new Autofix captures as Playwright fixture evidence. No image is called a public-PR/real-model Fix result. |
 | Real Autofix E2E | No completed production-path record existed at baseline. | A real DeepSeek run completed the production Review and Fix workflows on an explicitly labelled synthetic temporary Git repository; the public-PR Fix scope remains `BLOCKED`, and no fixture/mock/cache/rule result is presented as that evidence. |
@@ -39,6 +49,21 @@
 | Resume bullets | Some bullets embedded outdated suite counts/Windows identifiers. | Every current bullet cites code/test/verification evidence and separates implementation from pending real-model/full-suite gates. |
 | Links | No repository-wide executable link check existed. | Checker now scans every repository Markdown file (excluding generated/vendor trees) for Markdown and HTML relative targets. |
 | Single source of truth | Facts were copied manually across docs. | `docs/project-facts.yaml` plus checker validates naming, versions, runtime nodes/tools/parser/benchmarks, README structure, limitations, links, historical markers and forbidden overclaims. |
+
+## Current-facing and historical evidence boundary
+
+- Current-facing documents use merged PR #17 and final `main` commit
+  `35bc8caf66dcc61b6f1559e26405980b4ff1ae5d` as delivery state.
+- `69402dd7d570b64a36fba883f98b540f8a893ee5` remains the source-bound tested
+  implementation SHA for the 269 Python / 60 TypeScript / 22 Rust (+1 ignored)
+  matrix and scoped real Autofix E2E.
+- `74e457704f431bc21ad5b1d29fbfc475fa077be7` is the final PR head contribution.
+- `456c0914cd214961b9c4265b239e74eb00a6e390` is the temporary PR CI merge ref
+  recorded by the final PR-head Windows artifact; it is not a `main` commit.
+- Older baseline/run/artifact SHAs remain allowed only in explicitly historical
+  or source-bound records. They are not rewritten as current delivery facts.
+- The repository-wide relative-link scan found no broken current or historical
+  Markdown/HTML targets after this pass.
 
 ## Screenshot inventory
 
@@ -69,6 +94,8 @@ record.
 - required limitations and forbidden unqualified vector/native-tool/full-Java
   claims;
 - historical markers and Windows CI/manual separation;
+- PR #17 delivery identities and latest audited post-merge Windows Run/Artifact
+  propagation across current-facing documents;
 - every Markdown/HTML relative link in every repository Markdown document;
 - existence and source-bound fields of the scoped real Autofix E2E record,
   including its explicit synthetic-repository and blocked public-PR boundary.
@@ -92,6 +119,7 @@ record.
 
 - [x] Canonical names and version sources unified.
 - [x] Historical research/evidence scope preserved and labelled.
+- [x] PR #17 merge, delivery SHA chain, and post-merge Windows evidence synced.
 - [x] English/Chinese README structures and facts aligned.
 - [x] Autofix workflow/safety/API/usage/failure boundaries documented.
 - [x] Parser/vector/Tool Calling limits remain explicit.

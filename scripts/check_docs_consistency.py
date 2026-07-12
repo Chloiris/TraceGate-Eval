@@ -45,12 +45,16 @@ REQUIRED_FACT_KEYS = {
     "canonical_naming",
     "version",
     "version_history",
-    "baseline",
+    "pre_autofix_baseline",
+    "tested_implementation",
+    "merged_delivery",
+    "latest_windows_ci",
     "review_workflow",
     "autofix_workflow",
     "autofix_api",
     "tool_registry",
-    "test_counts",
+    "current_test_counts",
+    "historical_test_counts",
     "benchmark_counts",
     "parser_boundaries",
     "platforms",
@@ -195,11 +199,64 @@ def validate_facts_schema(facts: dict[str, Any]) -> list[str]:
     if milestones != ["v0.2-alpha", "v0.3-alpha"]:
         errors.append("historical research milestones must preserve v0.2-alpha and v0.3-alpha")
 
-    baseline = _mapping(facts.get("baseline"), "baseline", errors)
-    if not isinstance(baseline.get("main_sha"), str) or not SHA40.fullmatch(baseline["main_sha"]):
-        errors.append("baseline.main_sha must be a full lowercase Git SHA")
-    if not isinstance(baseline.get("development_branch"), str) or not baseline["development_branch"]:
-        errors.append("baseline.development_branch must be non-empty")
+    baseline = _mapping(
+        facts.get("pre_autofix_baseline"), "pre_autofix_baseline", errors
+    )
+    if not isinstance(baseline.get("main_sha"), str) or not SHA40.fullmatch(
+        baseline["main_sha"]
+    ):
+        errors.append("pre_autofix_baseline.main_sha must be a full lowercase Git SHA")
+    if baseline.get("feature_branch_status") != "merged":
+        errors.append("pre_autofix_baseline.feature_branch_status must be merged")
+
+    tested = _mapping(
+        facts.get("tested_implementation"), "tested_implementation", errors
+    )
+    if not isinstance(tested.get("source_sha"), str) or not SHA40.fullmatch(
+        tested["source_sha"]
+    ):
+        errors.append("tested_implementation.source_sha must be a full lowercase Git SHA")
+
+    merged = _mapping(facts.get("merged_delivery"), "merged_delivery", errors)
+    for key in ("pr_head_sha", "pr_merge_ref_sha", "main_sha"):
+        value = merged.get(key)
+        if not isinstance(value, str) or not SHA40.fullmatch(value):
+            errors.append(f"merged_delivery.{key} must be a full lowercase Git SHA")
+    if (
+        merged.get("status") != "merged"
+        or merged.get("feature_branch_status") != "merged"
+    ):
+        errors.append("merged_delivery and its feature branch must be marked merged")
+    if not isinstance(merged.get("pull_request"), int):
+        errors.append("merged_delivery.pull_request must be an integer")
+    merged_shas = {
+        merged.get("pr_head_sha"),
+        merged.get("pr_merge_ref_sha"),
+        merged.get("main_sha"),
+    }
+    if len(merged_shas) != 3:
+        errors.append("PR head, PR merge ref, and final main SHA must remain distinct")
+
+    windows = _mapping(facts.get("latest_windows_ci"), "latest_windows_ci", errors)
+    if windows.get("status") != "VERIFIED_WINDOWS_CI":
+        errors.append("latest_windows_ci.status must be VERIFIED_WINDOWS_CI")
+    if windows.get("event") != "push" or windows.get("branch") != "main":
+        errors.append("latest_windows_ci must describe the post-merge main push run")
+    if windows.get("main_sha") != merged.get("main_sha"):
+        errors.append("latest_windows_ci.main_sha must match merged_delivery.main_sha")
+    if not isinstance(windows.get("workflow_run_id"), int):
+        errors.append("latest_windows_ci.workflow_run_id must be an integer")
+    if not isinstance(windows.get("artifact_id"), int):
+        errors.append("latest_windows_ci.artifact_id must be an integer")
+    if (
+        not isinstance(windows.get("artifact_name"), str)
+        or not windows["artifact_name"]
+    ):
+        errors.append("latest_windows_ci.artifact_name must be non-empty")
+    elif not windows["artifact_name"].endswith(str(merged.get("main_sha"))):
+        errors.append("latest_windows_ci.artifact_name must be bound to final main SHA")
+    if windows.get("manual_gui_acceptance") != "BLOCKED":
+        errors.append("latest_windows_ci.manual_gui_acceptance must remain BLOCKED")
 
     review = _mapping(facts.get("review_workflow"), "review_workflow", errors)
     nodes = _sequence(review.get("nodes"), "review_workflow.nodes", errors)
@@ -231,15 +288,25 @@ def validate_facts_schema(facts: dict[str, Any]) -> list[str]:
     if registry.get("tool_count") != len(tools) or len(set(tools)) != len(tools):
         errors.append("tool_registry.tool_count must equal the unique tool list length")
 
-    tests = _mapping(facts.get("test_counts"), "test_counts", errors)
-    if not isinstance(tests.get("source_sha"), str) or not SHA40.fullmatch(tests["source_sha"]):
-        errors.append("test_counts.source_sha must be a full lowercase Git SHA")
-    typescript = _mapping(tests.get("typescript"), "test_counts.typescript", errors)
-    expected_ts_total = sum(
-        int(typescript.get(key, -1)) for key in ("shared_types", "api_client", "web")
-    )
-    if typescript.get("total") != expected_ts_total:
-        errors.append("test_counts.typescript.total must equal its three package counts")
+    test_records: dict[str, dict[str, Any]] = {}
+    for label in ("historical_test_counts", "current_test_counts"):
+        tests = _mapping(facts.get(label), label, errors)
+        test_records[label] = tests
+        if not isinstance(tests.get("source_sha"), str) or not SHA40.fullmatch(
+            tests["source_sha"]
+        ):
+            errors.append(f"{label}.source_sha must be a full lowercase Git SHA")
+        typescript = _mapping(tests.get("typescript"), f"{label}.typescript", errors)
+        expected_ts_total = sum(
+            int(typescript.get(key, -1))
+            for key in ("shared_types", "api_client", "web")
+        )
+        if typescript.get("total") != expected_ts_total:
+            errors.append(f"{label}.typescript.total must equal its three package counts")
+    if test_records["current_test_counts"].get("source_sha") != tested.get("source_sha"):
+        errors.append(
+            "current_test_counts.source_sha must match tested_implementation.source_sha"
+        )
 
     benchmark = _mapping(facts.get("benchmark_counts"), "benchmark_counts", errors)
     real_distribution = _mapping(
@@ -702,6 +769,75 @@ def check_current_document_claims(root: Path, facts: dict[str, Any]) -> list[str
     return errors
 
 
+def check_delivery_document_facts(root: Path, facts: dict[str, Any]) -> list[str]:
+    """Keep current delivery identifiers synchronized without rewriting history."""
+    errors: list[str] = []
+    baseline = facts["pre_autofix_baseline"]
+    tested = facts["tested_implementation"]
+    merged = facts["merged_delivery"]
+    windows = facts["latest_windows_ci"]
+    required_tokens = {
+        "README.md": [f"#{merged['pull_request']}", str(windows["workflow_run_id"])],
+        "docs/README_CN.md": [
+            f"#{merged['pull_request']}",
+            str(windows["workflow_run_id"]),
+        ],
+        "CHANGELOG.md": [f"#{merged['pull_request']}", "0.4.0 - Unreleased"],
+        "docs/current-autofix-baseline.md": [
+            baseline["main_sha"],
+            baseline["feature_branch"],
+            "Historical verification record",
+        ],
+        "docs/implementation-status.md": [
+            merged["main_sha"],
+            tested["source_sha"],
+            merged["pr_head_sha"],
+            merged["pr_merge_ref_sha"],
+            str(windows["workflow_run_id"]),
+            str(windows["artifact_id"]),
+            windows["artifact_name"],
+        ],
+        "docs/verification/windows-autofix-ci.md": [
+            baseline["main_sha"],
+            tested["source_sha"],
+            merged["pr_head_sha"],
+            merged["pr_merge_ref_sha"],
+            merged["main_sha"],
+            str(windows["workflow_run_id"]),
+            str(windows["artifact_id"]),
+            windows["artifact_name"],
+        ],
+        "docs/doc-consistency-audit.md": [
+            merged["main_sha"],
+            str(windows["workflow_run_id"]),
+            str(windows["artifact_id"]),
+        ],
+    }
+    for relative, tokens in required_tokens.items():
+        path = root / relative
+        if not path.is_file():
+            errors.append(f"delivery fact document does not exist: {relative}")
+            continue
+        text = path.read_text(encoding="utf-8")
+        for token in tokens:
+            if token not in text:
+                errors.append(f"{relative} is missing current delivery fact: {token!r}")
+
+    forbidden_current_phrases = (
+        "Current development branch",
+        "The feature branch has completed",
+        "当前功能分支已完成",
+        "Windows Autofix CI/artifacts remain pending",
+        "Autofix needs a fresh source-bound Windows run",
+    )
+    for relative in facts["documentation_policy"]["current_facing_documents"]:
+        text = (root / relative).read_text(encoding="utf-8")
+        for phrase in forbidden_current_phrases:
+            if phrase in text:
+                errors.append(f"{relative} contains stale delivery phrase: {phrase!r}")
+    return errors
+
+
 def check_declared_documents(root: Path, facts: dict[str, Any]) -> list[str]:
     errors: list[str] = []
     for record in facts["verification_documents"]:
@@ -730,6 +866,7 @@ def run_checks(root: Path = ROOT) -> list[str]:
         )
     )
     errors.extend(check_current_document_claims(root, facts))
+    errors.extend(check_delivery_document_facts(root, facts))
     errors.extend(check_declared_documents(root, facts))
     return errors
 

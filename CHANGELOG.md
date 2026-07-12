@@ -5,6 +5,10 @@ repository state, not a published signed release.
 
 ## 0.4.0 - Unreleased
 
+The `0.4.0` code is merged to `main` through PR
+[#17](https://github.com/Chloiris/TraceGate-Eval/pull/17). No `v0.4.0`
+GitHub Release has been published, so this section remains `Unreleased`.
+
 ### Added
 
 - TraceGate Studio local-first React, FastAPI, SQLite/Alembic, LangGraph, and
@@ -77,10 +81,11 @@ repository state, not a published signed release.
 - The newest macOS build, packaged Sidecar health, native Tauri launch,
   authenticated connection, Settings, and Autofix Diagnostics are verified;
   status-item and notification-click interaction remain unverified.
-- Current branch verification records 269 Python, 60 TypeScript/Vitest, 22
+- Source-bound implementation verification records 269 Python, 60
+  TypeScript/Vitest, 22
   Rust passed (+1 ignored), five Playwright flows, a real DeepSeek synthetic
-  temporary-repository Autofix E2E, and fresh macOS packaging. Source-bound
-  Windows Autofix CI/artifacts remain pending.
+  temporary-repository Autofix E2E, fresh macOS packaging, and successful
+  automated Windows packaging. Windows GUI/manual acceptance remains blocked.
 - No public-PR Autofix success rate, automatic-fix accuracy, native Tool
   Calling, or complete Java/JS/TS semantic call graph is claimed.
 - Autofix does not automatically commit, push, comment, open a PR, or merge.

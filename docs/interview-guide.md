@@ -154,8 +154,8 @@ starting.
   `VERIFIED_MACOS`; public-PR Fix E2E is `BLOCKED`, and no automatic-fix
   accuracy is claimed.
 - The existing real DeepSeek public-PR record verifies Review only.
-- Windows baseline CI produced unsigned packages, but Autofix needs a fresh
-  source-bound Windows run.
+- Windows baseline, source-bound Autofix, and post-merge `main` CI produced
+  unsigned packages; none is Windows GUI/manual acceptance.
 - Validation argv/cwd/environment are controlled, but repository tests still
   run with local user authority and are not OS/container sandboxed.
 - Windows GUI installation/tray/notifications/autostart/uninstall remain
