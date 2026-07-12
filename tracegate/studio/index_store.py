@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import time
 import uuid
 from pathlib import Path
@@ -231,6 +232,154 @@ def persist_repository_index(session: Session, repository: Repository) -> tuple[
     repository.current_commit_sha = snapshot.commit_sha
     repository.current_index_version = version.id
     repository.updated_at = _utcnow()
+    session.commit()
+    session.refresh(version)
+    return version, repository_map
+
+
+def persist_fix_workspace_index(
+    session: Session,
+    repository: Repository,
+    boundary: RepositoryBoundary,
+    *,
+    head_sha: str,
+    patch_hash: str,
+) -> tuple[IndexVersion, RepositoryMap]:
+    """Persist a patch-state index without replacing the enrolled repository index."""
+    snapshot = RepositoryIndexer(boundary).build(None)
+    if snapshot.commit_sha != head_sha:
+        raise RepositoryIndexError("Fix workspace Head SHA changed before indexing")
+    workspace_state_hash = hashlib.sha256(
+        f"{head_sha}:{patch_hash}".encode("ascii")
+    ).hexdigest()
+    existing = session.scalar(
+        select(IndexVersion).where(
+            IndexVersion.repository_id == repository.id,
+            IndexVersion.commit_sha == workspace_state_hash,
+        )
+    )
+    if existing is not None:
+        return existing, load_repository_map(session, repository.id, existing.id)
+
+    started = time.monotonic()
+    workspace_snapshot = IndexSnapshot(
+        id=str(uuid.uuid4()),
+        commit_sha=workspace_state_hash,
+        created_at_epoch=snapshot.created_at_epoch,
+        files=snapshot.files,
+        changed_paths=snapshot.changed_paths,
+        deleted_paths=snapshot.deleted_paths,
+    )
+    version = IndexVersion(
+        id=workspace_snapshot.id,
+        repository_id=repository.id,
+        commit_sha=workspace_state_hash,
+        status="fix_ready",
+        file_count=workspace_snapshot.file_count,
+        symbol_count=workspace_snapshot.symbol_count,
+        changed_count=len(workspace_snapshot.changed_paths),
+        deleted_count=len(workspace_snapshot.deleted_paths),
+        duration_ms=0,
+        index_duration_ms=0,
+        graph_duration_ms=0,
+    )
+    session.add(version)
+    session.flush()
+
+    for path, item in sorted(workspace_snapshot.files.items()):
+        absolute = boundary.resolve(path)
+        content = absolute.read_text(encoding="utf-8", errors="replace")
+        file_id = str(uuid.uuid4())
+        session.add(
+            IndexedFile(
+                id=file_id,
+                index_version_id=version.id,
+                path=path,
+                language=item.parsed.language,
+                content_hash=item.content_hash,
+                size_bytes=item.size_bytes,
+                capabilities_json=[
+                    capability.value for capability in item.parsed.capabilities
+                ],
+                imports_json=list(item.parsed.imports),
+                exports_json=list(item.parsed.exports),
+                references_json=[
+                    {
+                        "source_symbol": reference.source_symbol,
+                        "target": reference.target,
+                        "kind": reference.kind,
+                        "line": reference.line,
+                        "resolved": reference.resolved,
+                        "status": reference.status.value,
+                    }
+                    for reference in item.parsed.references
+                ],
+                relationships_json=[
+                    {
+                        "source_symbol": relation.source_symbol,
+                        "target": relation.target,
+                        "kind": relation.kind,
+                        "line": relation.line,
+                        "status": relation.status.value,
+                    }
+                    for relation in item.parsed.relationships
+                ],
+                content=content,
+            )
+        )
+        for symbol in item.parsed.symbols:
+            session.add(
+                IndexedSymbol(
+                    indexed_file_id=file_id,
+                    name=symbol.name,
+                    qualified_name=symbol.qualified_name,
+                    kind=symbol.kind.value,
+                    signature=symbol.signature,
+                    start_line=symbol.start_line,
+                    end_line=symbol.end_line,
+                )
+            )
+        session.execute(
+            text(
+                "INSERT INTO indexed_content_fts(index_version_id, file_id, path, content) "
+                "VALUES (:version, :file_id, :path, :content)"
+            ),
+            {
+                "version": version.id,
+                "file_id": file_id,
+                "path": path,
+                "content": content,
+            },
+        )
+
+    graph_started = time.monotonic()
+    version.index_duration_ms = int((graph_started - started) * 1000)
+    repository_map = build_repository_map(repository.id, workspace_snapshot)
+    for node in repository_map.nodes:
+        session.add(
+            GraphNodeRecord(
+                id=node.id,
+                index_version_id=version.id,
+                kind=node.kind,
+                label=node.label,
+                path=node.path,
+                symbol=node.symbol,
+                language=node.language,
+            )
+        )
+    for edge in repository_map.edges:
+        session.add(
+            GraphEdgeRecord(
+                id=edge.id,
+                index_version_id=version.id,
+                source=edge.source,
+                target=edge.target,
+                kind=edge.kind,
+                confirmed=edge.confirmed,
+            )
+        )
+    version.graph_duration_ms = int((time.monotonic() - graph_started) * 1000)
+    version.duration_ms = int((time.monotonic() - started) * 1000)
     session.commit()
     session.refresh(version)
     return version, repository_map
