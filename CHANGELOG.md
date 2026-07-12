@@ -77,7 +77,7 @@ repository state, not a published signed release.
 - The newest macOS build, packaged Sidecar health, native Tauri launch,
   authenticated connection, Settings, and Autofix Diagnostics are verified;
   status-item and notification-click interaction remain unverified.
-- Current branch verification records 268 Python, 60 TypeScript/Vitest, 22
+- Current branch verification records 269 Python, 60 TypeScript/Vitest, 22
   Rust passed (+1 ignored), five Playwright flows, a real DeepSeek synthetic
   temporary-repository Autofix E2E, and fresh macOS packaging. Source-bound
   Windows Autofix CI/artifacts remain pending.

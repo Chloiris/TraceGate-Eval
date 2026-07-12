@@ -127,8 +127,8 @@
     "playwright": 4,
     "current_autofix": {
       "status": "VERIFIED_MACOS",
-      "source_sha": "db627662dc8cfac311fd33069f48a0dcb987d5a6",
-      "python": 268,
+      "source_sha": "3f5edb099c132af97164d47f6dce8d2d5c3a02f3",
+      "python": 269,
       "typescript": 60,
       "rust": {
         "passed": 22,

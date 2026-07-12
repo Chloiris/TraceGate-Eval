@@ -4,7 +4,7 @@
 - Product version: `0.4.0`
 - Protected starting `main`: `a1dcd7d755c25e0f75aac499943a07b759ec30db`
 - Current development branch: `feat/coding-agent-autofix-loop`
-- Tested implementation source SHA: `db627662dc8cfac311fd33069f48a0dcb987d5a6`
+- Tested implementation source SHA: `3f5edb099c132af97164d47f6dce8d2d5c3a02f3`
 - Canonical facts: [`project-facts.yaml`](project-facts.yaml)
 
 This is the current-facing status page. Older source-bound evidence keeps its
@@ -95,7 +95,7 @@ Current macOS branch totals from `./scripts/test.sh` and `pnpm test:e2e`:
 
 | Suite | Current result |
 | --- | ---: |
-| Python | 268 passed |
+| Python | 269 passed |
 | Shared types | 15 passed |
 | API client | 17 passed |
 | Web/Vitest | 28 passed |

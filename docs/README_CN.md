@@ -173,7 +173,7 @@ Keychain 或 Windows Credential Manager 后清空输入；API/UI 只得到
 | Autofix 前的 macOS Review 路径 | `VERIFIED_MACOS` | 浏览器/API/SQLite、打包 arm64 Sidecar、受限桌面生命周期及一次真实 DeepSeek Review E2E；均有历史 Source-bound 记录。 |
 | Autofix 前的 Windows 交付 | `VERIFIED_WINDOWS_CI` | 自动测试、凭据库 Round Trip、Sidecar 健康检查和未签名 NSIS/MSI/Portable 构建。 |
 | Windows 图形界面验收 | `BLOCKED` | 未在真实 Windows 完成安装、WebView2、托盘、通知、自启动、单实例、清理和卸载。 |
-| macOS Autofix 工作流/API/UI | `VERIFIED_MACOS` | 268 个 Python、60 个 TypeScript/Vitest、22 个 Rust（另 1 个忽略）、5 条 fixture 标注的 Playwright，以及 Sidecar 健康检查、Tauri 构建和原生应用启动均通过。 |
+| macOS Autofix 工作流/API/UI | `VERIFIED_MACOS` | 269 个 Python、60 个 TypeScript/Vitest、22 个 Rust（另 1 个忽略）、5 条 fixture 标注的 Playwright，以及 Sidecar 健康检查、Tauri 构建和原生应用启动均通过。 |
 | 真实模型 Autofix E2E | `VERIFIED_MACOS` | 一次真实 DeepSeek 在明确标注的 synthetic 临时 Git 仓库达到 `RESOLVED`。 |
 | 真实公共 PR Autofix E2E | `BLOCKED` | 未选到同时具备可证明缺陷与稳定本地验证路径的小型公共 PR；没有拿随机 PR 冒充成功。 |
 
@@ -301,7 +301,7 @@ uv run python -m tracegate guardrails scan --strict
 
 不可变的 Autofix 前基线为 212 个 Python、30 个 TypeScript/Vitest、22 个
 通过的 Rust 测试（另有 1 个原生凭据变更测试显式 ignored）和 4 个
-Playwright 流程。当前 macOS 验证记录为 268 个 Python、60 个
+Playwright 流程。当前 macOS 验证记录为 269 个 Python、60 个
 TypeScript/Vitest、22 个 Rust 通过（另 1 个忽略）和 5 条 Playwright。
 Autofix Playwright 是明确标注的 UI fixture；独立真实模型记录使用 synthetic
 临时 Git 仓库。

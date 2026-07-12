@@ -199,7 +199,7 @@ Credential Manager, then cleared; the API and UI receive only
 | Pre-Autofix macOS review path | `VERIFIED_MACOS` | Browser/API/SQLite, packaged arm64 Sidecar, bounded desktop lifecycle, and one real DeepSeek review E2E. Historical source-bound records are linked below. |
 | Pre-Autofix Windows delivery | `VERIFIED_WINDOWS_CI` | Automated tests, secure-store round trip, Sidecar health, and unsigned NSIS/MSI/portable packaging at the recorded baseline SHA. |
 | Windows graphical acceptance | `BLOCKED` | No real Windows install, WebView2, tray, notification, autostart, single-instance, cleanup, or uninstall acceptance. |
-| Autofix workflow/API/UI on macOS | `VERIFIED_MACOS` | 268 Python, 60 TypeScript/Vitest, 22 Rust tests (+1 ignored), five fixture-labelled Playwright flows, packaged Sidecar health, Tauri build, and native app launch passed. |
+| Autofix workflow/API/UI on macOS | `VERIFIED_MACOS` | 269 Python, 60 TypeScript/Vitest, 22 Rust tests (+1 ignored), five fixture-labelled Playwright flows, packaged Sidecar health, Tauri build, and native app launch passed. |
 | Real-model Autofix E2E | `VERIFIED_MACOS` | One real DeepSeek run reached `RESOLVED` on an explicitly labelled synthetic temporary Git repository. |
 | Real public-PR Autofix E2E | `BLOCKED` | No small public PR with a defensible existing defect and stable local validation was selected; no random PR is presented as success evidence. |
 
@@ -342,7 +342,7 @@ uv run python -m tracegate guardrails scan --strict
 
 The immutable pre-Autofix baseline is 212 Python, 30 TypeScript/Vitest, 22
 passing Rust tests with one explicit native mutation test ignored, and four
-Playwright flows. Current macOS verification records 268 Python, 60
+Playwright flows. Current macOS verification records 269 Python, 60
 TypeScript/Vitest, 22 Rust passing plus one ignored, and five Playwright flows.
 The Autofix Playwright flow is a labelled UI fixture; the separate real-model
 record uses a synthetic temporary Git repository.
