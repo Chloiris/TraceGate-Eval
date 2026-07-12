@@ -37,9 +37,10 @@ state and use the persisted failed-run trace to explain the boundary.
    exact write confirmation gate.
 6. **Desktop/cross-platform (60 seconds).** Show the Tauri tray menu, native
    capability bridge, Sidecar lifecycle and the Windows build workflow. State
-   clearly that macOS packaging was run locally, while Windows Setup/portable
-   code remains `IMPLEMENTED_UNVERIFIED` until an owner-approved Windows CI run;
-   Windows notification/autostart installation remains a manual checklist.
+   clearly that macOS packaging was run locally and Windows CI produced and
+   hash-verified unsigned NSIS, MSI, and portable packages. Do not present that
+   CI result as Windows installation, tray, notification, autostart, or GUI
+   acceptance; those remain a manual checklist.
 
 ## Evidence ready for slides
 
@@ -48,19 +49,29 @@ state and use the persisted failed-run trace to explain the boundary.
 - [Eval Center screenshot](screenshots/p1-eval-center-macos.png)
 - [Registry screenshot](screenshots/p1-registry-macos.png)
 - [macOS verification](verification/p1-macos.md)
+- [Real-model macOS E2E](verification/real-model-e2e-macos.md)
+- [Windows CI verification](verification/windows-ci.md)
 - [Windows manual checklist](windows-manual-acceptance.md)
 
 ## Safe answers to likely questions
 
-- **“Is the semantic result real?”** Only when a real provider is configured.
-  Otherwise analysis fails explicitly; tests may inject doubles but production
-  cannot access them.
-- **“Is the Java graph precise?”** No. Python is precise for the implemented
-  symbols; JS/TS/Java are intentionally labelled partial. The UI shows the
-  parser capability rather than inflating it.
-- **“Did Windows pass?”** Workflow code exists and is locally linted. Without
-  an inspected runner artifact it is not `VERIFIED_WINDOWS_CI`, and CI would
-  still not mean Windows GUI/manual acceptance.
+- **“Is the semantic result real?”** One production-path DeepSeek run is
+  `VERIFIED_MACOS`: `psf/requests#7565` completed all six required stages
+  with 4 real model requests, 3 completed Tool Calls, 1 persisted Evidence,
+  1 Finding, and 7 Agent Trace rows. This proves execution/traceability, not
+  model accuracy. Without a configured provider, analysis still fails
+  explicitly; production does not substitute a test double or rule fallback.
+- **“Is the Java graph precise?”** No. Python is AST-backed but explicitly
+  bounded to the implemented symbol/reference subset; JS/TS/Java are
+  intentionally labelled partial or unsupported per capability. The UI shows
+  the parser capability rather than inflating it.
+- **“Did Windows pass?”** Yes for the exact automated build boundary: push run
+  [29163495677](https://github.com/Chloiris/TraceGate-Eval/actions/runs/29163495677)
+  and PR run
+  [29163496649](https://github.com/Chloiris/TraceGate-Eval/actions/runs/29163496649)
+  succeeded and the unsigned artifact was downloaded and hash-checked. No for
+  Windows GUI/manual acceptance, which still requires installation, tray,
+  notification, autostart, single-instance, WebView2, and uninstall checks.
 - **“Can the Agent edit or push?”** Read-only analysis is the default. Patch is
   disabled until a scoped exact confirmation; commit/comment/push are not
   automatic actions.

@@ -41,9 +41,11 @@ operating-system credential store. See
 [macOS P1 evidence](docs/verification/p1-macos.md).
 
 Windows x86_64 workflows build a native PyInstaller Sidecar, health-check it,
-and package unsigned NSIS/portable artifacts. No current Windows runner result
-or Windows GUI acceptance is claimed. The draft PR/workflow must be inspected
-again only with repository-owner approval.
+and package unsigned NSIS, MSI, and portable artifacts. The push and Pull
+Request workflows passed for commit
+`ef6c2f2fd49c57d06f4fa21784127e4f9b3bb904`; see the
+[Windows CI evidence](docs/verification/windows-ci.md). This proves the
+automated Windows build and packaging path, not Windows GUI/manual acceptance.
 
 ### Studio product surface
 
@@ -128,8 +130,11 @@ Windows build is performed on Windows, not by renaming a macOS binary:
 ```
 
 Or run the owner-approved `build-windows.yml` workflow. It is designed to
-produce an unsigned NSIS installer, portable archive, hashes, build info, and
-logs; no current Windows artifact is claimed.
+produce unsigned NSIS/MSI installers, a portable archive, hashes, build info,
+and logs. The verified run uploaded artifact
+`TraceGate-Studio-Windows-x86_64-unsigned-ef6c2f2fd49c57d06f4fa21784127e4f9b3bb904`
+(artifact ID `8251618586`). Installation and graphical behavior still require
+the separate [Windows manual checklist](docs/windows-manual-acceptance.md).
 
 GitHub credentials are optional for public read and required for private
 repositories/monitoring. Desktop credentials go to the OS secure store. A real
@@ -151,10 +156,19 @@ pnpm test:e2e
 uv run python scripts/benchmark_studio.py --files 100 1000
 ```
 
-The latest local pass recorded 159 Python tests, 20 TypeScript/Vitest tests, 20
-Rust tests, 4 Chrome E2E flows, a macOS arm64 `.app`/Sidecar health check, and a
-reproducible 100/1000-file smoke benchmark. See
-[implementation status](docs/implementation-status.md) and
+The verified Windows run passed 163 Python tests, 30 TypeScript/Vitest tests
+(5 shared types + 7 API client + 18 web), and 22 Rust tests with 1 explicit
+native secure-store mutation test ignored. The workflow then passed that
+Windows Credential Manager write/read/delete round-trip separately, 1/1. The
+macOS verification also passed 4 Chrome E2E flows, an arm64 `.app`/Sidecar
+health check, and a reproducible 100/1000-file smoke benchmark. A
+production-path DeepSeek run against
+`psf/requests#7565` made 4 real model requests and persisted Tool Calls,
+Evidence, a Finding, and Agent Trace; it is evidence of execution and
+traceability, not model-accuracy improvement. See
+[implementation status](docs/implementation-status.md),
+[Windows CI evidence](docs/verification/windows-ci.md),
+[real-model macOS E2E evidence](docs/verification/real-model-e2e-macos.md), and
 [performance results](docs/performance.md).
 
 Security boundaries include loopback-only bearer auth, exact CORS, OS secure
@@ -163,10 +177,17 @@ bounded commands/provider responses, HMAC/replay protection, prompt-injection
 separation, verifier checks, and redacted rotating JSON logs. Telemetry is off.
 See [security model](docs/security-model.md) and [privacy](docs/privacy.md).
 
-Known limitations: Python has precise AST definitions/ranges but only partial
-same-file direct-call and inheritance resolution. JavaScript, TypeScript and
-Java remain declaration-level partial adapters; they do **not** provide a
-semantic reference index or function call graph. Regex-only
+Known limitations: Python has AST-backed, bounded definitions/ranges and
+only partial same-file direct-call and inheritance resolution; shadowed or
+lexically invisible names—including module/local rebindings—remain unknown, and
+decorator/default-expression calls are not function-body call edges.
+JavaScript, TypeScript and Java remain declaration-level partial adapters.
+They mask comments and string/template literals before matching, but are not
+full grammar parsers and do **not** provide a semantic reference index or
+function call graph. CommonJS dependencies are not confirmed; JSX/TSX and Java
+Unicode-escape files are recognized but static extraction is withheld.
+Java explicit imports remain syntax-only until package/type targets can be
+validated, so they do not create confirmed file/test edges. Regex-only
 `extends`/`implements` observations are labelled `inferred` and cannot enter
 confirmed Repository/Review Map edges. Changed-symbol mapping is Head-side and
 does not reconstruct deleted symbols. See the audited

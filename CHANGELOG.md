@@ -21,6 +21,15 @@ repository state, not a published signed release.
   report export using unchanged 19-case/160-run artifacts.
 - Native Sidecar lifecycle, tray/single-instance/deep-link/autostart/
   notification code, macOS arm64 packaging, and Windows CI packaging workflow.
+- Verified one production-path DeepSeek E2E on `psf/requests#7565`, including 4
+  real model requests and persisted Tool Calls, Evidence, Finding, and Agent
+  Trace without storing the API key.
+- Verified Windows x86_64 CI compilation, 163 Python tests, 30
+  TypeScript/Vitest tests, and 22 passing Rust tests (1 explicit native
+  secure-store mutation test ignored in the ordinary suite), followed by a
+  passing explicit 1/1 Windows Credential Manager round-trip, authenticated
+  PyInstaller Sidecar health, and unsigned NSIS, MSI, and portable artifact
+  generation for commit `ef6c2f2fd49c57d06f4fa21784127e4f9b3bb904`.
 - Reproducible local performance smoke benchmark and product/interview/support
   documentation.
 
@@ -33,11 +42,13 @@ repository state, not a published signed release.
 
 ### Known limitations
 
-- No real model credential was available for a production LLM E2E in this pass.
-- GitHub remote synchronization was not rerun because remote access requires
-  explicit user permission.
-- Windows CI and Windows GUI acceptance are not verified.
+- The single real DeepSeek E2E verifies execution and trace persistence, not
+  comparative model accuracy or broad model quality.
+- Live GitHub OAuth Device Flow authorization remains unverified.
+- Windows CI is verified only for automated compilation, tests, Sidecar health,
+  and unsigned packaging. Installation, WebView2, tray, notification,
+  autostart, single-instance, background process, and uninstall behavior have
+  no real Windows GUI/manual acceptance evidence.
 - The newest macOS build started and its Sidecar passed lifecycle checks, but
   the local UI-control interface could not inspect a window/status item; tray
   clicking remains unverified.
-

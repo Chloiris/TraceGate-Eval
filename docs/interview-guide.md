@@ -102,21 +102,27 @@ Agent Evidence Graph to Evidence, Tool calls, and Agent steps.
 
 ## macOS development versus Windows delivery
 
-macOS can build and verify only the macOS arm64 Sidecar and `.app`. A Windows
-executable must be built by PyInstaller on `windows-latest`, renamed to the
-Tauri target triple, health-checked there, and bundled by Tauri into NSIS (and
-portable/optional MSI where supported). That CI result still does not prove
+macOS can build and verify only the macOS arm64 Sidecar and `.app`. The native
+Windows executable was built by PyInstaller on `windows-latest`, renamed to the
+Tauri target triple, health-checked there, and bundled by Tauri into unsigned
+NSIS, MSI, and portable packages. The successful CI result still does not prove
 tray, notification, autostart, install, or uninstall behavior in a real Windows
 GUI; those remain a separate manual checklist.
 
 ## Current limitations to state plainly
 
-- Real LLM E2E is blocked without a model credential.
-- No new remote GitHub sync/CI verification occurred without explicit user
-  permission.
-- Windows CI artifact and Windows GUI acceptance are unverified.
+- One real DeepSeek E2E is `VERIFIED_MACOS` for `psf/requests#7565`; it proves
+  production-path requests, Tool Calls, persistence, and traceability, not
+  comparative model accuracy or general quality.
+- Windows compilation, automated tests, Sidecar health, and unsigned package
+  creation are `VERIFIED_WINDOWS_CI` for commit
+  `ef6c2f2fd49c57d06f4fa21784127e4f9b3bb904`.
+- Windows installation, WebView2, tray, notification, autostart,
+  single-instance, background process, and uninstall behavior remain blocked
+  on real Windows GUI/manual evidence.
 - JavaScript/TypeScript/Java parsing is intentionally partial compared with the
-  precise Python path.
+  AST-backed, bounded Python path; Python also labels unsupported symbol kinds
+  and ambiguous resolution as partial/unknown.
 - Vector embeddings are not enabled; retrieval labels that absence.
 - Large graphs use caps/aggregation and do not claim full function rendering.
 - Latest macOS process/Sidecar startup and shutdown were verified, but GUI
@@ -127,8 +133,10 @@ GUI; those remain a separate manual checklist.
 - [`implementation-status.md`](implementation-status.md)
 - [`performance.md`](performance.md)
 - [`verification/p1-macos.md`](verification/p1-macos.md)
+- [`verification/real-model-e2e-macos.md`](verification/real-model-e2e-macos.md)
+- [`verification/windows-ci.md`](verification/windows-ci.md)
+- [`windows-manual-acceptance.md`](windows-manual-acceptance.md)
 - [`screenshots/p1-pr-diff-macos.png`](screenshots/p1-pr-diff-macos.png)
 - [`screenshots/p1-review-map-macos.png`](screenshots/p1-review-map-macos.png)
 - [`screenshots/p1-eval-center-macos.png`](screenshots/p1-eval-center-macos.png)
 - [`screenshots/p1-registry-macos.png`](screenshots/p1-registry-macos.png)
-

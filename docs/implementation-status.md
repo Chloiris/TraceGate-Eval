@@ -1,6 +1,6 @@
 # TraceGate Studio implementation status
 
-- Last updated: 2026-07-11
+- Last updated: 2026-07-12
 - Branch: `feat/tracegate-studio-fullstack`
 - Status owner: TraceGate maintainers
 
@@ -22,12 +22,12 @@
 
 | Feature | Status | Evidence / note |
 | --- | --- | --- |
-| Existing suite plus Studio tests | VERIFIED_MACOS | 159 Python tests, 20 TypeScript/Vitest tests, 20 Rust tests (1 explicit secure-store mutation ignored), and 4 Chrome Playwright flows; original Eval coverage remains intact |
+| Existing suite plus Studio tests | VERIFIED_MACOS / VERIFIED_WINDOWS_CI | Windows CI passed 163 Python tests, 30 TypeScript/Vitest tests (5 shared types + 7 API client + 18 web), and 22 Rust tests (1 explicit native secure-store mutation ignored); macOS also passed 4 Chrome Playwright flows; original Eval coverage remains intact; see `verification/windows-ci.md` |
 | ClaimBench controlled benchmark | VERIFIED_MACOS | Existing tests and checked-in 160-run reports; metric definitions unchanged |
 | Real-PR hard benchmark | VERIFIED_MACOS | Existing tests and checked-in 19 scored cases |
 | EvidencePacket and redaction | VERIFIED_MACOS | Existing `tests/test_pr_advisor.py` |
 | Semantic verifier/guardrails | VERIFIED_MACOS | Existing tests; strict scan reports 0 dangerous runtime paths |
-| Real DeepSeek semantic execution | VERIFIED_MACOS | Keychain credential injected without logging; `psf/requests#7565` completed 7 workflow steps, 4 real model requests, 3 Tool Calls, 1 Evidence and 1 Finding; see `docs/verification/real-model-e2e-macos.md` |
+| Real DeepSeek semantic execution | VERIFIED_MACOS | One Keychain-injected `deepseek-chat` run on `psf/requests#7565` completed all six required stages with 7 persisted Agent Trace rows, 4 real model requests, 3 Tool Calls, 1 Evidence and 1 Finding without logging the key; Run ID `f3273e5e-ef34-4370-800d-63ee107fd7a4`; see `verification/real-model-e2e-macos.md` |
 
 ## P0: foundation and desktop loop
 
@@ -36,10 +36,10 @@
 | Repository audit and baseline | VERIFIED_MACOS | `docs/current-baseline.md` plus recorded commands |
 | Architecture decision | VERIFIED_MACOS | ADR boundaries were exercised by the packaged macOS app; see `docs/verification/p0-macos.md` |
 | Development branch | VERIFIED_MACOS | `feat/tracegate-studio-fullstack` created from `76a23ab` |
-| Monorepo workspace and locked Node dependencies | VERIFIED_MACOS | pnpm workspace, `pnpm-lock.yaml`, frozen install and 14 tests |
+| Monorepo workspace and locked Node dependencies | VERIFIED_MACOS / VERIFIED_WINDOWS_CI | pnpm workspace and `pnpm-lock.yaml`; Windows frozen install passed all 30 TypeScript/Vitest tests |
 | Locked Python environment | VERIFIED_MACOS | `uv.lock`; frozen uv environment used for tests and packaging |
 | React + strict TypeScript browser client | VERIFIED_MACOS | Dashboard plus P1 product pages exercised by Chrome Playwright; see `docs/verification/p1-macos.md` |
-| Typed API client and shared types | VERIFIED_MACOS | Zod-validated client; 12 package tests plus 8 web/unit integration tests |
+| Typed API client and shared types | VERIFIED_MACOS / VERIFIED_WINDOWS_CI | Zod-validated client; Windows CI passed 12 package tests plus 18 web tests |
 | FastAPI `/api/v1` service | VERIFIED_MACOS | Authenticated API tests and real browser/desktop process |
 | Local API authentication and CORS | VERIFIED_MACOS | Auth/CORS tests plus Tauri-origin runtime verification |
 | SQLAlchemy 2 persistence | VERIFIED_MACOS | Studio models and API persistence tests |
@@ -49,7 +49,8 @@
 | System status API | VERIFIED_MACOS | Explicit ready/not-configured/unavailable states tested and rendered |
 | Diagnostics API/page | VERIFIED_MACOS | Redacted runtime/storage/queue/update state plus GitHub/index/graph/model/retrieval/notification metrics are API-tested and browser-rendered |
 | Non-secret settings persistence | VERIFIED_MACOS | Theme/language/background choices persist; API never accepts a secret |
-| Platform secure credential storage | VERIFIED_MACOS | Native Keychain round-trip passed and deleted its verification entry; Windows code awaits CI |
+| macOS secure credential storage | VERIFIED_MACOS | Native Keychain round-trip passed and deleted its verification entry |
+| Windows Credential Manager secure storage | VERIFIED_WINDOWS_CI | The ordinary Rust suite passed 22 tests with the mutation test ignored, then run `29163495677` explicitly reran `native_secure_store_round_trip -- --ignored` and passed its native write/read/delete cycle 1/1; this is automated runner evidence, not Windows GUI/manual acceptance |
 | Python Sidecar entry and health check | VERIFIED_MACOS | Independent and packaged authenticated health checks passed |
 | macOS arm64 PyInstaller Sidecar | VERIFIED_MACOS | Native Mach-O artifact built, authenticated-health-checked and bundled on 2026-07-10 |
 | Tauri 2 shell | VERIFIED_MACOS | Latest packaged `.app` launched with one Tauri owner and real Sidecar; logs show migration, `api_ready`, graceful shutdown and no orphan process |
@@ -58,10 +59,11 @@
 | True quit stops Sidecar | VERIFIED_MACOS | Desktop plus PyInstaller bootloader/worker all disappeared after Quit |
 | Single-instance foundation | VERIFIED_MACOS | Repeated native launch retained one application/Sidecar owner |
 | Browser development mode | VERIFIED_MACOS | Browser UI exercised against real authenticated API |
-| Windows x86_64 build workflow | IMPLEMENTED_UNVERIFIED | `build-windows.yml` is actionlint-clean; no runner execution yet |
-| Windows Sidecar health check in CI | IMPLEMENTED_UNVERIFIED | Authenticated loopback check is in workflow/script; no CI run yet |
-| Windows NSIS Setup.exe artifact | IMPLEMENTED_UNVERIFIED | Native Windows build/package gate exists; no artifact exists yet |
-| Windows portable archive | IMPLEMENTED_UNVERIFIED | Workflow packages executable plus Sidecar; no CI artifact exists yet |
+| Windows x86_64 build workflow | VERIFIED_WINDOWS_CI | Push run [29163495677](https://github.com/Chloiris/TraceGate-Eval/actions/runs/29163495677) and PR run [29163496649](https://github.com/Chloiris/TraceGate-Eval/actions/runs/29163496649) succeeded for commit `ef6c2f2fd49c57d06f4fa21784127e4f9b3bb904`; see `verification/windows-ci.md` |
+| Windows Sidecar health check in CI | VERIFIED_WINDOWS_CI | PyInstaller produced `tracegate-backend.exe` and the Windows runner passed its authenticated loopback health check |
+| Windows NSIS Setup.exe artifact | VERIFIED_WINDOWS_CI | Unsigned `TraceGate-Studio-Setup.exe` was produced, hashed, uploaded, and downloaded for hash/format inspection; this is not installation evidence |
+| Windows MSI artifact | VERIFIED_WINDOWS_CI | Unsigned `TraceGate-Studio.msi` was produced, hashed, uploaded, and downloaded for hash/format inspection; this is not installation evidence |
+| Windows portable archive | VERIFIED_WINDOWS_CI | `TraceGate-Studio-portable-x86_64.zip` contains `tracegate-studio.exe` and `tracegate-backend.exe`; archive hash verified after download |
 | Windows desktop manual acceptance | BLOCKED | No real Windows graphical environment/evidence is available |
 
 ## P1: coding-agent product loop
@@ -120,7 +122,7 @@ The reproducible smoke record in `docs/performance.md` measured 100/1000-file
 production index/graph paths, Review Map, a 157 ms browser data-ready wall-clock
 upper bound, and five 0.1% idle Python-worker CPU samples. A subsequent real
 DeepSeek PR-analysis run measured 12,362 ms end-to-end and 11,998 ms of model
-latency; see `docs/verification/real-model-e2e-macos.md`. Windows performance
+latency; see `verification/real-model-e2e-macos.md`. Windows performance
 remains outside the current Mac verification boundary.
 
 ## P3: explicitly deferred interfaces
@@ -148,14 +150,22 @@ item, so direct tray restore and notification click remain
 
 ### Windows x86_64 CI
 
-Studio Windows workflow code exists and passes local YAML/actionlint checks,
-but no workflow run exists yet. Nothing is marked `VERIFIED_WINDOWS_CI`.
+Commit `ef6c2f2fd49c57d06f4fa21784127e4f9b3bb904` passed the push and Pull
+Request Windows workflows on `windows-latest`. The runner passed 163 Python,
+30 TypeScript/Vitest, and 22 Rust tests (with 1 native secure-store test ignored
+in the ordinary suite), then passed that native Credential Manager round-trip
+in a separate explicit 1/1 invocation, authenticated the PyInstaller Sidecar
+health endpoint, and produced unsigned NSIS, MSI, and portable packages.
+Artifact `TraceGate-Studio-Windows-x86_64-unsigned-ef6c2f2fd49c57d06f4fa21784127e4f9b3bb904`
+(ID `8251618586`) contains the packages, `SHA256SUMS.txt`, `build-info.json`,
+and `test-summary.txt`. Exact runs, hashes, retention, and download evidence are
+recorded in [`verification/windows-ci.md`](verification/windows-ci.md).
 
 ### Windows graphical manual acceptance
 
-No manual evidence exists. All installation, WebView2, tray, notification,
+No manual evidence exists. Installation, WebView2, tray, notification,
 autostart, single-instance, background process and uninstall checks remain
-`BLOCKED` or `NOT_STARTED`; none are `VERIFIED_WINDOWS_MANUAL`.
+`BLOCKED` or `IMPLEMENTED_UNVERIFIED`; none are `VERIFIED_WINDOWS_MANUAL`.
 
 ## Status update rule
 
