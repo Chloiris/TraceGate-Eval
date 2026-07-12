@@ -227,6 +227,31 @@ def test_ecmascript_adapters_report_only_partial_declarations(
     )
 
 
+@pytest.mark.parametrize(
+    ("language", "extension"),
+    (("javascript", "js"), ("typescript", "ts")),
+)
+def test_ecmascript_crlf_preserves_confirmed_import_and_test_edges(
+    tmp_path: Path,
+    language: str,
+    extension: str,
+) -> None:
+    workspace = _repository(tmp_path, language)
+    for source in workspace.rglob(f"*.{extension}"):
+        normalized = (
+            source.read_bytes().replace(b"\r\n", b"\n").replace(b"\r", b"\n")
+        )
+        source.write_bytes(normalized.replace(b"\n", b"\r\n"))
+
+    snapshot = RepositoryIndexer(RepositoryBoundary(workspace)).build()
+    parsed = snapshot.files[f"src/service.{extension}"].parsed
+    repository_map = build_repository_map(f"crlf-{language}", snapshot)
+
+    assert parsed.imports
+    assert any(edge.kind == "import" for edge in repository_map.edges)
+    assert any(edge.kind == "test" for edge in repository_map.edges)
+
+
 def test_typescript_interface_is_detected_but_not_semantically_resolved(tmp_path: Path) -> None:
     workspace = _repository(tmp_path, "typescript")
     parsed = UnifiedCodeParser().parse(

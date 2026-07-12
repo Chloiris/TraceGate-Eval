@@ -836,6 +836,7 @@ class UnifiedCodeParser:
         return _EXTENSIONS.get(path.suffix.casefold())
 
     def parse(self, relative_path: str, content: str) -> ParsedFile:
+        content = content.replace("\r\n", "\n").replace("\r", "\n")
         language = self.language_for(Path(relative_path))
         if language is None:
             return ParsedFile(
