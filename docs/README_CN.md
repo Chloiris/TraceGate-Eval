@@ -23,9 +23,11 @@
 Studio 把 React 界面、受认证 FastAPI Sidecar、Commit 绑定的代码智能、
 可观察 LangGraph 工作流、受控工具和 Tauri 2 组合在一起。版本 `0.4.0`
 新增独立的受控 Autofix 路径：它可以提出和验证 Patch，但不能静默修改
-用户原工作区或向远程 Push。当前功能分支已完成 macOS 全量测试、原生打包、
-限定范围的真实模型运行，以及 Source-bound Windows CI/打包；公共 PR Fix
-证据与 Windows 图形界面验收仍明确为 `BLOCKED`。
+用户原工作区或向远程 Push。PR
+[#17](https://github.com/Chloiris/TraceGate-Eval/pull/17) 已合并到 `main`；
+Source-bound 实现已完成 macOS 全量测试、原生打包、限定范围的真实模型运行，
+以及自动化 Windows CI/打包。公共 PR Fix 证据与 Windows 图形界面验收仍明确
+为 `BLOCKED`。
 
 ## 2. 为什么需要 TraceGate
 
@@ -176,7 +178,7 @@ Keychain 或 Windows Credential Manager 后清空输入；API/UI 只得到
 | Windows 图形界面验收 | `BLOCKED` | 未在真实 Windows 完成安装、WebView2、托盘、通知、自启动、单实例、清理和卸载。 |
 | macOS Autofix 工作流/API/UI | `VERIFIED_MACOS` | 269 个 Python、60 个 TypeScript/Vitest、22 个 Rust（另 1 个忽略）、5 条 fixture 标注的 Playwright，以及 Sidecar 健康检查、Tauri 构建和原生应用启动均通过。 |
 | 真实模型 Autofix E2E | `VERIFIED_MACOS` | 一次真实 DeepSeek 在明确标注的 synthetic 临时 Git 仓库达到 `RESOLVED`。 |
-| Autofix Windows 构建 | `VERIFIED_WINDOWS_CI` | Source-bound Run `29196292381` 通过 269 个 Python、60 个 TypeScript、22 个 Rust（另 1 个忽略）、PyInstaller Sidecar 健康检查、Tauri NSIS/MSI 与 Portable 打包；这不是 GUI 验收。 |
+| Autofix Windows 构建 | `VERIFIED_WINDOWS_CI` | 合并后 `main` Run [`29197940209`](https://github.com/Chloiris/TraceGate-Eval/actions/runs/29197940209) 通过 269 个 Python、60 个 TypeScript、22 个 Rust（另 1 个忽略）、PyInstaller Sidecar 健康检查、Tauri NSIS/MSI 与 Portable 打包；这不是 GUI 验收。 |
 | 真实公共 PR Autofix E2E | `BLOCKED` | 未选到同时具备可证明缺陷与稳定本地验证路径的小型公共 PR；没有拿随机 PR 冒充成功。 |
 
 Autofix fixture 截图：

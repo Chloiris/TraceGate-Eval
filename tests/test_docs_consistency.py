@@ -10,6 +10,7 @@ sys.path.insert(0, str(REPOSITORY_ROOT))
 from scripts.check_docs_consistency import (
     ROOT,
     check_current_document_claims,
+    check_delivery_document_facts,
     check_historical_markers,
     check_readme_structure_and_autofix,
     check_relative_links,
@@ -46,6 +47,28 @@ def test_project_facts_schema_rejects_autofix_node_endpoint_and_resolution_drift
     assert any("exactly 11 nodes" in error for error in errors)
     assert any("resolutions" in error for error in errors)
     assert any("autofix_api.endpoint_count" in error for error in errors)
+
+
+def test_project_facts_schema_keeps_delivery_sha_and_windows_evidence_distinct() -> None:
+    facts = deepcopy(load_facts(ROOT))
+    facts["merged_delivery"]["pr_merge_ref_sha"] = facts["merged_delivery"]["main_sha"]
+    facts["latest_windows_ci"]["event"] = "pull_request"
+    facts["latest_windows_ci"]["artifact_id"] = "8261513802"
+
+    errors = validate_facts_schema(facts)
+
+    assert any("must remain distinct" in error for error in errors)
+    assert any("post-merge main push run" in error for error in errors)
+    assert any("artifact_id must be an integer" in error for error in errors)
+
+
+def test_delivery_document_check_rejects_drift_from_canonical_facts() -> None:
+    facts = deepcopy(load_facts(ROOT))
+    facts["latest_windows_ci"]["artifact_id"] = 99999999999
+
+    errors = check_delivery_document_facts(ROOT, facts)
+
+    assert any("missing current delivery fact: '99999999999'" in error for error in errors)
 
 
 def test_relative_link_check_covers_markdown_and_html(tmp_path: Path) -> None:

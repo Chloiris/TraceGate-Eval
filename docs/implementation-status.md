@@ -2,13 +2,24 @@
 
 - Last updated: 2026-07-12
 - Product version: `0.4.0`
-- Protected starting `main`: `a1dcd7d755c25e0f75aac499943a07b759ec30db`
-- Current development branch: `feat/coding-agent-autofix-loop`
-- Tested implementation source SHA: `69402dd7d570b64a36fba883f98b540f8a893ee5`
+- Current branch: `main`
+- Current `main` SHA at this post-PR-#17 audit boundary:
+  `35bc8caf66dcc61b6f1559e26405980b4ff1ae5d`
+- Merged delivery PR: [#17](https://github.com/Chloiris/TraceGate-Eval/pull/17)
+- Feature branch: `feat/coding-agent-autofix-loop` — merged / historical
+- Pre-Autofix baseline main SHA: `a1dcd7d755c25e0f75aac499943a07b759ec30db`
+- Source-bound tested implementation SHA: `69402dd7d570b64a36fba883f98b540f8a893ee5`
+- PR head SHA: `74e457704f431bc21ad5b1d29fbfc475fa077be7`
+- PR CI merge-ref SHA: `456c0914cd214961b9c4265b239e74eb00a6e390`
+- Latest post-merge Windows Run: [29197940209](https://github.com/Chloiris/TraceGate-Eval/actions/runs/29197940209)
+- Latest Windows Artifact: `8261706447` —
+  `TraceGate-Studio-Windows-x86_64-unsigned-35bc8caf66dcc61b6f1559e26405980b4ff1ae5d`
 - Canonical facts: [`project-facts.yaml`](project-facts.yaml)
 
 This is the current-facing status page. Older source-bound evidence keeps its
 original SHA/run and carries a **Historical verification record** marker.
+The documentation-only finalization PR can advance `main`; that later Git
+commit does not replace the PR #17 delivery SHA or source-bound runtime evidence.
 
 ## Status definitions
 
@@ -44,7 +55,7 @@ original SHA/run and carries a **Historical verification record** marker.
 | Rollback/cleanup | `VERIFIED_MACOS` | Real run recorded rollback and deletion; native Diagnostics showed no residual managed workspace. |
 | Real-model Autofix E2E | `VERIFIED_MACOS` | Real DeepSeek reached `RESOLVED` on an explicitly labelled synthetic temporary Git repository; public-PR Fix E2E is `BLOCKED`. |
 | macOS package with Autofix | `VERIFIED_MACOS` | PyInstaller Sidecar health, Tauri `.app`, native authenticated launch, Settings/Diagnostics and unsigned arm64 ZIP SHA were verified locally. |
-| Windows CI with Autofix | `VERIFIED_WINDOWS_CI` | Run `29196292381`: 269 Python, 60 TypeScript, 22 Rust + 1 ignored, PyInstaller Sidecar health, Tauri NSIS/MSI, portable ZIP, checksums and metadata passed. |
+| Windows CI with Autofix | `VERIFIED_WINDOWS_CI` | Post-merge `main` Run `29197940209`: 269 Python, 60 TypeScript, 22 Rust + 1 ignored, PyInstaller Sidecar health, Tauri NSIS/MSI, portable ZIP, checksums and metadata passed. |
 | Windows Autofix GUI/manual | `BLOCKED` | No real Windows graphical target is available. |
 
 Focused test sources are `tests/test_autofix_safety.py`,
@@ -71,7 +82,8 @@ counts below are copied from the completed matrix.
 | macOS arm64 baseline product path | `VERIFIED_MACOS` | Historical browser/API/SQLite, packaged Sidecar, secure-store and bounded desktop lifecycle evidence at the pre-Autofix source SHA. Direct status-item and notification-click acceptance remain excluded. |
 | Windows x86-64 baseline CI | `VERIFIED_WINDOWS_CI` | Historical run `29185555800`, artifact `8258026173`: automated tests, Credential Manager round trip, authenticated Sidecar health, unsigned Setup.exe/MSI/portable ZIP, checksums, build metadata. |
 | macOS Autofix package | `VERIFIED_MACOS` | `TraceGate Studio.app` launched natively and connected to its authenticated packaged Sidecar; ZIP SHA-256 `bbb08229fdcdd7f1757c87a066bc80112974b7297e72bd1f4f13e318ae2af527`. |
-| Windows Autofix CI/package | `VERIFIED_WINDOWS_CI` | Run `29196292381`, artifact `8261244145`; Setup.exe, MSI, portable ZIP and checksums were downloaded and revalidated. |
+| Windows Autofix CI/package | `VERIFIED_WINDOWS_CI` | Post-merge `main` Run `29197940209`, Artifact `8261706447`; Setup.exe, MSI, portable ZIP and checksums were downloaded and revalidated. |
+| Historical source-bound Windows Autofix CI | `VERIFIED_WINDOWS_CI` | Historical Run `29196292381`, Artifact `8261244145`; preserved as implementation-source evidence, not current delivery metadata. |
 | Windows installation and GUI | `BLOCKED` | Installer, WebView2, tray, notifications, autostart, single instance, hidden monitoring, true quit, uninstall and residue require the real target checklist. |
 
 The current Autofix artifact is recorded in
@@ -91,7 +103,8 @@ The clean starting `main` ran:
 | Rust | 22 passed; 1 explicit native mutation test ignored |
 | Playwright | 4 flows in the recorded baseline |
 
-Current macOS branch totals from `./scripts/test.sh` and `pnpm test:e2e`:
+Current source-bound implementation totals from `./scripts/test.sh` and
+`pnpm test:e2e`:
 
 | Suite | Current result |
 | --- | ---: |
