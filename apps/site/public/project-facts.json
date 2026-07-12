@@ -1,0 +1,58 @@
+{
+  "productName": "TraceGate Studio",
+  "repositoryName": "TraceGate-Eval",
+  "version": "0.4.0",
+  "review": {
+    "nodeCount": 7,
+    "nodes": [
+      "Planner",
+      "Repository Retriever",
+      "Context Resolver",
+      "Code Analyst",
+      "Risk Reviewer",
+      "Verifier",
+      "Report Composer"
+    ]
+  },
+  "autofix": {
+    "nodeCount": 11,
+    "nodes": [
+      "LOAD_FINDING",
+      "CHECK_FIX_ELIGIBILITY",
+      "PLAN_FIX",
+      "GENERATE_PATCH",
+      "VALIDATE_PATCH",
+      "AWAIT_USER_CONFIRMATION",
+      "APPLY_PATCH",
+      "RUN_VALIDATION",
+      "REINDEX_CHANGES",
+      "RE_REVIEW",
+      "FINALIZE"
+    ],
+    "resolutions": [
+      "RESOLVED",
+      "PARTIALLY_RESOLVED",
+      "NOT_RESOLVED",
+      "VERIFICATION_FAILED",
+      "NEEDS_HUMAN_REVIEW"
+    ]
+  },
+  "tools": 19,
+  "tests": {
+    "python": 269,
+    "typescript": 60,
+    "rust": 22,
+    "rustIgnored": 1,
+    "playwright": 5,
+    "sourceSha": "69402dd7d570b64a36fba883f98b540f8a893ee5"
+  },
+  "benchmark": {
+    "publicPrCases": 19,
+    "claimbenchRuns": 160
+  },
+  "verification": {
+    "macos": "VERIFIED_MACOS",
+    "windowsCi": "VERIFIED_WINDOWS_CI",
+    "windowsManual": "BLOCKED"
+  }
+}

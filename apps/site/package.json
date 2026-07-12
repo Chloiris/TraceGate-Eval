@@ -1,0 +1,43 @@
+{
+  "name": "@tracegate/site",
+  "version": "0.4.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "facts": "node scripts/generate-project-facts.mjs",
+    "assets": "node scripts/optimize-assets.mjs",
+    "predev": "pnpm facts",
+    "dev": "vite --host 127.0.0.1 --port 4173",
+    "lint": "eslint src e2e vite.config.ts playwright.site.config.ts --max-warnings 0",
+    "typecheck": "tsc -p tsconfig.json",
+    "pretest": "pnpm facts",
+    "test": "vitest run",
+    "prebuild": "pnpm facts",
+    "build": "vite build",
+    "preview": "vite preview --host 127.0.0.1 --port 4174",
+    "test:e2e": "playwright test --config playwright.site.config.ts",
+    "capture": "TRACEGATE_SITE_CAPTURE=1 playwright test --config playwright.site.config.ts",
+    "lighthouse": "node scripts/run-lighthouse.mjs"
+  },
+  "dependencies": {
+    "motion": "^12.23.26",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.61.1",
+    "@testing-library/jest-dom": "^6.9.0",
+    "@testing-library/react": "^16.3.0",
+    "@testing-library/user-event": "^14.6.0",
+    "@types/node": "^24.0.0",
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0",
+    "@vitejs/plugin-react": "^5.1.0",
+    "chrome-launcher": "^1.0.0",
+    "jsdom": "^27.0.0",
+    "lighthouse": "^13.0.1",
+    "sharp": "^0.34.5",
+    "vite": "^7.2.0",
+    "vitest": "^4.0.0"
+  }
+}

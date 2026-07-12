@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://tracegate.chlogonia.xyz/sitemap.xml

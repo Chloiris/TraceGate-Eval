@@ -14,7 +14,17 @@
     "typecheck": "pnpm -r --if-present typecheck",
     "test": "pnpm -r --if-present test",
     "test:e2e": "playwright test",
-    "build": "pnpm --filter @tracegate/web... build && pnpm --filter @tracegate/desktop build"
+    "build": "pnpm --filter @tracegate/web... build && pnpm --filter @tracegate/desktop build",
+    "site:dev": "pnpm --filter @tracegate/site dev",
+    "site:lint": "pnpm --filter @tracegate/site lint",
+    "site:typecheck": "pnpm --filter @tracegate/site typecheck",
+    "site:test": "pnpm --filter @tracegate/site test",
+    "site:build": "pnpm --filter @tracegate/site build",
+    "site:preview": "pnpm --filter @tracegate/site preview",
+    "site:test:e2e": "pnpm --filter @tracegate/site test:e2e",
+    "site:lighthouse": "pnpm --filter @tracegate/site lighthouse",
+    "site:assets": "pnpm --filter @tracegate/site assets",
+    "site:deploy": "./scripts/deploy-site.sh"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.0",
