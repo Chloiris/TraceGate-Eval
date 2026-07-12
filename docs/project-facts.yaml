@@ -127,7 +127,7 @@
     "playwright": 4,
     "current_autofix": {
       "status": "VERIFIED_MACOS",
-      "source_sha": "3f5edb099c132af97164d47f6dce8d2d5c3a02f3",
+      "source_sha": "69402dd7d570b64a36fba883f98b540f8a893ee5",
       "python": 269,
       "typescript": 60,
       "rust": {
@@ -290,6 +290,23 @@
         "test-summary.txt"
       ],
       "note": "The cited baseline run produced the MSI; the workflow copies it only when Tauri emits it."
+    },
+    "autofix_windows_x86_64": {
+      "status": "VERIFIED_WINDOWS_CI",
+      "unsigned": true,
+      "source_sha": "69402dd7d570b64a36fba883f98b540f8a893ee5",
+      "workflow_run_id": 29196292381,
+      "artifact_id": 8261244145,
+      "artifact_name": "TraceGate-Studio-Windows-x86_64-unsigned-42dca4ac37e4e8da5b8251e0088c922b5fe6e51d",
+      "files": [
+        "TraceGate-Studio-Setup.exe",
+        "TraceGate-Studio.msi",
+        "TraceGate-Studio-portable-x86_64.zip",
+        "SHA256SUMS.txt",
+        "build-info.json",
+        "test-summary.txt"
+      ],
+      "note": "Automated unsigned Windows evidence only; manual graphical acceptance remains BLOCKED."
     }
   },
   "current_limitations": [
@@ -390,6 +407,12 @@
       "status": "VERIFIED_MACOS",
       "scope": "Production-path real DeepSeek Review + Autofix on an explicitly labelled synthetic temporary Git repository; public-PR Fix E2E remains BLOCKED",
       "historical": false
+    },
+    {
+      "path": "docs/verification/windows-autofix-ci.md",
+      "status": "VERIFIED_WINDOWS_CI",
+      "scope": "Source-bound Autofix Windows tests, Sidecar health, Tauri NSIS/MSI and portable packaging; no GUI/manual acceptance",
+      "historical": false
     }
   ],
   "documentation_policy": {
@@ -421,6 +444,7 @@
       "docs/autofix-guide.md",
       "docs/autofix-safety.md",
       "docs/verification/real-autofix-e2e-macos.md",
+      "docs/verification/windows-autofix-ci.md",
       "docs/architecture/ADR-003-autofix-workflow.md",
       "docs/doc-consistency-audit.md",
       "SECURITY.md",

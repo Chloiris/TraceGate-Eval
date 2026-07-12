@@ -4,7 +4,7 @@
 - Product version: `0.4.0`
 - Protected starting `main`: `a1dcd7d755c25e0f75aac499943a07b759ec30db`
 - Current development branch: `feat/coding-agent-autofix-loop`
-- Tested implementation source SHA: `3f5edb099c132af97164d47f6dce8d2d5c3a02f3`
+- Tested implementation source SHA: `69402dd7d570b64a36fba883f98b540f8a893ee5`
 - Canonical facts: [`project-facts.yaml`](project-facts.yaml)
 
 This is the current-facing status page. Older source-bound evidence keeps its
@@ -44,7 +44,7 @@ original SHA/run and carries a **Historical verification record** marker.
 | Rollback/cleanup | `VERIFIED_MACOS` | Real run recorded rollback and deletion; native Diagnostics showed no residual managed workspace. |
 | Real-model Autofix E2E | `VERIFIED_MACOS` | Real DeepSeek reached `RESOLVED` on an explicitly labelled synthetic temporary Git repository; public-PR Fix E2E is `BLOCKED`. |
 | macOS package with Autofix | `VERIFIED_MACOS` | PyInstaller Sidecar health, Tauri `.app`, native authenticated launch, Settings/Diagnostics and unsigned arm64 ZIP SHA were verified locally. |
-| Windows CI with Autofix | `PENDING` | Requires final source-bound Python/TS/Rust/security/Sidecar/package run and artifact record. |
+| Windows CI with Autofix | `VERIFIED_WINDOWS_CI` | Run `29196292381`: 269 Python, 60 TypeScript, 22 Rust + 1 ignored, PyInstaller Sidecar health, Tauri NSIS/MSI, portable ZIP, checksums and metadata passed. |
 | Windows Autofix GUI/manual | `BLOCKED` | No real Windows graphical target is available. |
 
 Focused test sources are `tests/test_autofix_safety.py`,
@@ -71,12 +71,12 @@ counts below are copied from the completed matrix.
 | macOS arm64 baseline product path | `VERIFIED_MACOS` | Historical browser/API/SQLite, packaged Sidecar, secure-store and bounded desktop lifecycle evidence at the pre-Autofix source SHA. Direct status-item and notification-click acceptance remain excluded. |
 | Windows x86-64 baseline CI | `VERIFIED_WINDOWS_CI` | Historical run `29185555800`, artifact `8258026173`: automated tests, Credential Manager round trip, authenticated Sidecar health, unsigned Setup.exe/MSI/portable ZIP, checksums, build metadata. |
 | macOS Autofix package | `VERIFIED_MACOS` | `TraceGate Studio.app` launched natively and connected to its authenticated packaged Sidecar; ZIP SHA-256 `bbb08229fdcdd7f1757c87a066bc80112974b7297e72bd1f4f13e318ae2af527`. |
-| Windows Autofix CI/package | `PENDING` | Fresh workflow/artifact required after push. |
+| Windows Autofix CI/package | `VERIFIED_WINDOWS_CI` | Run `29196292381`, artifact `8261244145`; Setup.exe, MSI, portable ZIP and checksums were downloaded and revalidated. |
 | Windows installation and GUI | `BLOCKED` | Installer, WebView2, tray, notifications, autostart, single instance, hidden monitoring, true quit, uninstall and residue require the real target checklist. |
 
-Historical artifact identifiers above are not version `0.4.0` Autofix delivery
-evidence. New run URLs and artifact names must be source-bound in the final
-verification report.
+The current Autofix artifact is recorded in
+[`verification/windows-autofix-ci.md`](verification/windows-autofix-ci.md).
+It is unsigned automated evidence and does not establish Windows GUI acceptance.
 
 ## Executable baseline and current totals
 
@@ -103,7 +103,8 @@ Current macOS branch totals from `./scripts/test.sh` and `pnpm test:e2e`:
 | Playwright | 5 passed |
 
 Docs consistency, lint, typecheck, Rust fmt/clippy and native packaging also
-passed. Remote Windows totals remain pending until the source-bound workflow.
+passed. The same aggregate matrix and package gates passed on the source-bound
+Windows workflow.
 
 ## Parser and graph boundary
 
@@ -141,16 +142,19 @@ See [`autofix-safety.md`](autofix-safety.md).
 | Cloud synchronization | `NOT_STARTED` |
 | Automatic external commit/push/comment/merge | Out of scope by safety decision |
 
-## Dynamic evidence required before release claim
+## Completed delivery evidence
 
-- final feature commit and Draft PR URL;
-- complete local test totals and timings;
+- feature source commit and Pull Request URL;
+- complete local test totals;
 - real-model Autofix scope, model, Fix Session ID, Tool Calls, token/latency,
   Patch Hash, changed files/lines, commands/return codes, re-review, resolution,
   authoritative files, rollback/cleanup;
 - macOS Sidecar/Tauri build and runtime result;
 - Windows workflow URL, per-job status, artifact name/ID/paths/hashes;
 - explicit statement that Windows CI is not Windows GUI manual acceptance.
+
+These fields are source-bound in the verification records. A signed release,
+public-PR Autofix E2E, and Windows graphical/manual acceptance are not claimed.
 
 ## Status update rule
 

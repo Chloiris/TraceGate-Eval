@@ -4,8 +4,8 @@
 - Starting code baseline: `a1dcd7d755c25e0f75aac499943a07b759ec30db`
 - Active branch: `feat/coding-agent-autofix-loop`
 - Product version selected after tag audit: `0.4.0`
-- Status: macOS implementation, full local matrix, native package and scoped
-  real-model Autofix evidence complete; remote Windows evidence remains pending
+- Status: macOS implementation, full local matrix, native package, scoped
+  real-model Autofix and source-bound Windows CI/package evidence complete
 
 ## Canonical naming
 
@@ -76,7 +76,7 @@ record.
 ## Remaining dynamic evidence
 
 - [x] Tested implementation source SHA.
-- [ ] Pull Request URL and final remote Windows workflow record.
+- [x] Pull Request URL and source-bound Windows workflow record.
 - [x] Complete current Python/TypeScript/Rust/Playwright counts.
 - [x] Migration fresh/upgrade/idempotency/MySQL-offline final result.
 - [x] Real-model Autofix scope, provider/model, Fix Session, model/Tool counts,
@@ -84,7 +84,7 @@ record.
   re-review/resolution, authoritative artifacts, original-workspace proof,
   rollback and cleanup.
 - [x] Fresh macOS Sidecar/Tauri package/runtime evidence.
-- [ ] Fresh Windows workflow URL, every job status, artifact name/ID/paths and
+- [x] Fresh Windows workflow URL, every job status, artifact name/ID/paths and
   hashes.
 - [ ] Windows GUI/manual remains blocked unless a real target record is added.
 
@@ -99,4 +99,4 @@ record.
 - [x] Fixture screenshots are labelled and links resolve.
 - [x] Repository-wide link and Autofix fact checks implemented.
 - [x] Replace completed macOS dynamic fields only from real commands/runs.
-- [ ] Replace remote Windows fields only after the source-bound workflow ends.
+- [x] Replace remote Windows fields only after the source-bound workflow ended.

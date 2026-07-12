@@ -23,8 +23,9 @@
 Studio 把 React 界面、受认证 FastAPI Sidecar、Commit 绑定的代码智能、
 可观察 LangGraph 工作流、受控工具和 Tauri 2 组合在一起。版本 `0.4.0`
 新增独立的受控 Autofix 路径：它可以提出和验证 Patch，但不能静默修改
-用户原工作区或向远程 Push。当前功能分支上的 Autofix 仅剩 Windows 远程
-验证门槛；macOS 全量测试、原生打包与限定范围的真实模型运行已经完成。
+用户原工作区或向远程 Push。当前功能分支已完成 macOS 全量测试、原生打包、
+限定范围的真实模型运行，以及 Source-bound Windows CI/打包；公共 PR Fix
+证据与 Windows 图形界面验收仍明确为 `BLOCKED`。
 
 ## 2. 为什么需要 TraceGate
 
@@ -175,6 +176,7 @@ Keychain 或 Windows Credential Manager 后清空输入；API/UI 只得到
 | Windows 图形界面验收 | `BLOCKED` | 未在真实 Windows 完成安装、WebView2、托盘、通知、自启动、单实例、清理和卸载。 |
 | macOS Autofix 工作流/API/UI | `VERIFIED_MACOS` | 269 个 Python、60 个 TypeScript/Vitest、22 个 Rust（另 1 个忽略）、5 条 fixture 标注的 Playwright，以及 Sidecar 健康检查、Tauri 构建和原生应用启动均通过。 |
 | 真实模型 Autofix E2E | `VERIFIED_MACOS` | 一次真实 DeepSeek 在明确标注的 synthetic 临时 Git 仓库达到 `RESOLVED`。 |
+| Autofix Windows 构建 | `VERIFIED_WINDOWS_CI` | Source-bound Run `29196292381` 通过 269 个 Python、60 个 TypeScript、22 个 Rust（另 1 个忽略）、PyInstaller Sidecar 健康检查、Tauri NSIS/MSI 与 Portable 打包；这不是 GUI 验收。 |
 | 真实公共 PR Autofix E2E | `BLOCKED` | 未选到同时具备可证明缺陷与稳定本地验证路径的小型公共 PR；没有拿随机 PR 冒充成功。 |
 
 Autofix fixture 截图：
@@ -319,11 +321,11 @@ Windows x86-64：
 .\scripts\build-windows.ps1
 ```
 
-历史 Source-bound Workflow 产出过 macOS arm64 Bundle 和未签名 Windows
-Setup.exe、MSI、Portable ZIP、`SHA256SUMS.txt`、`build-info.json`。必须
-为 Autofix 分支重新运行打包/CI，才能把它们作为版本 `0.4.0` 的证据。
-Windows 产物未签名，`VERIFIED_WINDOWS_CI` 不等于
-`VERIFIED_WINDOWS_MANUAL`。
+Source-bound Autofix Windows Workflow 已产出未签名 Setup.exe、MSI、
+Portable ZIP、`SHA256SUMS.txt` 和 `build-info.json`，PyInstaller Sidecar
+健康检查与两个 Tauri Bundle 均通过。详见
+[Windows Autofix CI 记录](verification/windows-autofix-ci.md)。Windows
+产物未签名，`VERIFIED_WINDOWS_CI` 不等于 `VERIFIED_WINDOWS_MANUAL`。
 
 ## 22. 解析器边界
 
@@ -359,10 +361,9 @@ JS/TS/Java 适配器，不声称 Java 全程序调用解析。
 
 ## 24. 路线图
 
-近期重点是完成证据门槛而非堆功能：发布与最终源码绑定的 Windows Autofix
-CI 产物，在不降低安全门的前提下寻找可证明的公共 PR Fix 案例，并在
-目标机器可用后做 Windows GUI 人工验收。签名分发、真实 OAuth 证据和更大
-且有统计设计的评测集属于后续工作。
+近期重点是完成证据门槛而非堆功能：在不降低安全门的前提下寻找可证明的
+公共 PR Fix 案例，并在目标机器可用后做 Windows GUI 人工验收。签名分发、
+真实 OAuth 证据和更大且有统计设计的评测集属于后续工作。
 
 P4/Perforce、UE/Maya Host Adapter、团队服务、Cloud Sync 和自动外部写入
 不是当前产品能力。
@@ -379,6 +380,7 @@ P4/Perforce、UE/Maya Host Adapter、团队服务、Cloud Sync 和自动外部�
 | [产品导览](product-tour.md) | UI 流程与数据来源 |
 | [解析器矩阵](parser-capability-matrix.md) | 各语言静态分析限制 |
 | [真实 Autofix E2E 记录](verification/real-autofix-e2e-macos.md) | `VERIFIED_MACOS` synthetic 临时仓库运行；公共 PR 范围 `BLOCKED` |
+| [Windows Autofix CI 记录](verification/windows-autofix-ci.md) | `VERIFIED_WINDOWS_CI` 测试、Sidecar 健康、安装包与哈希 |
 | [Windows 人工清单](windows-manual-acceptance.md) | 图形目标平台验收 |
 | [文档审计](doc-consistency-audit.md) | 规范名称、事实、链接与剩余漂移 |
 

@@ -32,9 +32,9 @@ Studio joins a React UI, authenticated FastAPI Sidecar, commit-bound code
 intelligence, observable LangGraph workflows, controlled tools, and Tauri 2.
 Version `0.4.0` adds a separate controlled Autofix path: it may propose and
 validate a patch, but it cannot silently mutate the enrolled workspace or push
-code. The Autofix implementation on this feature branch is still completing
-its remote Windows verification gate; the full macOS matrix, native package,
-and scoped real-model run are complete.
+code. The feature branch has completed its full macOS matrix, native package,
+scoped real-model run, and source-bound Windows CI/package gate. Public-PR Fix
+evidence and Windows graphical acceptance remain explicitly blocked.
 
 ## 2. Why TraceGate
 
@@ -201,6 +201,7 @@ Credential Manager, then cleared; the API and UI receive only
 | Windows graphical acceptance | `BLOCKED` | No real Windows install, WebView2, tray, notification, autostart, single-instance, cleanup, or uninstall acceptance. |
 | Autofix workflow/API/UI on macOS | `VERIFIED_MACOS` | 269 Python, 60 TypeScript/Vitest, 22 Rust tests (+1 ignored), five fixture-labelled Playwright flows, packaged Sidecar health, Tauri build, and native app launch passed. |
 | Real-model Autofix E2E | `VERIFIED_MACOS` | One real DeepSeek run reached `RESOLVED` on an explicitly labelled synthetic temporary Git repository. |
+| Autofix Windows build | `VERIFIED_WINDOWS_CI` | Source-bound run `29196292381` passed 269 Python, 60 TypeScript, 22 Rust (+1 ignored), PyInstaller Sidecar health, Tauri NSIS/MSI and portable packaging. This is not GUI acceptance. |
 | Real public-PR Autofix E2E | `BLOCKED` | No small public PR with a defensible existing defect and stable local validation was selected; no random PR is presented as success evidence. |
 
 Autofix fixture screenshots:
@@ -360,11 +361,12 @@ On Windows x86-64:
 .\scripts\build-windows.ps1
 ```
 
-The historical source-bound workflows produced a macOS arm64 bundle and
-unsigned Windows Setup.exe, MSI, portable ZIP, `SHA256SUMS.txt`, and
-`build-info.json`. The Autofix branch must run fresh packaging/CI before those
-artifacts are evidence for version `0.4.0`. Windows artifacts are unsigned, and
-`VERIFIED_WINDOWS_CI` does not imply `VERIFIED_WINDOWS_MANUAL`.
+The source-bound Autofix Windows workflow produced an unsigned Setup.exe, MSI,
+portable ZIP, `SHA256SUMS.txt`, and `build-info.json`; PyInstaller Sidecar
+health and both Tauri bundles passed. See the
+[Windows Autofix CI record](docs/verification/windows-autofix-ci.md). Windows
+artifacts are unsigned, and `VERIFIED_WINDOWS_CI` does not imply
+`VERIFIED_WINDOWS_MANUAL`.
 
 ## 22. Parser Boundaries
 
@@ -406,11 +408,10 @@ claim whole-program Java call resolution.
 
 ## 24. Roadmap
 
-Near-term gates are evidence work, not feature inflation: publish fresh
-source-bound Windows Autofix CI artifacts, identify a defensible public-PR Fix
-case without lowering safety gates, and complete real Windows GUI acceptance
-when a target machine is available. Signed distribution, live OAuth evidence,
-and larger statistically designed evaluation sets remain future work.
+Near-term gates are evidence work, not feature inflation: identify a defensible
+public-PR Fix case without lowering safety gates and complete real Windows GUI
+acceptance when a target machine is available. Signed distribution, live OAuth
+evidence, and larger statistically designed evaluation sets remain future work.
 
 P4/Perforce, UE/Maya host adapters, team service, cloud synchronization, and
 automatic external mutations are not current product capabilities.
@@ -427,6 +428,7 @@ automatic external mutations are not current product capabilities.
 | [Product tour](docs/product-tour.md) | UI walkthrough and data provenance |
 | [Parser matrix](docs/parser-capability-matrix.md) | Per-language static-analysis limits |
 | [Real Autofix E2E record](docs/verification/real-autofix-e2e-macos.md) | `VERIFIED_MACOS` synthetic temporary-repository run; public-PR scope `BLOCKED` |
+| [Windows Autofix CI record](docs/verification/windows-autofix-ci.md) | `VERIFIED_WINDOWS_CI` tests, Sidecar health, installers and hashes |
 | [Windows manual checklist](docs/windows-manual-acceptance.md) | Graphical target-platform acceptance |
 | [Documentation audit](docs/doc-consistency-audit.md) | Canonical names, facts, links, and remaining drift |
 
