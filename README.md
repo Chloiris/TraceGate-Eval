@@ -14,12 +14,15 @@
   </p>
 </div>
 
-![TraceGate Studio Pull Request workspace](docs/screenshots/p1-pr-diff-macos.png)
+[![TraceGate Studio product website](docs/site-screenshots/desktop-1440-home.png)](docs/site-screenshots/desktop-1440-home.png)
 
-> The hero image comes from an isolated Playwright repository fixture. It
-> verifies the running UI path, not a public-PR or live-model result. Evidence
-> records below keep fixture, real-local, real-model, and public-PR scopes
-> separate.
+> Local acceptance capture of the bilingual static product site. Product UI
+> shown inside the composition retains its fixture provenance; it is not a
+> public-PR or live-model result.
+
+The repository includes the commercial-grade static site in
+[`apps/site`](apps/site/README.md), with its own design system, evidence
+boundaries, responsive gallery, Playwright acceptance, and deployment path.
 
 ## 1. Product Overview
 
@@ -37,6 +40,11 @@ into `main`; the source-bound implementation completed its full macOS matrix,
 native package, scoped real-model run, and automated Windows CI/package gates.
 Public-PR Fix evidence and Windows graphical acceptance remain explicitly
 blocked.
+
+![TraceGate Studio Pull Request workspace](docs/screenshots/p1-pr-diff-macos.png)
+
+> Isolated Playwright repository fixture. This verifies the running PR Diff
+> and navigation path, not public-PR analysis accuracy.
 
 ## 2. Why TraceGate
 
@@ -433,6 +441,10 @@ automatic external mutations are not current product capabilities.
 | [Windows Autofix CI record](docs/verification/windows-autofix-ci.md) | `VERIFIED_WINDOWS_CI` tests, Sidecar health, installers and hashes |
 | [Windows manual checklist](docs/windows-manual-acceptance.md) | Graphical target-platform acceptance |
 | [Documentation audit](docs/doc-consistency-audit.md) | Canonical names, facts, links, and remaining drift |
+| [Product site](apps/site/README.md) | Local development, asset generation, validation, and maintenance |
+| [Site design system](docs/site-design-system.md) | Brand tokens, components, motion, and responsive behavior |
+| [Site content boundaries](docs/site-content-boundaries.md) | Screenshot provenance and claims intentionally withheld |
+| [Site deployment](docs/site-deployment.md) | Restricted static deployment, Nginx, HTTPS, and acceptance |
 
 ## 26. License
 

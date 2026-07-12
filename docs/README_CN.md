@@ -8,11 +8,13 @@
   </p>
 </div>
 
-![TraceGate Studio Pull Request 工作区](screenshots/p1-pr-diff-macos.png)
+[![TraceGate Studio 产品官网](site-screenshots/desktop-1440-home.png)](site-screenshots/desktop-1440-home.png)
 
-> 首图来自隔离的 Playwright 仓库 fixture，只证明真实运行 UI 路径，
-> 不代表公共 PR 或真实模型结果。下文始终区分 fixture、真实本地仓库、
-> 真实模型和公共 PR 四种证据范围。
+> 这是双语静态产品官网的本地验收截图。画面内嵌的产品 UI 保留 fixture
+> 来源标记，不代表公共 PR 或真实模型结果。
+
+仓库内的 [`apps/site`](../apps/site/README.md) 是独立商业级静态官网工程，
+包含统一设计系统、证据边界、响应式图库、Playwright 验收与受限部署流程。
 
 ## 1. 产品概览
 
@@ -28,6 +30,11 @@ Studio 把 React 界面、受认证 FastAPI Sidecar、Commit 绑定的代码智�
 Source-bound 实现已完成 macOS 全量测试、原生打包、限定范围的真实模型运行，
 以及自动化 Windows CI/打包。公共 PR Fix 证据与 Windows 图形界面验收仍明确
 为 `BLOCKED`。
+
+![TraceGate Studio Pull Request 工作区](screenshots/p1-pr-diff-macos.png)
+
+> 隔离的 Playwright 仓库 fixture，仅验证真实运行的 PR Diff 与导航路径，
+> 不代表公共 PR 分析准确率。
 
 ## 2. 为什么需要 TraceGate
 
@@ -385,6 +392,10 @@ P4/Perforce、UE/Maya Host Adapter、团队服务、Cloud Sync 和自动外部�
 | [Windows Autofix CI 记录](verification/windows-autofix-ci.md) | `VERIFIED_WINDOWS_CI` 测试、Sidecar 健康、安装包与哈希 |
 | [Windows 人工清单](windows-manual-acceptance.md) | 图形目标平台验收 |
 | [文档审计](doc-consistency-audit.md) | 规范名称、事实、链接与剩余漂移 |
+| [产品官网工程](../apps/site/README.md) | 本地开发、图片生成、验证与维护 |
+| [官网设计系统](site-design-system.md) | 品牌 Token、组件、动效与响应式行为 |
+| [官网内容边界](site-content-boundaries.md) | 截图来源与主动不声明的能力 |
+| [官网部署](site-deployment.md) | 受限静态部署、Nginx、HTTPS 与验收 |
 
 ## 26. 许可证
 
