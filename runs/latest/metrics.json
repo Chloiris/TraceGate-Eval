@@ -1,0 +1,66 @@
+{
+  "active_count": 12,
+  "active_only": false,
+  "benchmark_name": "TraceGate v0.2-alpha hard real-data mini benchmark",
+  "benchmark_note": "small real-data smoke benchmark, not a statistically significant benchmark",
+  "conflicting_count": 2,
+  "decision_distribution": {
+    "detect_conflict": 2,
+    "preserve": 12,
+    "verify_first": 5
+  },
+  "excluded_cases": [],
+  "excluded_cases_count": 0,
+  "github_action_mode": "warning-only",
+  "hard_benchmark_minimums": {
+    "active": 8,
+    "conflicting": 2,
+    "stale": 1,
+    "unknown": 3
+  },
+  "hard_benchmark_ready": true,
+  "hard_labels_source": "Codex evidence audit plus human final acceptance",
+  "label_source_distribution": {
+    "heuristic_verified": 12,
+    "human_accepted_codex_audit": 7
+  },
+  "limitations": [
+    "v0.2-alpha is a small hard real-data mini benchmark and is not statistically significant.",
+    "Hard labels come from Codex evidence audit plus human final acceptance, and do not replace human code review.",
+    "The real-data advisor is a deterministic baseline, not a final LLM agent.",
+    "TraceGate is not a general code review bot.",
+    "GitHub Action advisory remains warning-only and should not be treated as a merge blocker.",
+    "hard_benchmark_ready is true because the minimum distribution is met: unknown>=3, conflicting>=2, stale>=1, scored_cases>=14."
+  ],
+  "manual_review_cases": 0,
+  "manual_review_queue_cases": 40,
+  "needs_manual_review_rate": 0.0,
+  "num_cases_excluded": 0,
+  "num_cases_scored": 19,
+  "num_cases_total": 19,
+  "pollution_flag_rate": 0.15789473684210525,
+  "promoted_cases": 7,
+  "provenance_completeness_rate": 1.0,
+  "risk_level_distribution": {
+    "high": 4,
+    "low": 8,
+    "medium": 7
+  },
+  "scored_cases": 19,
+  "scored_status_distribution": {
+    "active": 12,
+    "conflicting": 2,
+    "stale": 2,
+    "unknown": 3
+  },
+  "stale_count": 2,
+  "status_distribution": {
+    "active": 12,
+    "conflicting": 2,
+    "stale": 2,
+    "unknown": 3
+  },
+  "unknown_count": 3,
+  "unsafe_allow_rate": 0.0,
+  "verify_first_rate_on_unknown_or_conflicting": 1.0
+}

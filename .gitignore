@@ -9,6 +9,14 @@ htmlcov/
 *.egg-info/
 dist/
 build/
+*.app
+*.dmg
+*.msi
+*.exe
+*.app.tar.gz
+*.app.zip
+*.portable.zip
+artifacts/
 
 # Local environment
 .env
@@ -18,13 +26,26 @@ build/
 venv/
 env/
 node_modules/
+.pnpm-store/
+.vite/
+coverage/
+playwright-report/
+test-results/
+blob-report/
+npm-debug.log*
+pnpm-debug.log*
 
 # Java/Maven generated output
 .m2/
 **/target/
+apps/desktop/src-tauri/binaries/tracegate-backend-*
+!apps/desktop/src-tauri/binaries/.gitkeep
 
 # Generated run artifacts and model outputs
-runs/
+runs/*
+!runs/latest/
+runs/latest/*
+!runs/latest/metrics.json
 runs_stage2/
 runs_claim/
 datasets/real_min/raw/
@@ -54,6 +75,14 @@ rendered_tracegate_intro_direct/
 tmp/
 temp/
 *.tmp
+*.sqlite
+*.sqlite3
+*.db
+*.db-shm
+*.db-wal
+*.db-journal
+backups/
+.tracegate-dev/
 
 # IDE and OS files
 .idea/

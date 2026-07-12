@@ -1,0 +1,79 @@
+mod commands;
+mod credentials;
+mod deep_link;
+mod github_oauth;
+mod lifecycle;
+mod platform;
+mod relay_pairing;
+mod sidecar;
+mod state;
+mod tray;
+mod window;
+
+use tauri::Manager;
+
+use state::DesktopState;
+
+pub fn run() {
+    let app = tauri::Builder::default()
+        // Tauri requires the single-instance plugin to be registered first.
+        .plugin(tauri_plugin_single_instance::init(
+            |app, arguments, _cwd| {
+                if !deep_link::deliver_from_arguments(app, arguments.iter().map(String::as_str)) {
+                    let _ = window::show_main_window(app);
+                }
+            },
+        ))
+        .plugin(tauri_plugin_deep_link::init())
+        .plugin(tauri_plugin_autostart::init(
+            tauri_plugin_autostart::MacosLauncher::LaunchAgent,
+            None,
+        ))
+        .plugin(tauri_plugin_notification::init())
+        .plugin(tauri_plugin_shell::init())
+        .plugin(tauri_plugin_window_state::Builder::default().build())
+        .manage(DesktopState::default())
+        .manage(github_oauth::GitHubOAuthState::default())
+        .invoke_handler(tauri::generate_handler![
+            commands::get_desktop_status,
+            commands::get_api_connection,
+            commands::get_credential_status,
+            commands::store_credential,
+            commands::delete_credential,
+            commands::take_pending_deep_link,
+            commands::show_main_window,
+            commands::hide_main_window,
+            commands::get_autostart_enabled,
+            commands::set_autostart_enabled,
+            commands::show_review_notification,
+            commands::open_workspace,
+            commands::open_workspace_file,
+            commands::open_external,
+            commands::quit_tracegate,
+            github_oauth::begin_github_device_flow,
+            github_oauth::poll_github_device_flow,
+            relay_pairing::pair_webhook_relay,
+        ])
+        .on_window_event(window::handle_window_event)
+        .on_menu_event(tray::handle_menu_event)
+        .on_tray_icon_event(tray::handle_tray_icon_event)
+        .setup(|app| {
+            #[cfg(all(debug_assertions, windows))]
+            {
+                use tauri_plugin_deep_link::DeepLinkExt;
+                app.deep_link().register_all()?;
+            }
+
+            tray::build(app)?;
+
+            let state = app.state::<DesktopState>();
+            state.sidecar.start(app.handle().clone());
+
+            let _ = deep_link::deliver_from_arguments(app.handle(), std::env::args().skip(1));
+            Ok(())
+        })
+        .build(tauri::generate_context!())
+        .expect("failed to build TraceGate Studio desktop shell");
+
+    app.run(|app_handle, event| lifecycle::handle_run_event(app_handle, &event));
+}

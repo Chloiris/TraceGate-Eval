@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="TraceGate Studio">
+  <defs>
+    <linearGradient id="background" x1="72" y1="40" x2="440" y2="472" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#14B8A6"/>
+      <stop offset="1" stop-color="#2563EB"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="112" fill="#0F172A"/>
+  <path d="M256 64 420 154v204L256 448 92 358V154L256 64Z" fill="url(#background)"/>
+  <path d="M173 170h166v52h-55v150h-56V222h-55v-52Z" fill="white"/>
+  <circle cx="256" cy="396" r="22" fill="#0F172A"/>
+</svg>

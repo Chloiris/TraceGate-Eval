@@ -1,0 +1,17 @@
+services:
+  mysql:
+    image: mysql:8.4
+    environment:
+      MYSQL_DATABASE: tracegate
+      MYSQL_USER: tracegate
+      MYSQL_PASSWORD: tracegate-local-test
+      MYSQL_ROOT_PASSWORD: tracegate-root-local-test
+    ports:
+      - "127.0.0.1:33060:3306"
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-uroot", "-ptracegate-root-local-test"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    tmpfs:
+      - /var/lib/mysql

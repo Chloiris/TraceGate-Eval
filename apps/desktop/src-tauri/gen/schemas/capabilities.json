@@ -1,0 +1,1 @@
+{"main-window":{"identifier":"main-window","description":"Minimum capabilities for the TraceGate Studio main WebView.","local":true,"windows":["main"],"permissions":["core:default"]}}

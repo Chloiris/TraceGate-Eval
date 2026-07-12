@@ -1,0 +1,216 @@
+name: Build Windows x86_64
+
+on:
+  workflow_call:
+  push:
+    branches: ["**"]
+    paths:
+      - "apps/desktop/**"
+      - "apps/web/**"
+      - "packages/**"
+      - "packaging/**"
+      - "scripts/build-windows.ps1"
+      - "scripts/tracegate_sidecar_entry.py"
+      - "tracegate/**"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - "pyproject.toml"
+      - "uv.lock"
+      - ".github/workflows/build-windows.yml"
+  pull_request:
+    paths:
+      - "apps/desktop/**"
+      - "apps/web/**"
+      - "packages/**"
+      - "packaging/**"
+      - "scripts/build-windows.ps1"
+      - "scripts/tracegate_sidecar_entry.py"
+      - "tracegate/**"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - "pyproject.toml"
+      - "uv.lock"
+      - ".github/workflows/build-windows.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: windows-x64-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-windows-x64:
+    name: Unsigned Windows x86_64 installers
+    runs-on: windows-latest
+    timeout-minutes: 75
+    env:
+      UV_FROZEN: "true"
+      CARGO_TERM_COLOR: always
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up pnpm 11.7.0
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.7.0
+          run_install: false
+
+      - name: Set up Node.js 24.14.0
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24.14.0
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Set up uv 0.11.28
+        uses: astral-sh/setup-uv@v7
+        with:
+          version: "0.11.28"
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+
+      - name: Set up Rust 1.97.0 x86_64 MSVC
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.97.0
+          components: rustfmt, clippy
+          targets: x86_64-pc-windows-msvc
+
+      - name: Install ripgrep runtime dependency
+        shell: pwsh
+        run: |
+          choco install ripgrep --yes --no-progress
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          rg --version
+
+      - name: Verify pinned x86_64 toolchain
+        shell: pwsh
+        run: |
+          if (-not [Environment]::Is64BitOperatingSystem) { throw "x86_64 Windows is required" }
+          if ((node --version) -ne "v24.14.0") { throw "unexpected Node version" }
+          if ((pnpm --version) -ne "11.7.0") { throw "unexpected pnpm version" }
+          if ((uv --version).Split()[1] -ne "0.11.28") { throw "unexpected uv version" }
+          if ((rustc --version).Split()[1] -ne "1.97.0") { throw "unexpected Rust version" }
+          rustc -vV | Select-String -Pattern '^host: x86_64-pc-windows-msvc$'
+          New-Item -ItemType Directory -Force .ci-artifacts/windows, artifacts/windows | Out-Null
+
+      - name: Install frozen dependencies
+        shell: pwsh
+        run: |
+          pnpm install --frozen-lockfile *>&1 | Tee-Object .ci-artifacts/windows/pnpm-install.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          uv sync --frozen --extra dev --extra packaging *>&1 | Tee-Object .ci-artifacts/windows/uv-sync.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Run Python, TypeScript, and Rust checks
+        shell: pwsh
+        run: |
+          uv run pytest -q *>&1 | Tee-Object .ci-artifacts/windows/pytest.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          pnpm lint *>&1 | Tee-Object .ci-artifacts/windows/lint.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          pnpm typecheck *>&1 | Tee-Object .ci-artifacts/windows/typecheck.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          pnpm test *>&1 | Tee-Object .ci-artifacts/windows/frontend-test.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          pnpm --filter @tracegate/desktop fmt:check *>&1 | Tee-Object .ci-artifacts/windows/rust-fmt.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          pnpm --filter @tracegate/desktop clippy *>&1 | Tee-Object .ci-artifacts/windows/rust-clippy.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          pnpm --filter @tracegate/desktop test *>&1 | Tee-Object .ci-artifacts/windows/rust-test.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Build and authenticated-health-check Windows Sidecar and Tauri bundles
+        shell: pwsh
+        run: |
+          $env:TAURI_CONFIG = '{"bundle":{"externalBin":[]}}'
+          cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml credentials::tests::native_secure_store_round_trip -- --ignored *>&1 | Tee-Object .ci-artifacts/windows/credential-store.log
+          $CredentialTestExit = $LASTEXITCODE
+          Remove-Item Env:TAURI_CONFIG
+          if ($CredentialTestExit -ne 0) { exit $CredentialTestExit }
+          ./scripts/build-windows.ps1 *>&1 | Tee-Object .ci-artifacts/windows/build.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Verify target binaries and package unsigned artifacts
+        shell: pwsh
+        run: |
+          $Target = "apps/desktop/src-tauri/target/release"
+          $Staged = "apps/desktop/src-tauri/binaries/tracegate-backend-x86_64-pc-windows-msvc.exe"
+          if (-not (Test-Path $Staged)) { throw "target-named Sidecar is missing" }
+          $Header = ([IO.File]::ReadAllBytes((Resolve-Path $Staged)))[0..1]
+          if ($Header[0] -ne 0x4d -or $Header[1] -ne 0x5a) { throw "Sidecar is not Windows PE" }
+
+          $Nsis = Get-ChildItem "$Target/bundle/nsis/*.exe" | Select-Object -First 1
+          if (-not $Nsis) { throw "NSIS Setup.exe was not produced" }
+          Copy-Item $Nsis.FullName artifacts/windows/TraceGate-Studio-Setup.exe
+
+          $Msi = Get-ChildItem "$Target/bundle/msi/*.msi" -ErrorAction SilentlyContinue | Select-Object -First 1
+          if ($Msi) { Copy-Item $Msi.FullName artifacts/windows/TraceGate-Studio.msi }
+
+          $PortableRoot = "artifacts/windows/portable"
+          New-Item -ItemType Directory -Force $PortableRoot | Out-Null
+          Copy-Item "$Target/tracegate-studio.exe" $PortableRoot
+          $BundledSidecar = Get-ChildItem "$Target/tracegate-backend*.exe" | Select-Object -First 1
+          if (-not $BundledSidecar) { throw "release Sidecar for portable archive is missing" }
+          Copy-Item $BundledSidecar.FullName $PortableRoot
+          Compress-Archive -Path "$PortableRoot/*" -DestinationPath artifacts/windows/TraceGate-Studio-portable-x86_64.zip
+          Remove-Item $PortableRoot -Recurse -Force
+
+          @{
+            commit = "${{ github.sha }}"
+            runner = "windows-latest"
+            architecture = "x86_64"
+            target_triple = "x86_64-pc-windows-msvc"
+            node = "24.14.0"
+            pnpm = "11.7.0"
+            python = "3.12"
+            uv = "0.11.28"
+            rust = "1.97.0"
+            signing = "unsigned test artifacts; no Authenticode certificate"
+          } | ConvertTo-Json | Set-Content artifacts/windows/build-info.json
+
+          Get-ChildItem artifacts/windows -File | ForEach-Object {
+            "{0}  {1}" -f (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant(), $_.Name
+          } | Set-Content artifacts/windows/SHA256SUMS.txt
+          Get-Content artifacts/windows/SHA256SUMS.txt
+
+      - name: Write test summary
+        shell: pwsh
+        run: |
+          @"
+          TraceGate Studio Windows x86_64 automated evidence
+          Python, TypeScript, and Rust checks completed before packaging.
+          PyInstaller Sidecar passed authenticated loopback health check.
+          NSIS Setup.exe exists. MSI is included when produced. Portable archive is an uninstalled test package.
+          These artifacts are unsigned and are not Windows manual acceptance evidence.
+          "@ | Set-Content artifacts/windows/test-summary.txt
+
+      - name: Upload Windows x86_64 artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: TraceGate-Studio-Windows-x86_64-unsigned-${{ github.sha }}
+          path: artifacts/windows
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload Windows failure logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-x86_64-failure-logs-${{ github.run_id }}
+          path: |
+            .ci-artifacts/windows
+            build/sidecar/work/**/warn-*.txt
+          if-no-files-found: ignore
+          retention-days: 7

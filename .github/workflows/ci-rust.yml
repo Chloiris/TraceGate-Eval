@@ -1,0 +1,125 @@
+name: Rust CI
+
+on:
+  push:
+    branches: ["**"]
+    paths:
+      - "apps/desktop/**"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - ".github/workflows/ci-rust.yml"
+  pull_request:
+    paths:
+      - "apps/desktop/**"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - ".github/workflows/ci-rust.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: rust-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  rust:
+    name: Format, check, clippy, and test
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    env:
+      CARGO_TERM_COLOR: always
+      # Source-only checks must not require a packaged Sidecar. Production
+      # Tauri builds do not receive this override and still fail if it is absent.
+      TAURI_CONFIG: '{"bundle":{"externalBin":[]}}'
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Prepare CI logs
+        shell: bash
+        run: mkdir -p .ci-artifacts/rust
+
+      - name: Install Tauri Linux build prerequisites
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update 2>&1 | tee .ci-artifacts/rust/apt.log
+          sudo apt-get install --yes --no-install-recommends \
+            build-essential \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            libssl-dev \
+            libwebkit2gtk-4.1-dev \
+            libxdo-dev 2>&1 | tee -a .ci-artifacts/rust/apt.log
+
+      - name: Set up Rust 1.97.0
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.97.0
+          components: rustfmt, clippy
+
+      - name: Verify Rust version and frozen Cargo lock
+        shell: bash
+        run: |
+          set -euo pipefail
+          rustc --version | tee .ci-artifacts/rust/toolchain.log
+          test "$(rustc --version | awk '{print $2}')" = "1.97.0"
+          cargo metadata \
+            --manifest-path apps/desktop/src-tauri/Cargo.toml \
+            --locked \
+            --no-deps \
+            --format-version 1 >/dev/null
+
+      - name: Check Rust formatting
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo fmt \
+            --manifest-path apps/desktop/src-tauri/Cargo.toml \
+            --all \
+            -- \
+            --check 2>&1 | tee .ci-artifacts/rust/fmt.log
+
+      - name: Check Rust sources without a packaged Sidecar
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo check \
+            --manifest-path apps/desktop/src-tauri/Cargo.toml \
+            --locked \
+            --all-targets 2>&1 | tee .ci-artifacts/rust/check.log
+
+      - name: Run Clippy with warnings denied
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo clippy \
+            --manifest-path apps/desktop/src-tauri/Cargo.toml \
+            --locked \
+            --all-targets \
+            --all-features \
+            -- \
+            -D warnings 2>&1 | tee .ci-artifacts/rust/clippy.log
+
+      - name: Run Rust tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo test \
+            --manifest-path apps/desktop/src-tauri/Cargo.toml \
+            --locked \
+            --all-targets 2>&1 | tee .ci-artifacts/rust/test.log
+
+      - name: Upload Rust failure logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rust-failure-logs-${{ github.run_id }}
+          path: .ci-artifacts/rust
+          if-no-files-found: ignore
+          retention-days: 7

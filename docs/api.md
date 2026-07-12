@@ -1,4 +1,69 @@
-# TraceGate Eval Web/API Prototype
+# TraceGate APIs
+
+## TraceGate Studio `/api/v1`
+
+Studio is the authenticated production API used by the React browser client
+and Tauri Sidecar. It listens on loopback by default. Every `/api/v1` request
+except health requires `Authorization: Bearer <per-launch-token>`; browser
+development must supply that token explicitly and packaged mode obtains it
+through the native HostBridge. The token is not returned by status or
+diagnostics.
+
+Start a development service with the same settings used by `scripts/dev.sh`:
+
+```bash
+export TRACEGATE_LOCAL_API_TOKEN="$(openssl rand -hex 32)"
+export TRACEGATE_DATA_DIR="$PWD/.tracegate-dev"
+uv run tracegate-studio serve
+```
+
+Core endpoints:
+
+| Method and path | Real source / behavior |
+| --- | --- |
+| `GET /api/v1/health` | Process health and version; no secret-bearing details. |
+| `GET /api/v1/system/status` | Explicit API, database, GitHub, model and Eval capability states. |
+| `GET /api/v1/diagnostics` | Redacted versions, paths, process/port, queues, monitoring, provider/index/graph/model/retrieval timing and notification outcomes. |
+| `GET /api/v1/system/update` | Signed-update interface status; currently explicitly unconfigured. |
+| `GET/PUT /api/v1/settings` | Non-secret theme, locale, monitoring, model metadata and startup preference. |
+| `GET/PUT /api/v1/onboarding` | Persisted first-run progress without credentials. |
+| `GET/POST /api/v1/repositories` | List/enroll controlled repository workspaces. |
+| `GET/PUT/DELETE /api/v1/repositories/{id}` | Read, update monitoring, or remove enrollment (never repository files). |
+| `POST /api/v1/repositories/{id}/sync` | ETag/rate-limit-aware GitHub PR synchronization. |
+| `POST /api/v1/repositories/{id}/index` | Persist a commit-bound incremental parser/index snapshot. |
+| `GET /api/v1/repositories/{id}/graph` | Static Repository Map from the current index. |
+| `GET /api/v1/repositories/{id}/search` | Labeled ripgrep/symbol/FTS hybrid retrieval. |
+| `GET /api/v1/pull-requests` | Persisted PR Inbox with filters. |
+| `GET /api/v1/pull-requests/{id}` | Persisted PR metadata and commit identity. |
+| `GET /api/v1/pull-requests/{id}/commits` | Structured persisted commit history from GitHub synchronization. |
+| `GET /api/v1/pull-requests/{id}/files` | Structured changed files and parsed changed hunks bound to Head SHA. |
+| `GET /api/v1/pull-requests/{id}/diff` | Real local Git content for the selected changed file. |
+| `GET /api/v1/pull-requests/{id}/graph` | Review Map from Git diff + static index + Agent Evidence. |
+| `GET /api/v1/pull-requests/{id}/tour` | Bounded Change Tour with explicit incomplete/confidence state. |
+| `POST /api/v1/pull-requests/{id}/analyze` | Enqueue the real LangGraph workflow or fail if model/index prerequisites are absent. |
+| `GET /api/v1/runs` | Durable Agent Run list. |
+| `GET /api/v1/runs/{id}` | Run, Step and ToolCall detail. |
+| `GET /api/v1/runs/{id}/graph` | Run-owned Agent Evidence Graph. |
+| `POST /api/v1/runs/{id}/cancel` | Persist and request bounded cancellation. |
+| `POST /api/v1/runs/{id}/retry` | Explicit retry; does not suppress the original failure. |
+| `GET /api/v1/runs/{id}/events` | Authenticated SSE run updates. |
+| `GET /api/v1/findings` / `evidence` | Run/PR-scoped traceability records. |
+| `GET /api/v1/evaluations` | Checked-in real benchmark/ClaimBench artifacts plus SHA-256 provenance. |
+| `GET /api/v1/agents` / `tools` | Actual workflow and Tool Registry schemas/permissions/stats. |
+| `PUT /api/v1/agents/{name}` | Persistently enable/disable a production Agent; disabled required Agents block new runs. |
+| `PUT /api/v1/tools/{name}` | Persistently enable/disable a Tool; write-confirmation Tools cannot be globally enabled. |
+| `GET/POST /api/v1/notifications` | Read or record actual OS handoff/failure outcomes; an attempted notification is not called displayed. |
+| `POST /api/v1/webhooks/github` | Optional direct HMAC-SHA256 GitHub delivery with durable deduplication. |
+
+Errors use a non-success HTTP status and an `{ "error": { "code",
+"message" } }` body. Missing GitHub/model/relay capabilities remain explicit;
+the API does not switch to fixture data or a normal-looking report.
+
+The separate optional Webhook Relay, device pairing, authenticated SSE, Docker
+profile and TLS requirements are documented in
+[webhook-relay.md](webhook-relay.md).
+
+## Legacy TraceGate Eval Web/API Prototype
 
 The Web/API layer is a local v0.1 presentation shell for TraceGate Eval. It exposes the Stage3 controlled benchmark, task definitions, result summaries, and a rule-based demo decision endpoint. It does not run model calls and does not generate patches.
 
@@ -184,4 +249,3 @@ Response:
 - `/api/analyze-demo` is rule-based and only demonstrates the decision schema.
 - The dashboard reads checked-in summaries and does not execute experiments.
 - Missing structured result files trigger aggregate fallback summaries, not synthetic run logs.
-

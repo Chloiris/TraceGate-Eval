@@ -1,0 +1,107 @@
+name: Frontend CI
+
+on:
+  push:
+    branches: ["**"]
+    paths:
+      - "apps/web/**"
+      - "packages/api-client/**"
+      - "packages/shared-types/**"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - "tsconfig.base.json"
+      - "eslint.config.js"
+      - ".github/workflows/ci-frontend.yml"
+  pull_request:
+    paths:
+      - "apps/web/**"
+      - "packages/api-client/**"
+      - "packages/shared-types/**"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - "tsconfig.base.json"
+      - "eslint.config.js"
+      - ".github/workflows/ci-frontend.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: frontend-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  frontend:
+    name: Lint, typecheck, test, and build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up pnpm 11.7.0
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.7.0
+          run_install: false
+
+      - name: Set up Node.js 24.14.0
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24.14.0
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Verify tool versions
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(node --version)" = "v24.14.0"
+          test "$(pnpm --version)" = "11.7.0"
+
+      - name: Prepare CI logs
+        shell: bash
+        run: mkdir -p .ci-artifacts/frontend
+
+      - name: Install frozen workspace dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          pnpm install --frozen-lockfile 2>&1 | tee .ci-artifacts/frontend/install.log
+
+      - name: Lint frontend workspace
+        shell: bash
+        run: |
+          set -euo pipefail
+          pnpm --filter @tracegate/web... lint 2>&1 | tee .ci-artifacts/frontend/lint.log
+
+      - name: Typecheck frontend workspace
+        shell: bash
+        run: |
+          set -euo pipefail
+          pnpm --filter @tracegate/web... typecheck 2>&1 | tee .ci-artifacts/frontend/typecheck.log
+
+      - name: Test frontend workspace
+        shell: bash
+        run: |
+          set -euo pipefail
+          pnpm --filter @tracegate/web... test 2>&1 | tee .ci-artifacts/frontend/test.log
+
+      - name: Build frontend workspace
+        shell: bash
+        run: |
+          set -euo pipefail
+          pnpm --filter @tracegate/web... build 2>&1 | tee .ci-artifacts/frontend/build.log
+
+      - name: Upload frontend failure logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-failure-logs-${{ github.run_id }}
+          path: .ci-artifacts/frontend
+          if-no-files-found: ignore
+          retention-days: 7

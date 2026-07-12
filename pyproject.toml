@@ -9,34 +9,50 @@ description = "Evaluate process-context routing for AI coding agents on legacy m
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
+    "alembic>=1.13,<2.0",
     "PyYAML>=6.0",
     "fastapi>=0.115",
+    "httpx>=0.28,<1.0",
+    "langgraph==1.2.8",
+    "PyMySQL==1.2.0",
     "pydantic>=2.0",
+    "SQLAlchemy>=2.0,<3.0",
     "uvicorn>=0.30",
 ]
 
 [project.optional-dependencies]
 dev = [
-    "httpx>=0.27",
     "pytest>=8.0",
+    "pytest-asyncio>=0.24",
 ]
 plots = [
     "matplotlib>=3.8",
 ]
+packaging = [
+    "pyinstaller>=6.11,<7.0",
+]
 all = [
-    "httpx>=0.27",
     "matplotlib>=3.8",
+    "pyinstaller>=6.11,<7.0",
     "pytest>=8.0",
+    "pytest-asyncio>=0.24",
 ]
 
 [project.scripts]
 tracegate = "tracegate.cli:main"
+tracegate-studio = "tracegate.studio.cli:main"
 
 [tool.setuptools.packages.find]
 include = ["tracegate*"]
 
 [tool.setuptools.package-data]
-tracegate = ["prompts/templates/*.md", "web/templates/*.html", "web/static/*"]
+tracegate = [
+    "prompts/templates/*.md",
+    "studio/migrations/*.mako",
+    "web/templates/*.html",
+    "web/static/*",
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+norecursedirs = ["tests/fixtures/parser_repositories"]

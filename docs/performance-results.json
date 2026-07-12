@@ -1,0 +1,47 @@
+{
+  "measured_at": "2026-07-10T16:18:04.055147+00:00",
+  "environment": {
+    "operating_system": "macOS-26.5.1-arm64-arm-64bit",
+    "architecture": "arm64",
+    "processor": "arm",
+    "python": "3.12.13"
+  },
+  "method": "Temporary local Git repositories; production RepositoryIndexer, persistence, Repository Map, and Review Map paths; one warm-free run per size.",
+  "limitations": [
+    "Synthetic source layout is deterministic and is not a substitute for a large polyglot repository.",
+    "One run per size is a smoke benchmark, not a statistically stable latency distribution.",
+    "GitHub PR synchronization and UI time-to-interactive are not measured by this local Python benchmark."
+  ],
+  "results": [
+    {
+      "requested_file_count": 100,
+      "indexed_file_count": 100,
+      "symbol_count": 99,
+      "repository_map_nodes": 201,
+      "repository_map_edges": 298,
+      "index_and_persist_wall_ms": 41.95,
+      "production_index_duration_ms": 30,
+      "production_graph_duration_ms": 3,
+      "production_total_duration_ms": 33,
+      "review_map_wall_ms": 36.67,
+      "review_map_nodes": 113,
+      "review_map_edges": 210,
+      "review_map_truncated": false
+    },
+    {
+      "requested_file_count": 1000,
+      "indexed_file_count": 1000,
+      "symbol_count": 999,
+      "repository_map_nodes": 2001,
+      "repository_map_edges": 2998,
+      "index_and_persist_wall_ms": 313.65,
+      "production_index_duration_ms": 202,
+      "production_graph_duration_ms": 53,
+      "production_total_duration_ms": 256,
+      "review_map_wall_ms": 74.26,
+      "review_map_nodes": 800,
+      "review_map_edges": 1584,
+      "review_map_truncated": true
+    }
+  ]
+}

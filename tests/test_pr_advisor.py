@@ -7,6 +7,7 @@ from typing import Any
 
 import pytest
 
+from tracegate.pr_advisor.collect import collect_pull_request
 from tracegate.pr_advisor.cli import validate_live_smoke_payload
 from tracegate.pr_advisor.deepseek_client import DeepSeekClientError, DeepSeekResponse, load_deepseek_settings_from_env
 from tracegate.pr_advisor.evidence_packet import EvidenceItem, EvidencePacket, sanitize_json_value
@@ -192,8 +193,47 @@ def test_fork_pr_workflow_does_not_access_llm_secret() -> None:
     workflow = Path(".github/workflows/tracegate-semantic-advisory.yml").read_text(encoding="utf-8")
     assert "semantic advisor skipped for fork PR because secrets are unavailable" in workflow
     assert "trusted base code does not yet include the v0.3 PR CLI" in workflow
+    assert "semantic advisor could not complete; this warning-only check does not block delivery" in workflow
     assert "pull_request_target" not in workflow
     assert "head.repo.full_name != github.event.pull_request.base.repo.full_name" in workflow
+
+
+def test_pr_collection_uses_paginated_files_api_for_large_diffs(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    view = {
+        "title": "Large Studio delivery",
+        "body": "",
+        "url": "https://github.com/example/repo/pull/16",
+        "state": "OPEN",
+        "labels": [],
+        "comments": [],
+        "reviews": [],
+        "files": [],
+        "commits": [],
+        "closingIssuesReferences": [],
+    }
+    monkeypatch.setattr("tracegate.pr_advisor.collect._run_gh_json", lambda *_args, **_kwargs: view)
+
+    requested_paths: list[str] = []
+
+    def fake_api(_repo: str, path: str) -> list[dict[str, object]]:
+        requested_paths.append(path)
+        if path.startswith("pulls/16/files"):
+            if path.endswith("page=1"):
+                return [{"filename": f"src/file-{index}.py"} for index in range(100)]
+            if path.endswith("page=2"):
+                return [{"filename": "src/final.py"}]
+        return []
+
+    monkeypatch.setattr("tracegate.pr_advisor.collect._api_json", fake_api)
+    monkeypatch.setattr("tracegate.pr_advisor.collect._collect_related_refs", lambda *_args, **_kwargs: [])
+
+    snapshot = collect_pull_request("example/repo", 16)
+
+    assert len(snapshot.diff_file_names) == 101
+    assert snapshot.diff_file_names[-1] == "src/final.py"
+    assert any("pulls/16/files?per_page=100&page=2" == path for path in requested_paths)
 
 
 def test_live_smoke_payload_requires_real_deepseek_call() -> None:

@@ -1,0 +1,20 @@
+{
+  "name": "@tracegate/desktop",
+  "version": "0.1.0",
+  "private": true,
+  "description": "TraceGate Studio Tauri 2 desktop shell",
+  "scripts": {
+    "dev": "tauri dev",
+    "build": "tauri build",
+    "check": "node scripts/cargo-task.mjs check",
+    "test": "node scripts/cargo-task.mjs test",
+    "fmt:check": "node scripts/cargo-task.mjs fmt-check",
+    "clippy": "node scripts/cargo-task.mjs clippy"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.8.0"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

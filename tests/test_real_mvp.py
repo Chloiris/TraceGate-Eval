@@ -372,6 +372,33 @@ def test_guardrail_scan_detects_dangerous_runtime_fallback(tmp_path: Path) -> No
     assert dangerous
 
 
+def test_guardrail_scan_allows_only_known_failure_boundaries(tmp_path: Path) -> None:
+    safe = tmp_path / "tracegate" / "studio" / "run_manager.py"
+    safe.parent.mkdir(parents=True)
+    safe.write_text("try:\n    work()\nexcept Exception as exc:\n    raise RuntimeError() from exc\n", encoding="utf-8")
+    unsafe = tmp_path / "tracegate" / "unknown.py"
+    unsafe.write_text("try:\n    work()\nexcept Exception:\n    return []\n", encoding="utf-8")
+    findings = scan_guardrails(root=tmp_path)
+    boundary = [item for item in findings if item.path.endswith("run_manager.py")]
+    dangerous = [item for item in findings if item.path.endswith("unknown.py")]
+    assert boundary and all(item.classification == "allowed_failure_boundary" for item in boundary)
+    assert dangerous and all(item.classification == "dangerous_runtime_path" for item in dangerous)
+
+
+def test_guardrail_scan_skips_dependency_and_build_trees(tmp_path: Path) -> None:
+    for relative_path in (
+        "node_modules/vendor/runtime.py",
+        "apps/desktop/src-tauri/target/generated/runtime.py",
+        "apps/web/dist/runtime.py",
+        "build/sidecar/runtime.py",
+    ):
+        generated = tmp_path / relative_path
+        generated.parent.mkdir(parents=True, exist_ok=True)
+        generated.write_text("def load_data():\n    return []\n", encoding="utf-8")
+
+    assert scan_guardrails(root=tmp_path) == []
+
+
 def test_cli_help_exposes_real_data_commands() -> None:
     result = subprocess.run(
         [sys.executable, "-m", "tracegate", "--help"],
