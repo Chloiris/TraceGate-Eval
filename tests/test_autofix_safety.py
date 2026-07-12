@@ -65,7 +65,21 @@ def test_state_machine_rejects_skips_and_returns_server_actions() -> None:
         has_workspace=True,
         has_patch=False,
         has_result=False,
-    ) == ["generate", "cancel", "delete_workspace"]
+    ) == ["generate", "cancel"]
+    assert "cancel" not in allowed_actions(
+        FixSessionStatus.FAILED,
+        FixPermissionMode.APPLY_IN_ISOLATED_WORKSPACE,
+        has_workspace=True,
+        has_patch=True,
+        has_result=False,
+    )
+    assert "cancel" not in allowed_actions(
+        FixSessionStatus.STALE,
+        FixPermissionMode.APPLY_IN_ISOLATED_WORKSPACE,
+        has_workspace=False,
+        has_patch=True,
+        has_result=False,
+    )
 
 
 def test_patch_hash_is_normalized_and_patch_is_statically_checked(tmp_path: Path) -> None:
@@ -91,6 +105,14 @@ def test_patch_hash_is_normalized_and_patch_is_statically_checked(tmp_path: Path
         "--- a/../escape.py\n+++ b/../escape.py\n@@ -0,0 +1 @@\n+x=1\n",
         "--- /dev/null\n+++ /tmp/absolute.py\n@@ -0,0 +1 @@\n+x=1\n",
         "GIT binary patch\nliteral 1\nA\n",
+        (
+            "diff --git a/linked.py b/linked.py\n"
+            "new file mode 120000\n"
+            "--- /dev/null\n"
+            "+++ b/linked.py\n"
+            "@@ -0,0 +1 @@\n"
+            "+../outside.py\n"
+        ),
     ],
 )
 def test_patch_safety_rejects_credentials_traversal_absolute_and_binary(
@@ -132,6 +154,51 @@ def test_patch_safety_rejects_symlink_and_size_limits(tmp_path: Path) -> None:
         ).validate(service_patch(), expected_head_sha=head, require_clean=False)
 
 
+def test_patch_safety_rejects_hidden_mode_only_section(tmp_path: Path) -> None:
+    repository = tmp_path / "repository"
+    head = initialize_repository(repository)
+    (repository / "unapproved.sh").write_text("echo safe\n", encoding="utf-8")
+    subprocess.run(["git", "add", "unapproved.sh"], cwd=repository, check=True)
+    subprocess.run(["git", "commit", "-qm", "add script"], cwd=repository, check=True)
+    head = subprocess.run(
+        ["git", "rev-parse", "HEAD"],
+        cwd=repository,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+    malicious = (
+        service_patch()
+        + "diff --git a/unapproved.sh b/unapproved.sh\n"
+        + "old mode 100644\n"
+        + "new mode 100755\n"
+    )
+
+    with pytest.raises(AutofixError, match="Mode, rename, and copy"):
+        PatchSafetyValidator(RepositoryBoundary(repository)).validate(
+            malicious,
+            expected_head_sha=head,
+            expected_files=["src/service.py"],
+        )
+
+
+def test_patch_safety_rejects_rename_from_sensitive_old_path(tmp_path: Path) -> None:
+    repository = tmp_path / "repository"
+    head = initialize_repository(repository)
+    malicious = """diff --git a/.env b/src/config.py
+similarity index 100%
+rename from .env
+rename to src/config.py
+"""
+
+    with pytest.raises(AutofixError, match="Mode, rename, and copy"):
+        PatchSafetyValidator(RepositoryBoundary(repository)).validate(
+            malicious,
+            expected_head_sha=head,
+            expected_files=["src/config.py"],
+        )
+
+
 def test_isolated_worktree_apply_rollback_and_cleanup_leave_source_unchanged(tmp_path: Path) -> None:
     repository = tmp_path / "repository"
     head = initialize_repository(repository)
@@ -148,6 +215,14 @@ def test_isolated_worktree_apply_rollback_and_cleanup_leave_source_unchanged(tmp
     )
     validator = PatchSafetyValidator(workspace.boundary)
     validator.validate(service_patch(), expected_head_sha=head)
+    original, projected = manager.project_file_versions(
+        workspace, service_patch(), "src/service.py"
+    )
+    assert original is not None and "return value * 2" in original
+    assert projected is not None and "return value + 2" in projected
+    assert "return value * 2" in (
+        workspace.worktree_root / "src" / "service.py"
+    ).read_text()
     validator.apply(service_patch(), expected_head_sha=head)
     assert "return value + 2" in (workspace.worktree_root / "src" / "service.py").read_text()
     assert source_file.read_bytes() == source_before
@@ -232,6 +307,8 @@ def test_resolution_requires_apply_tests_reindex_and_re_review() -> None:
         patch_applied=True,
         validation_outcomes=[ValidationOutcome(True, ValidationStatus.PASSED)],
         test_command_available=True,
+        targeted_test_passed=True,
+        finding_path_changed=True,
         reindex_succeeded=True,
         re_review=review,
     ) == FixResolution.RESOLVED
@@ -239,6 +316,8 @@ def test_resolution_requires_apply_tests_reindex_and_re_review() -> None:
         patch_applied=True,
         validation_outcomes=[ValidationOutcome(True, ValidationStatus.FAILED)],
         test_command_available=True,
+        targeted_test_passed=False,
+        finding_path_changed=True,
         reindex_succeeded=True,
         re_review=review,
     ) == FixResolution.VERIFICATION_FAILED
@@ -246,6 +325,17 @@ def test_resolution_requires_apply_tests_reindex_and_re_review() -> None:
         patch_applied=True,
         validation_outcomes=[ValidationOutcome(True, ValidationStatus.PASSED)],
         test_command_available=False,
+        targeted_test_passed=False,
+        finding_path_changed=True,
+        reindex_succeeded=True,
+        re_review=review,
+    ) == FixResolution.NEEDS_HUMAN_REVIEW
+    assert decide_resolution(
+        patch_applied=True,
+        validation_outcomes=[ValidationOutcome(True, ValidationStatus.PASSED)],
+        test_command_available=True,
+        targeted_test_passed=False,
+        finding_path_changed=True,
         reindex_succeeded=True,
         re_review=review,
     ) == FixResolution.NEEDS_HUMAN_REVIEW

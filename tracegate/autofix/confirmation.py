@@ -110,6 +110,49 @@ class FixConfirmationService:
         session.flush()
         return confirmation
 
+    def consume_bound(
+        self,
+        session: Session,
+        fix_session: FixSession,
+        *,
+        patch_hash: str,
+        current_head_sha: str,
+    ) -> FixConfirmation:
+        """Consume the newest server-issued confirmation without exposing its nonce.
+
+        The authenticated confirmation request is the user gesture. The cryptographic
+        nonce remains hash-only server state used to make each grant unique; it
+        is deliberately absent from API responses and logs.
+        """
+        confirmation = session.scalar(
+            select(FixConfirmation)
+            .where(
+                FixConfirmation.fix_session_id == fix_session.id,
+                FixConfirmation.repository_id == fix_session.repository_id,
+                FixConfirmation.pull_request_id == fix_session.pull_request_id,
+                FixConfirmation.finding_id == fix_session.finding_id,
+                FixConfirmation.head_sha == fix_session.head_sha,
+                FixConfirmation.patch_hash == patch_hash,
+                FixConfirmation.confirmed_at.is_not(None),
+                FixConfirmation.consumed_at.is_(None),
+                FixConfirmation.invalidated_at.is_(None),
+            )
+            .order_by(FixConfirmation.created_at.desc())
+            .limit(1)
+        )
+        if confirmation is None:
+            raise AutofixError("fix_confirmation_required", "Valid user confirmation is required")
+        if _aware(confirmation.expires_at) <= utcnow():
+            raise AutofixError("fix_confirmation_expired", "Confirmation expired")
+        if current_head_sha != confirmation.head_sha or fix_session.head_sha != confirmation.head_sha:
+            raise AutofixError("fix_head_stale", "Pull Request Head changed after confirmation")
+        confirmation.consumed_at = utcnow()
+        session.flush()
+        return confirmation
+
+    # Backwards-compatible descriptive alias for callers that use the lifecycle wording.
+    consume_latest = consume_bound
+
     def invalidate(self, session: Session, fix_session_id: str) -> int:
         now = utcnow()
         count = 0

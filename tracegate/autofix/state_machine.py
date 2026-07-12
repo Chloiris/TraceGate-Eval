@@ -76,6 +76,7 @@ ALLOWED_TRANSITIONS: dict[FixSessionStatus, frozenset[FixSessionStatus]] = {
             FixSessionStatus.RUNNING_VALIDATION,
             FixSessionStatus.ROLLED_BACK,
             FixSessionStatus.CANCELLED,
+            FixSessionStatus.STALE,
         }
     ),
     FixSessionStatus.RUNNING_VALIDATION: frozenset(
@@ -84,16 +85,22 @@ ALLOWED_TRANSITIONS: dict[FixSessionStatus, frozenset[FixSessionStatus]] = {
             FixSessionStatus.FAILED,
             FixSessionStatus.CANCELLED,
             FixSessionStatus.ROLLED_BACK,
+            FixSessionStatus.STALE,
         }
     ),
     FixSessionStatus.VALIDATION_COMPLETE: frozenset(
-        {FixSessionStatus.REINDEXING_CHANGES, FixSessionStatus.ROLLED_BACK}
+        {
+            FixSessionStatus.REINDEXING_CHANGES,
+            FixSessionStatus.ROLLED_BACK,
+            FixSessionStatus.STALE,
+        }
     ),
     FixSessionStatus.REINDEXING_CHANGES: frozenset(
         {
             FixSessionStatus.RE_REVIEWING,
             FixSessionStatus.FAILED,
             FixSessionStatus.ROLLED_BACK,
+            FixSessionStatus.STALE,
         }
     ),
     FixSessionStatus.RE_REVIEWING: frozenset(
@@ -101,10 +108,16 @@ ALLOWED_TRANSITIONS: dict[FixSessionStatus, frozenset[FixSessionStatus]] = {
             FixSessionStatus.FINALIZING,
             FixSessionStatus.FAILED,
             FixSessionStatus.ROLLED_BACK,
+            FixSessionStatus.STALE,
         }
     ),
     FixSessionStatus.FINALIZING: frozenset(
-        {FixSessionStatus.COMPLETED, FixSessionStatus.FAILED, FixSessionStatus.ROLLED_BACK}
+        {
+            FixSessionStatus.COMPLETED,
+            FixSessionStatus.FAILED,
+            FixSessionStatus.ROLLED_BACK,
+            FixSessionStatus.STALE,
+        }
     ),
     FixSessionStatus.COMPLETED: frozenset({FixSessionStatus.ROLLED_BACK}),
     FixSessionStatus.FAILED: frozenset({FixSessionStatus.ROLLED_BACK}),
@@ -163,16 +176,17 @@ def allowed_actions(
             actions.append("export_report")
     if current not in {
         FixSessionStatus.COMPLETED,
+        FixSessionStatus.FAILED,
         FixSessionStatus.CANCELLED,
         FixSessionStatus.ROLLED_BACK,
+        FixSessionStatus.STALE,
     }:
         actions.append("cancel")
-    if has_workspace and current not in {
-        FixSessionStatus.APPLYING_PATCH,
-        FixSessionStatus.RUNNING_VALIDATION,
-        FixSessionStatus.REINDEXING_CHANGES,
-        FixSessionStatus.RE_REVIEWING,
-        FixSessionStatus.FINALIZING,
+    if has_workspace and current in {
+        FixSessionStatus.FAILED,
+        FixSessionStatus.CANCELLED,
+        FixSessionStatus.ROLLED_BACK,
+        FixSessionStatus.STALE,
     }:
         actions.append("delete_workspace")
     return list(dict.fromkeys(actions))

@@ -133,6 +133,13 @@ def utcnow() -> datetime:
     return datetime.now(timezone.utc)
 
 
+def _normalize_evidence_reference(value: str) -> str:
+    """Accept an exact Evidence ID with optional display brackets only."""
+    if len(value) >= 2 and value.startswith("[") and value.endswith("]"):
+        return value[1:-1]
+    return value
+
+
 class TraceGateAgentWorkflow:
     """Seven real LangGraph nodes with durable Studio step/evidence/finding records."""
 
@@ -510,7 +517,14 @@ class TraceGateAgentWorkflow:
         repository, pull_request = self._repository_and_pr(state)
         evidence = self._evidence_prompt(state)
         result = await self.model.complete_structured(
-            system_prompt="Analyze code evidence for concrete defects. Empty findings are valid when evidence does not prove a defect.",
+            system_prompt=(
+                "Analyze code evidence for concrete defects. Empty findings are valid "
+                "when evidence does not prove a defect. Every evidence_ids value must "
+                "copy the complete bracketed Evidence ID exactly, including its namespace "
+                "prefix and punctuation; never shorten or rewrite an Evidence ID. "
+                "start_line and end_line must refer to the numbered CURRENT_HEAD_CONTENT, "
+                "not removed lines or diff display positions."
+            ),
             user_prompt=(
                 f"Repository {repository.full_name}; PR #{pull_request.number}; Head {state['head_sha']}\n"
                 f"UNTRUSTED_EVIDENCE\n{evidence}\nEND_UNTRUSTED_EVIDENCE"
@@ -528,7 +542,12 @@ class TraceGateAgentWorkflow:
         self, state: WorkflowState, _step_id: str
     ) -> WorkflowState:
         result = await self.model.complete_structured(
-            system_prompt="Classify whether the supplied evidence is active, stale, unknown, or conflicting under TraceGate semantics.",
+            system_prompt=(
+                "Classify whether the supplied evidence is active, stale, unknown, or "
+                "conflicting under TraceGate semantics. Every evidence_used value must "
+                "copy the complete bracketed Evidence ID exactly, including its namespace "
+                "prefix and punctuation; never shorten or rewrite an Evidence ID."
+            ),
             user_prompt=(
                 "UNTRUSTED_EVIDENCE\n"
                 + self._evidence_prompt(state)
@@ -581,7 +600,13 @@ class TraceGateAgentWorkflow:
             if evidence
             else ["No commit-bound repository evidence was retrieved."],
         )
-        verified_judgment = verify_judgment(packet, dict(state["judgment"]))
+        judgment = dict(state["judgment"])
+        judgment["evidence_used"] = [
+            _normalize_evidence_reference(value)
+            for value in judgment.get("evidence_used", [])
+            if isinstance(value, str)
+        ]
+        verified_judgment = verify_judgment(packet, judgment)
         evidence_by_id = {item.id: item for item in evidence}
         with self.session_factory() as session:
             indexed_rows = list(
@@ -597,9 +622,13 @@ class TraceGateAgentWorkflow:
         verified_findings: list[dict[str, Any]] = []
         for raw in state.get("findings", []):
             finding = FindingDraft.model_validate(raw)
+            normalized_ids = [
+                _normalize_evidence_reference(evidence_id)
+                for evidence_id in finding.evidence_ids
+            ]
             valid_ids = [
                 evidence_id
-                for evidence_id in finding.evidence_ids
+                for evidence_id in normalized_ids
                 if evidence_id in evidence_by_id
                 and evidence_by_id[evidence_id].commit_sha == state["head_sha"]
             ]
@@ -740,8 +769,29 @@ class TraceGateAgentWorkflow:
                     )
                 )
             )
+            indexed = {
+                item.path: item
+                for item in session.scalars(
+                    select(IndexedFile).where(
+                        IndexedFile.index_version_id == state["index_version"],
+                        IndexedFile.path.in_([row.file_path for row in rows if row.file_path]),
+                    )
+                )
+            }
         return "\n".join(
-            f"[{row.id}] commit={row.commit_sha} path={row.file_path}\n{row.payload_json.get('snippet', '')}"
+            (
+                f"[{row.id}] commit={row.commit_sha} path={row.file_path}\n"
+                f"DIFF_EVIDENCE\n{row.payload_json.get('snippet', '')}\n"
+                "CURRENT_HEAD_CONTENT\n"
+                + "\n".join(
+                    f"{number}: {line}"
+                    for number, line in enumerate(
+                        (indexed[row.file_path].content if row.file_path in indexed else "").splitlines(),
+                        start=1,
+                    )
+                )[:6_000]
+                + "\nEND_CURRENT_HEAD_CONTENT"
+            )
             for row in rows
         )[:40_000]
 

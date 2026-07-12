@@ -587,6 +587,20 @@ def test_notification_records_capture_actual_delivery_outcome(client: TestClient
     assert delivered.json()["status"] == "delivered"
     assert delivered.json()["error_message"] is None
 
+    fix_delivered = client.post(
+        "/api/v1/notifications",
+        headers=auth_headers(),
+        json={
+            "kind": "fix_awaiting_confirmation",
+            "status": "delivered",
+            "title": "TraceGate · Fix awaiting confirmation",
+            "body": "Review the hash-bound patch proposal",
+            "deep_link": "tracegate://fix/00000000-0000-4000-8000-000000000002",
+        },
+    )
+    assert fix_delivered.status_code == 201
+    assert fix_delivered.json()["kind"] == "fix_awaiting_confirmation"
+
     failed = client.post(
         "/api/v1/notifications",
         headers=auth_headers(),

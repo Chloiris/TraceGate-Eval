@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import hashlib
+import re
 import time
 import uuid
 from pathlib import Path
@@ -243,15 +243,14 @@ def persist_fix_workspace_index(
     boundary: RepositoryBoundary,
     *,
     head_sha: str,
-    patch_hash: str,
+    workspace_state_hash: str,
 ) -> tuple[IndexVersion, RepositoryMap]:
     """Persist a patch-state index without replacing the enrolled repository index."""
     snapshot = RepositoryIndexer(boundary).build(None)
     if snapshot.commit_sha != head_sha:
         raise RepositoryIndexError("Fix workspace Head SHA changed before indexing")
-    workspace_state_hash = hashlib.sha256(
-        f"{head_sha}:{patch_hash}".encode("ascii")
-    ).hexdigest()
+    if not re.fullmatch(r"[0-9a-f]{64}", workspace_state_hash):
+        raise RepositoryIndexError("Fix workspace state hash is invalid")
     existing = session.scalar(
         select(IndexVersion).where(
             IndexVersion.repository_id == repository.id,

@@ -16,6 +16,8 @@ def decide_resolution(
     patch_applied: bool,
     validation_outcomes: list[ValidationOutcome],
     test_command_available: bool,
+    targeted_test_passed: bool,
+    finding_path_changed: bool,
     reindex_succeeded: bool,
     re_review: ReReviewAssessment | None,
 ) -> FixResolution:
@@ -29,7 +31,13 @@ def decide_resolution(
         for outcome in validation_outcomes
     ):
         return FixResolution.VERIFICATION_FAILED
-    if not test_command_available or re_review is None or re_review.confidence < 0.6:
+    if (
+        not test_command_available
+        or not targeted_test_passed
+        or not finding_path_changed
+        or re_review is None
+        or re_review.confidence < 0.6
+    ):
         return FixResolution.NEEDS_HUMAN_REVIEW
     if re_review.original_finding_supported:
         return FixResolution.NOT_RESOLVED

@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import hashlib
 import os
 import re
 import shutil
 import subprocess
+import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -187,27 +189,177 @@ class FixWorkspaceManager:
         )
         return result.stdout
 
-    def file_versions(self, workspace: FixWorkspace, relative_path: str) -> tuple[str, str]:
-        boundary = workspace.boundary
-        modified_path = boundary.resolve(relative_path)
-        modified = modified_path.read_text(encoding="utf-8", errors="replace")
-        original_result = self._run_git(
+    def diff_all(self, workspace: FixWorkspace) -> str:
+        """Return the authoritative full worktree diff, including new files."""
+        self.verify(workspace, require_clean=False)
+        untracked = self._run_git(
             workspace.worktree_root,
-            "show",
-            f"{workspace.head_sha}:{relative_path}",
-            check=False,
-        )
-        original = original_result.stdout if original_result.returncode == 0 else ""
-        return original, modified
+            "ls-files",
+            "--others",
+            "--exclude-standard",
+            "-z",
+        ).stdout.split("\0")
+        for relative_path in (path for path in untracked if path):
+            workspace.boundary.resolve(relative_path)
+            self._run_git(
+                workspace.worktree_root,
+                "add",
+                "-N",
+                "--",
+                relative_path,
+            )
+        return self._run_git(
+            workspace.worktree_root,
+            "diff",
+            "--binary",
+            "--no-ext-diff",
+            workspace.head_sha,
+            "--",
+        ).stdout
+
+    def state_hash(self, workspace: FixWorkspace) -> str:
+        """Hash every changed/deleted/untracked path and byte in the worktree."""
+        self.verify(workspace, require_clean=False)
+        paths = self._run_git(
+            workspace.worktree_root,
+            "ls-files",
+            "-m",
+            "-d",
+            "-o",
+            "--exclude-standard",
+            "-z",
+        ).stdout.split("\0")
+        digest = hashlib.sha256()
+        for relative_path in sorted({path for path in paths if path}):
+            absolute = workspace.boundary.resolve(relative_path, allow_missing=True)
+            digest.update(relative_path.encode("utf-8", errors="surrogateescape"))
+            digest.update(b"\0")
+            if not absolute.exists():
+                digest.update(b"deleted\0")
+                continue
+            if absolute.is_symlink():
+                raise AutofixError(
+                    "fix_workspace_unavailable",
+                    "Fix workspace state contains an unexpected symbolic link",
+                )
+            stat = absolute.stat()
+            digest.update(f"{stat.st_mode & 0o777:o}:{stat.st_size}".encode("ascii"))
+            digest.update(b"\0")
+            if absolute.is_file():
+                with absolute.open("rb") as handle:
+                    for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+                        digest.update(chunk)
+            digest.update(b"\0")
+        return digest.hexdigest()
+
+    def project_file_versions(
+        self,
+        workspace: FixWorkspace,
+        patch: str,
+        relative_path: str,
+    ) -> tuple[str | None, str | None]:
+        """Project Base/Patched content without mutating the isolated worktree."""
+        workspace.boundary.resolve(relative_path, allow_missing=True)
+        with tempfile.TemporaryDirectory(
+            prefix="patch-projection-", dir=workspace.session_root
+        ) as temporary:
+            environment = _git_environment()
+            environment["GIT_INDEX_FILE"] = str(Path(temporary) / "index")
+            read_tree = subprocess.run(
+                ["git", "-C", str(workspace.worktree_root), "read-tree", workspace.head_sha],
+                capture_output=True,
+                text=True,
+                errors="replace",
+                timeout=30,
+                env=environment,
+                check=False,
+            )
+            if read_tree.returncode != 0:
+                raise AutofixError(
+                    "fix_workspace_unavailable",
+                    read_tree.stderr[:2_000].strip() or "Patch projection index failed",
+                )
+            applied = subprocess.run(
+                [
+                    "git",
+                    "-C",
+                    str(workspace.worktree_root),
+                    "apply",
+                    "--cached",
+                    "--whitespace=nowarn",
+                    "-",
+                ],
+                input=patch,
+                capture_output=True,
+                text=True,
+                errors="replace",
+                timeout=30,
+                env=environment,
+                check=False,
+            )
+            if applied.returncode != 0:
+                raise AutofixError(
+                    "fix_patch_unsafe",
+                    applied.stderr[:2_000].strip() or "Patch projection failed",
+                )
+
+            def show(specification: str) -> str | None:
+                result = subprocess.run(
+                    [
+                        "git",
+                        "-C",
+                        str(workspace.worktree_root),
+                        "show",
+                        specification,
+                    ],
+                    capture_output=True,
+                    text=True,
+                    errors="replace",
+                    timeout=30,
+                    env=environment,
+                    check=False,
+                )
+                return result.stdout if result.returncode == 0 else None
+
+            return show(f"{workspace.head_sha}:{relative_path}"), show(
+                f":{relative_path}"
+            )
 
     def discover_residual_worktrees(self) -> list[Path]:
         if not self.root.exists():
-            return []
+            return list()
         return sorted(
             path
             for path in self.root.glob("*/*/worktree")
             if path.is_dir() and path.resolve().is_relative_to(self.root)
         )
+
+    def delete_residual_worktree(self, worktree_root: Path) -> None:
+        """Remove an orphaned worktree directory without trusting its Git metadata.
+
+        Residual diagnostics can outlive the database record that identifies the
+        enrolled source repository.  In that case we deliberately do not follow
+        the worktree's ``.git`` pointer: it could reference a path outside the
+        managed Autofix root.  The stale Git administrative entry, if any, is
+        harmless and will be pruned by the source repository on its next normal
+        worktree operation.
+        """
+
+        candidate = worktree_root.expanduser()
+        if candidate.is_symlink() or candidate.parent.is_symlink():
+            raise AutofixError("fix_workspace_unavailable", "Residual Fix workspace is a symlink")
+        resolved = candidate.resolve(strict=True)
+        self._require_managed(resolved)
+        relative = resolved.relative_to(self.root.resolve(strict=False))
+        if len(relative.parts) != 3 or relative.parts[-1] != "worktree":
+            raise AutofixError(
+                "fix_workspace_unavailable",
+                "Residual Fix workspace does not match the managed directory layout",
+            )
+        session_root = resolved.parent
+        if session_root.is_symlink():
+            raise AutofixError("fix_workspace_unavailable", "Residual Fix session is a symlink")
+        shutil.rmtree(session_root)
 
     def _session_root(self, repository_id: str, session_id: str) -> Path:
         candidate = (self.root / repository_id / session_id).resolve(strict=False)

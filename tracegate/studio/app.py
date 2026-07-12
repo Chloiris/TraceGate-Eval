@@ -3,6 +3,8 @@ from __future__ import annotations
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 import logging
+from pathlib import Path
+import tempfile
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
@@ -12,10 +14,14 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.middleware.cors import CORSMiddleware
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
+from tracegate.autofix.workspace import FixWorkspaceManager
+
 from .api import router
-from .config import StudioSettings
+from .config import StudioSettings, default_data_dir
 from .database import StudioDatabase
 from .errors import StudioAPIError
+from .fix_api import router as fix_router, workspace_router
+from .fix_manager import FixManager
 from .migration_runner import require_current_revision, upgrade_database
 from .monitor import RepositoryMonitor
 from .relay_monitor import RelayMonitor
@@ -41,6 +47,15 @@ def _error_response(status_code: int, code: str, message: str) -> JSONResponse:
     )
 
 
+def _fix_workspace_root(database: StudioDatabase) -> Path:
+    url = database.engine.url
+    if url.get_backend_name() == "sqlite":
+        if url.database and url.database != ":memory:":
+            return Path(url.database).expanduser().resolve().parent / "autofix-workspaces"
+        return Path(tempfile.gettempdir()).resolve() / "tracegate-studio" / "autofix-workspaces"
+    return default_data_dir() / "autofix-workspaces"
+
+
 def create_app(settings: StudioSettings) -> FastAPI:
     database = StudioDatabase(settings.database_url)
     run_manager = RunManager(database.session_factory)
@@ -50,6 +65,10 @@ def create_app(settings: StudioSettings) -> FastAPI:
         run_manager,
     )
     relay_monitor = RelayMonitor(database.session_factory, run_manager)
+    fix_manager = FixManager(
+        database.session_factory,
+        FixWorkspaceManager(_fix_workspace_root(database)),
+    )
     logger = logging.getLogger("tracegate.studio.api")
 
     @asynccontextmanager
@@ -67,6 +86,7 @@ def create_app(settings: StudioSettings) -> FastAPI:
             await relay_monitor.shutdown()
             await repository_monitor.shutdown()
             await run_manager.shutdown()
+            await fix_manager.shutdown()
             database.dispose()
             logger.info("api_stopped database_disposed=true")
 
@@ -83,6 +103,7 @@ def create_app(settings: StudioSettings) -> FastAPI:
     app.state.run_manager = run_manager
     app.state.repository_monitor = repository_monitor
     app.state.relay_monitor = relay_monitor
+    app.state.fix_manager = fix_manager
 
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=list(settings.allowed_hosts))
     app.add_middleware(
@@ -90,7 +111,15 @@ def create_app(settings: StudioSettings) -> FastAPI:
         allow_origins=list(settings.cors_origins),
         allow_credentials=False,
         allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-        allow_headers=["Authorization", "Content-Type"],
+        allow_headers=[
+            "Accept",
+            "Authorization",
+            "Cache-Control",
+            "Content-Type",
+            "Idempotency-Key",
+            "Last-Event-ID",
+        ],
+        expose_headers=["Content-Disposition", "X-TraceGate-Patch-Hash"],
         max_age=600,
     )
 
@@ -126,6 +155,8 @@ def create_app(settings: StudioSettings) -> FastAPI:
         return _error_response(exc.status_code, "http_error", str(exc.detail))
 
     app.include_router(router)
+    app.include_router(fix_router)
+    app.include_router(workspace_router)
     app.include_router(runtime_credentials_router)
     app.include_router(webhook_router)
     return app

@@ -23,6 +23,26 @@ def test_redaction_removes_bearer_and_provider_credentials() -> None:
     assert redacted.count("<redacted>") == 2
 
 
+def test_redaction_covers_fine_grained_cloud_and_private_key_shapes() -> None:
+    fine_grained = "github_pat_" + "A" * 48
+    aws_access_key = "AKIA" + "B" * 16
+    private_key_label = "PRIVATE" + " KEY"
+    private_key = (
+        f"-----BEGIN {private_key_label}-----\n"
+        + "C" * 64
+        + f"\n-----END {private_key_label}-----"
+    )
+
+    redacted = redact_text(
+        f"github={fine_grained} aws={aws_access_key}\n{private_key}"
+    )
+
+    assert fine_grained not in redacted
+    assert aws_access_key not in redacted
+    assert private_key not in redacted
+    assert redacted.count("<redacted>") == 3
+
+
 def test_json_formatter_uses_structured_bounded_fields() -> None:
     record = logging.LogRecord(
         name="tracegate.test",

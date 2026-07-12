@@ -5,7 +5,7 @@ import os
 import re
 import subprocess
 from dataclasses import dataclass
-from pathlib import Path, PurePosixPath
+from pathlib import PurePosixPath
 
 from tracegate.repository import RepositoryBoundary, RepositoryPathError
 
@@ -29,6 +29,11 @@ class PatchLimits:
 
 
 _DIFF_PATH = re.compile(r"^(?:---|\+\+\+) ([^\t]+)")
+_DIFF_GIT_PATHS = re.compile(r"^diff --git (\S+) (\S+)$")
+_UNSUPPORTED_DIFF_METADATA = re.compile(
+    r"^(?:old mode|new mode|similarity index|dissimilarity index|"
+    r"rename from|rename to|copy from|copy to) "
+)
 _SENSITIVE_SUFFIXES = {
     ".cer",
     ".crt",
@@ -160,6 +165,15 @@ class PatchSafetyValidator:
         normalized = normalize_patch(patch)
         if "GIT binary patch" in normalized or "Binary files " in normalized:
             raise AutofixError("fix_patch_unsafe", "Binary patches are forbidden")
+        if re.search(
+            r"^(?:(?:new|old) file mode|new mode) 120000$",
+            normalized,
+            flags=re.MULTILINE,
+        ):
+            raise AutofixError(
+                "fix_patch_unsafe",
+                "Patches may not create or convert files into symbolic links",
+            )
         if "diff --cc " in normalized or "diff --combined " in normalized:
             raise AutofixError("fix_patch_unsafe", "Combined diffs are not supported")
 
@@ -170,8 +184,25 @@ class PatchSafetyValidator:
         per_file: dict[str, int] = {}
         deleted_files: set[str] = set()
         previous_header: str | None = None
+        metadata_paths: set[str] = set()
 
         for line in normalized.splitlines():
+            if _UNSUPPORTED_DIFF_METADATA.match(line):
+                raise AutofixError(
+                    "fix_patch_unsafe",
+                    "Mode, rename, and copy metadata are not supported in Autofix patches",
+                )
+            diff_git = _DIFF_GIT_PATHS.match(line)
+            if diff_git:
+                # Validate both sides even before ---/+++ parsing. This prevents a
+                # hidden metadata-only section from escaping the structured file set.
+                for raw_path in diff_git.groups():
+                    cleaned = _clean_diff_path(raw_path)
+                    if cleaned is not None:
+                        metadata_paths.add(cleaned)
+                current_file = None
+                previous_header = None
+                continue
             matched = _DIFF_PATH.match(line)
             if matched:
                 raw_path = matched.group(1)
@@ -215,6 +246,11 @@ class PatchSafetyValidator:
             )
 
         expected = set(expected_files or [])
+        if metadata_paths and not metadata_paths.issubset(set(changed_files)):
+            raise AutofixError(
+                "fix_patch_unsafe",
+                "Patch contains a diff section without a bounded text hunk",
+            )
         if expected and expected != set(changed_files):
             raise AutofixError(
                 "fix_patch_unsafe",

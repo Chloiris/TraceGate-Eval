@@ -15,7 +15,7 @@ from .errors import AutofixError
 from .schemas import ValidationCommand, ValidationPlan, ValidationStatus
 
 
-MAX_VALIDATION_OUTPUT = 512 * 1024
+MAX_VALIDATION_OUTPUT = 64_000
 
 
 @dataclass(frozen=True)
@@ -30,7 +30,9 @@ class ValidationExecution:
 class ValidationCommandResolver:
     """Derive validation argv from repository manifests, never model shell text."""
 
-    def resolve(self, boundary: RepositoryBoundary, *, finding_path: str | None = None) -> ValidationPlan:
+    def resolve(
+        self, boundary: RepositoryBoundary, *, finding_path: str | None = None
+    ) -> ValidationPlan:
         commands: list[ValidationCommand] = [
             ValidationCommand(
                 argv=["git", "diff", "--check"],
@@ -46,7 +48,11 @@ class ValidationCommandResolver:
 
         if (root / "pyproject.toml").is_file() or (root / "pytest.ini").is_file():
             related = self._related_python_test(boundary, finding_path)
-            prefix = ["uv", "run", "pytest"] if (root / "uv.lock").is_file() else ["python", "-m", "pytest"]
+            prefix = (
+                ["uv", "run", "pytest"]
+                if (root / "uv.lock").is_file()
+                else ["python", "-m", "pytest"]
+            )
             if related:
                 commands.append(
                     ValidationCommand(
@@ -54,7 +60,7 @@ class ValidationCommandResolver:
                         command_purpose="Run the test module related to the Finding path",
                         required=True,
                         timeout=300,
-                        expected_result="All selected tests pass",
+                        expected_result="All selected tests succeed",
                         source="repository_structure",
                     )
                 )
@@ -64,7 +70,7 @@ class ValidationCommandResolver:
                     command_purpose="Run the repository Python test suite",
                     required=True,
                     timeout=900,
-                    expected_result="All Python tests pass",
+                    expected_result="All Python tests succeed",
                     source="pyproject.toml",
                 )
             )
@@ -108,7 +114,7 @@ class ValidationCommandResolver:
                     command_purpose="Run the repository Rust tests",
                     required=True,
                     timeout=900,
-                    expected_result="All Rust tests pass",
+                    expected_result="All Rust tests succeed",
                     source="Cargo.toml",
                 )
             )
@@ -125,7 +131,9 @@ class ValidationCommandResolver:
                     source="pom.xml",
                 )
             )
-        elif any((root / name).is_file() for name in ("build.gradle", "build.gradle.kts")):
+        elif any(
+            (root / name).is_file() for name in ("build.gradle", "build.gradle.kts")
+        ):
             executable = "./gradlew" if (root / "gradlew").is_file() else "gradle"
             commands.append(
                 ValidationCommand(
@@ -145,12 +153,33 @@ class ValidationCommandResolver:
             if key not in seen:
                 deduplicated.append(command)
                 seen.add(key)
-        if len(deduplicated) == 1:
+        if not any(self.is_test_command(command.argv) for command in deduplicated):
             notes.append("NO_TEST_COMMAND_AVAILABLE")
         return ValidationPlan(commands=deduplicated, notes=notes)
 
     @staticmethod
-    def _related_python_test(boundary: RepositoryBoundary, finding_path: str | None) -> str | None:
+    def is_test_command(argv: list[str]) -> bool:
+        values = tuple(argv)
+        prefixes = (
+            ("uv", "run", "pytest"),
+            ("python", "-m", "pytest"),
+            ("python3", "-m", "pytest"),
+            ("pytest",),
+            ("pnpm", "test"),
+            ("npm", "test"),
+            ("yarn", "test"),
+            ("cargo", "test"),
+            ("mvn", "test"),
+            ("./mvnw", "test"),
+            ("gradle", "test"),
+            ("./gradlew", "test"),
+        )
+        return any(values[: len(prefix)] == prefix for prefix in prefixes)
+
+    @staticmethod
+    def _related_python_test(
+        boundary: RepositoryBoundary, finding_path: str | None
+    ) -> str | None:
         if not finding_path or not finding_path.endswith(".py"):
             return None
         stem = Path(finding_path).stem
@@ -202,8 +231,12 @@ class ValidationExecutor:
                 int((time.monotonic() - started) * 1000),
             )
 
-        stdout_task = asyncio.create_task(self._read_stream(process.stdout, "stdout", on_output))
-        stderr_task = asyncio.create_task(self._read_stream(process.stderr, "stderr", on_output))
+        stdout_task = asyncio.create_task(
+            self._read_stream(process.stdout, "stdout", on_output)
+        )
+        stderr_task = asyncio.create_task(
+            self._read_stream(process.stderr, "stderr", on_output)
+        )
         status = ValidationStatus.RUNNING
         try:
             while process.returncode is None:
@@ -223,8 +256,15 @@ class ValidationExecutor:
         finally:
             stdout, stderr = await asyncio.gather(stdout_task, stderr_task)
         if status == ValidationStatus.RUNNING:
-            status = ValidationStatus.PASSED if process.returncode == 0 else ValidationStatus.FAILED
-        if status == ValidationStatus.FAILED and time.monotonic() - started > command.timeout:
+            status = (
+                ValidationStatus.PASSED
+                if process.returncode == 0
+                else ValidationStatus.FAILED
+            )
+        if (
+            status == ValidationStatus.FAILED
+            and time.monotonic() - started > command.timeout
+        ):
             stderr = (stderr + "\nCommand timed out.").strip()
         return ValidationExecution(
             status,
@@ -290,6 +330,8 @@ class ValidationExecutor:
                 "GIT_TERMINAL_PROMPT": "0",
                 "HOME": str(self.safe_home),
                 "NO_COLOR": "1",
+                "PYTHONDONTWRITEBYTECODE": "1",
+                "PYTEST_ADDOPTS": "-p no:cacheprovider",
                 "XDG_CACHE_HOME": str(self.safe_home / "cache"),
                 "XDG_CONFIG_HOME": str(self.safe_home / "config"),
             }
@@ -321,10 +363,19 @@ class ValidationExecutor:
         }
         values = tuple(argv)
         if not any(values[: len(prefix)] == prefix for prefix in prefixes):
-            raise AutofixError("fix_validation_forbidden", "Validation command is not allowed")
+            raise AutofixError(
+                "fix_validation_forbidden", "Validation command is not allowed"
+            )
         for argument in argv[1:]:
             normalized = argument.replace("\\", "/")
-            if "\x00" in argument or any(token in argument for token in ("&&", ";", "`", "$(")):
-                raise AutofixError("fix_validation_forbidden", "Validation argument is unsafe")
+            if "\x00" in argument or any(
+                token in argument for token in ("&&", ";", "`", "$(")
+            ):
+                raise AutofixError(
+                    "fix_validation_forbidden", "Validation argument is unsafe"
+                )
             if Path(normalized).is_absolute() or ".." in Path(normalized).parts:
-                raise AutofixError("fix_validation_forbidden", "Validation path argument escapes the workspace")
+                raise AutofixError(
+                    "fix_validation_forbidden",
+                    "Validation path argument escapes the workspace",
+                )

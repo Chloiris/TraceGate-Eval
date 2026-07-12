@@ -35,6 +35,7 @@ class RecordingModel:
         self.calls.append(output_schema.__name__)
         evidence_match = re.search(r"\[(studio-evidence:[^\]]+)\]", user_prompt)
         evidence_id = evidence_match.group(1) if evidence_match else ""
+        bracketed_evidence_id = f"[{evidence_id}]"
         payloads = {
             "PlanOutput": {
                 "objective": "Review the indexed function",
@@ -54,7 +55,7 @@ class RecordingModel:
                         "start_line": 2,
                         "end_line": 2,
                         "symbol": "indexed_function",
-                        "evidence_ids": [evidence_id],
+                        "evidence_ids": [bracketed_evidence_id],
                         "suggested_action": "Validate the value before returning it.",
                     }
                 ],
@@ -62,7 +63,7 @@ class RecordingModel:
             "RiskJudgmentOutput": {
                 "evidence_status": "unknown",
                 "expected_decision": "verify_first",
-                "evidence_used": [evidence_id],
+                "evidence_used": [bracketed_evidence_id],
                 "rationale": "Only repository evidence is available.",
                 "missing_evidence": ["A focused test result is missing."],
                 "should_block": False,
