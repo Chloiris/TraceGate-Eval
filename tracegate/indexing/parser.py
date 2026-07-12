@@ -649,7 +649,7 @@ def _java_type_is_safe(identifier: str | None) -> bool:
 
 
 def _nesting_depths_at(content: str, positions: Iterable[int]) -> dict[int, int]:
-    """Return conservative brace/parenthesis/bracket depth in one linear pass."""
+    """Return conservative brace/parenthesis/bracket depth in one linear scan."""
 
     depths: dict[int, int] = {}
     cursor = 0
