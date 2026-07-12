@@ -1,7 +1,8 @@
 # TraceGate Studio implementation status
 
 - Last updated: 2026-07-12
-- Branch: `feat/tracegate-studio-fullstack`
+- Verification source: feature branch `feat/tracegate-studio-fullstack` through
+  commit `a7466ce69441871df229a5ed1cdf32ec594ba935`
 - Status owner: TraceGate maintainers
 
 ## Status definitions
@@ -22,7 +23,7 @@
 
 | Feature | Status | Evidence / note |
 | --- | --- | --- |
-| Existing suite plus Studio tests | VERIFIED_MACOS / VERIFIED_WINDOWS_CI | Windows CI passed 163 Python tests, 30 TypeScript/Vitest tests (5 shared types + 7 API client + 18 web), and 22 Rust tests (1 explicit native secure-store mutation ignored); macOS also passed 4 Chrome Playwright flows; original Eval coverage remains intact; see `verification/windows-ci.md` |
+| Existing suite plus Studio tests | VERIFIED_MACOS / VERIFIED_WINDOWS_CI | Source-bound Windows CI passed 212 Python tests, 30 TypeScript/Vitest tests (5 shared types + 7 API client + 18 web), and 22 Rust tests (1 explicit native secure-store mutation ignored); macOS also passed 4 Chrome Playwright flows; original Eval coverage remains intact; see `verification/windows-ci.md` |
 | ClaimBench controlled benchmark | VERIFIED_MACOS | Existing tests and checked-in 160-run reports; metric definitions unchanged |
 | Real-PR hard benchmark | VERIFIED_MACOS | Existing tests and checked-in 19 scored cases |
 | EvidencePacket and redaction | VERIFIED_MACOS | Existing `tests/test_pr_advisor.py` |
@@ -50,7 +51,7 @@
 | Diagnostics API/page | VERIFIED_MACOS | Redacted runtime/storage/queue/update state plus GitHub/index/graph/model/retrieval/notification metrics are API-tested and browser-rendered |
 | Non-secret settings persistence | VERIFIED_MACOS | Theme/language/background choices persist; API never accepts a secret |
 | macOS secure credential storage | VERIFIED_MACOS | Native Keychain round-trip passed and deleted its verification entry |
-| Windows Credential Manager secure storage | VERIFIED_WINDOWS_CI | The ordinary Rust suite passed 22 tests with the mutation test ignored, then run `29163495677` explicitly reran `native_secure_store_round_trip -- --ignored` and passed its native write/read/delete cycle 1/1; this is automated runner evidence, not Windows GUI/manual acceptance |
+| Windows Credential Manager secure storage | VERIFIED_WINDOWS_CI | The ordinary Rust suite passed 22 tests with the mutation test ignored, then run `29176975492` explicitly reran `native_secure_store_round_trip -- --ignored` and passed its native write/read/delete cycle 1/1; this is automated runner evidence, not Windows GUI/manual acceptance |
 | Python Sidecar entry and health check | VERIFIED_MACOS | Independent and packaged authenticated health checks passed |
 | macOS arm64 PyInstaller Sidecar | VERIFIED_MACOS | Native Mach-O artifact built, authenticated-health-checked and bundled on 2026-07-10 |
 | Tauri 2 shell | VERIFIED_MACOS | Latest packaged `.app` launched with one Tauri owner and real Sidecar; logs show migration, `api_ready`, graceful shutdown and no orphan process |
@@ -59,7 +60,7 @@
 | True quit stops Sidecar | VERIFIED_MACOS | Desktop plus PyInstaller bootloader/worker all disappeared after Quit |
 | Single-instance foundation | VERIFIED_MACOS | Repeated native launch retained one application/Sidecar owner |
 | Browser development mode | VERIFIED_MACOS | Browser UI exercised against real authenticated API |
-| Windows x86_64 build workflow | VERIFIED_WINDOWS_CI | Push run [29163495677](https://github.com/Chloiris/TraceGate-Eval/actions/runs/29163495677) and PR run [29163496649](https://github.com/Chloiris/TraceGate-Eval/actions/runs/29163496649) succeeded for commit `ef6c2f2fd49c57d06f4fa21784127e4f9b3bb904`; see `verification/windows-ci.md` |
+| Windows x86_64 build workflow | VERIFIED_WINDOWS_CI | Push run [29176975492](https://github.com/Chloiris/TraceGate-Eval/actions/runs/29176975492) and PR run [29176976588](https://github.com/Chloiris/TraceGate-Eval/actions/runs/29176976588) succeeded for commit `a7466ce69441871df229a5ed1cdf32ec594ba935`; see `verification/windows-ci.md` |
 | Windows Sidecar health check in CI | VERIFIED_WINDOWS_CI | PyInstaller produced `tracegate-backend.exe` and the Windows runner passed its authenticated loopback health check |
 | Windows NSIS Setup.exe artifact | VERIFIED_WINDOWS_CI | Unsigned `TraceGate-Studio-Setup.exe` was produced, hashed, uploaded, and downloaded for hash/format inspection; this is not installation evidence |
 | Windows MSI artifact | VERIFIED_WINDOWS_CI | Unsigned `TraceGate-Studio.msi` was produced, hashed, uploaded, and downloaded for hash/format inspection; this is not installation evidence |
@@ -81,8 +82,8 @@
 | GitHub connection state | VERIFIED_MACOS | API and Chrome show “GitHub 尚未连接” without substituting data |
 | ETag-aware PR polling | VERIFIED_MACOS | Durable ETag/rate-limit sync plus background monitor and unit tests |
 | PR snapshots and Head-SHA deduplication | VERIFIED_MACOS | Snapshot uniqueness, ETag and analysis dedup are database/API tested |
-| PR Inbox | VERIFIED_MACOS | Real persisted inbox exercised in Chrome Playwright |
-| PR details and typed tabs | VERIFIED_MACOS | Nine real-data tabs exercised in Chrome; unavailable Checks remain explicit |
+| PR Inbox | VERIFIED_MACOS | Persisted fixture-backed inbox exercised in isolated Chrome Playwright |
+| PR details and typed tabs | VERIFIED_MACOS | Nine persisted fixture-backed tabs exercised in isolated Chrome Playwright; unavailable Checks remain explicit |
 | Monaco Diff with finding/evidence jumps | VERIFIED_MACOS | Local/offline Monaco and Finding→Diff flow verified by Playwright screenshot/test |
 | Unified CodeParser interface | VERIFIED_MACOS | Audited 12-row Python/JS/TS/Java matrix with real temporary Git fixtures; Python AST is bounded and JS/TS/Java remain explicit declaration-level partial adapters; see `docs/parser-capability-matrix.md` |
 | Incremental commit-bound index | VERIFIED_MACOS | Content hash/change/deletion and Head SHA binding tests |
@@ -90,7 +91,8 @@
 | Repository Map backend | VERIFIED_MACOS | Persisted parsed/indexed relationships and commit/index binding tests |
 | Repository Map React Flow UI | VERIFIED_MACOS | Directory-first aggregation, 800-node cap, filters, MiniMap, collapse, save/restore and measured layout ADR-002; backend-local graph paging remains future work |
 | Review Map backend | VERIFIED_MACOS | Real Git diff + static graph + persisted Agent Evidence API test |
-| Review Map UI and Diff bidirectional jump | VERIFIED_MACOS | Chrome Playwright and `p1-review-map-macos.png` |
+| Review Map UI rendering | VERIFIED_MACOS | Review Map rendering is exercised in isolated Chrome Playwright |
+| Review Map direct node ↔ Diff navigation | IMPLEMENTED_UNVERIFIED | UI foundations exist, but current Playwright evidence verifies Finding→Diff only; direct map-node navigation has not completed acceptance |
 | Finding schema/storage foundation | VERIFIED_MACOS | Required traceability fields, filters and UI are persisted/API-tested |
 | Evidence storage foundation | VERIFIED_MACOS | Commit/hash/source payload and Finding linkage verified |
 | Agent Trace API/SSE/UI | VERIFIED_MACOS | Authenticated SSE parser, run detail, steps/tools and UI tests |
@@ -150,14 +152,14 @@ item, so direct tray restore and notification click remain
 
 ### Windows x86_64 CI
 
-Commit `ef6c2f2fd49c57d06f4fa21784127e4f9b3bb904` passed the push and Pull
-Request Windows workflows on `windows-latest`. The runner passed 163 Python,
+Commit `a7466ce69441871df229a5ed1cdf32ec594ba935` passed the push and Pull
+Request Windows workflows on `windows-latest`. The runner passed 212 Python,
 30 TypeScript/Vitest, and 22 Rust tests (with 1 native secure-store test ignored
 in the ordinary suite), then passed that native Credential Manager round-trip
 in a separate explicit 1/1 invocation, authenticated the PyInstaller Sidecar
 health endpoint, and produced unsigned NSIS, MSI, and portable packages.
-Artifact `TraceGate-Studio-Windows-x86_64-unsigned-ef6c2f2fd49c57d06f4fa21784127e4f9b3bb904`
-(ID `8251618586`) contains the packages, `SHA256SUMS.txt`, `build-info.json`,
+Artifact `TraceGate-Studio-Windows-x86_64-unsigned-a7466ce69441871df229a5ed1cdf32ec594ba935`
+(ID `8255326332`) contains the packages, `SHA256SUMS.txt`, `build-info.json`,
 and `test-summary.txt`. Exact runs, hashes, retention, and download evidence are
 recorded in [`verification/windows-ci.md`](verification/windows-ci.md).
 

@@ -24,13 +24,13 @@ repository state, not a published signed release.
 - Verified one production-path DeepSeek E2E on `psf/requests#7565`, including 4
   real model requests and persisted Tool Calls, Evidence, Finding, and Agent
   Trace without storing the API key.
-- Verified Windows x86_64 CI compilation, 163 Python tests, 30
+- Verified Windows x86_64 CI compilation, 212 Python tests, 30
   TypeScript/Vitest tests, and 22 passing Rust tests (1 explicit native
   secure-store mutation test ignored in the ordinary suite), followed by a
   passing explicit 1/1 Windows Credential Manager round-trip, authenticated
   PyInstaller Sidecar health, and unsigned NSIS, MSI, and portable artifact
-  generation for commit `ef6c2f2fd49c57d06f4fa21784127e4f9b3bb904`.
-- Reproducible local performance smoke benchmark and product/interview/support
+  generation for commit `a7466ce69441871df229a5ed1cdf32ec594ba935`.
+- Reproducible local performance smoke benchmark and product/operator/support
   documentation.
 
 ### Security

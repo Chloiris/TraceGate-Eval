@@ -9,14 +9,13 @@ test("loads authenticated real service and benchmark state", async ({ page }) =>
   await expect(page.getByText("工作区活动")).toBeVisible();
   await expect(page.getByText("1", { exact: true }).first()).toBeVisible();
 
-  await page.keyboard.press("Meta+k");
-  await page.getByPlaceholder("搜索页面、仓库、PR 或 Run…").fill("诊断");
-  await page.keyboard.press("Enter");
-  await expect(page.getByRole("heading", { name: "诊断", level: 1 })).toBeVisible();
+  await page.getByRole("button", { name: /设置.*本地偏好与宿主/ }).click();
+  await page.getByRole("link", { name: /诊断.*版本、指标与队列/ }).click();
+  await expect(page.getByRole("heading", { name: "诊断", level: 2 })).toBeVisible();
   await expect(page.getByRole("heading", { name: "最近持久化指标" })).toBeVisible();
   await expect(page.getByText("not configured", { exact: true })).toBeVisible();
 
-  await page.getByRole("button", { name: /Eval Center/ }).click();
+  await page.getByRole("button", { name: /评测中心.*真实基准与声明评测/ }).click();
   await expect(page.getByRole("heading", { name: "TraceGate v0.2-alpha hard real-data mini benchmark" })).toBeVisible();
   await expect(page.getByText("160 ClaimBench runs")).toBeVisible();
   await expect(page.getByText("dataset version / sha256", { exact: false })).toBeVisible();
@@ -57,7 +56,7 @@ test("navigates PR diff, Review Map, Finding and Agent Trace", async ({ page }) 
   const pageErrors: string[] = [];
   page.on("pageerror", (error) => pageErrors.push(error.message));
   await page.goto("/");
-  await page.getByRole("button", { name: /PR Inbox/ }).click();
+  await page.getByRole("button", { name: /审查队列.*拉取请求审查与分析/ }).click();
   await expect(page.getByText("#17 · Double the calculated total")).toBeVisible();
   await page.getByText("#17 · Double the calculated total").click();
   await page.waitForTimeout(250);
@@ -70,7 +69,7 @@ test("navigates PR diff, Review Map, Finding and Agent Trace", async ({ page }) 
   await page.screenshot({ path: "docs/screenshots/p1-pr-diff-macos.png", fullPage: true });
 
   await page.getByRole("tab", { name: "Review Map" }).click();
-  await expect(page.getByText("Impact depth is derived", { exact: false })).toBeVisible();
+  await expect(page.getByText("Impact depth uses exact Head-side changed lines", { exact: false })).toBeVisible();
   await expect(page.locator(".review-flow .react-flow")).toBeVisible();
   await page.screenshot({ path: "docs/screenshots/p1-review-map-macos.png", fullPage: true });
 
@@ -91,14 +90,14 @@ test("navigates PR diff, Review Map, Finding and Agent Trace", async ({ page }) 
 
 test("shows explicit retry failure and actual registry permissions", async ({ page }) => {
   await page.goto("/");
-  await page.getByRole("button", { name: /Agent Runs/ }).click();
+  await page.getByRole("button", { name: /运行记录.*节点与工具轨迹/ }).click();
   await expect(page.getByText("verification_failed", { exact: false })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Agent Evidence Graph" })).toBeVisible();
   await expect(page.locator(".evidence-flow .react-flow")).toBeVisible();
   await page.getByRole("button", { name: "重试" }).click();
   await expect(page.getByText("操作失败: Model provider and model name are not configured", { exact: false })).toBeVisible();
 
-  await page.getByRole("button", { name: /Registry/ }).click();
+  await page.getByRole("button", { name: /组件注册.*智能体与工具/ }).click();
   await expect(page.getByRole("heading", { name: "Planner" })).toBeVisible();
   const plannerCard = page.locator(".registry-card", { hasText: "Planner" });
   await plannerCard.getByRole("button", { name: "停用 Agent" }).click();
