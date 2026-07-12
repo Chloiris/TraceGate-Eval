@@ -23,6 +23,9 @@ pub enum DeepLinkRoute {
     Run {
         run_id: String,
     },
+    Fix {
+        fix_session_id: String,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -44,6 +47,7 @@ impl DeepLinkRoute {
                 number,
             } => format!("/pull-requests/{owner}/{repository}/{number}"),
             Self::Run { run_id } => format!("/runs/{run_id}"),
+            Self::Fix { fix_session_id } => format!("/fix-sessions/{fix_session_id}"),
         }
     }
 }
@@ -112,6 +116,12 @@ pub fn parse(raw: &str) -> Result<DeepLinkRoute, DeepLinkError> {
             validate_component(run_id, 128)?;
             Ok(DeepLinkRoute::Run {
                 run_id: (*run_id).to_owned(),
+            })
+        }
+        ("fix", [fix_session_id]) => {
+            validate_component(fix_session_id, 128)?;
+            Ok(DeepLinkRoute::Fix {
+                fix_session_id: (*fix_session_id).to_owned(),
             })
         }
         _ => Err(DeepLinkError::UnsupportedRoute),
@@ -201,6 +211,17 @@ mod tests {
             DeepLinkRoute::Run {
                 run_id: "018f3d4a-7f20-7b9d-a3c2-123456789abc".into(),
             }
+        );
+        let fix = parse("tracegate://fix/018f3d4a-7f20-7b9d-a3c2-123456789abc").unwrap();
+        assert_eq!(
+            fix,
+            DeepLinkRoute::Fix {
+                fix_session_id: "018f3d4a-7f20-7b9d-a3c2-123456789abc".into(),
+            }
+        );
+        assert_eq!(
+            fix.frontend_path(),
+            "/fix-sessions/018f3d4a-7f20-7b9d-a3c2-123456789abc"
         );
     }
 

@@ -74,6 +74,10 @@ export type ConnectionTestResponse = z.infer<typeof connectionTestResponseSchema
 
 export const themeSchema = z.enum(["system", "light", "dark"]);
 export const languageSchema = z.enum(["zh-CN", "en-US"]);
+const autofixMaxFilesSettingSchema = z.number().int().min(1).max(32);
+const autofixMaxChangedLinesSettingSchema = z.number().int().min(50).max(5000);
+const autofixConfirmationTtlSettingSchema = z.number().int().min(60).max(3600);
+const autofixWorkspaceRetentionSettingSchema = z.number().int().min(1).max(168);
 
 export const settingsSchema = z.object({
   theme: themeSchema,
@@ -100,6 +104,10 @@ export const settingsSchema = z.object({
   automatic_analysis_include_drafts: z.boolean(),
   automatic_analysis_require_checks_success: z.boolean(),
   analysis_paused: z.boolean(),
+  autofix_max_files: autofixMaxFilesSettingSchema.default(8),
+  autofix_max_changed_lines: autofixMaxChangedLinesSettingSchema.default(800),
+  autofix_confirmation_ttl_seconds: autofixConfirmationTtlSettingSchema.default(900),
+  autofix_workspace_retention_hours: autofixWorkspaceRetentionSettingSchema.default(24),
   webhook_relay_url: z.string().url().nullable(),
   webhook_relay_device_id: z.string().nullable(),
   updated_at: z.string().min(1),
@@ -137,6 +145,12 @@ export const settingsUpdateSchema = settingsSchema
     webhook_relay_device_id: true,
   })
   .partial()
+  .extend({
+    autofix_max_files: autofixMaxFilesSettingSchema.optional(),
+    autofix_max_changed_lines: autofixMaxChangedLinesSettingSchema.optional(),
+    autofix_confirmation_ttl_seconds: autofixConfirmationTtlSettingSchema.optional(),
+    autofix_workspace_retention_hours: autofixWorkspaceRetentionSettingSchema.optional(),
+  })
   .refine((value) => Object.keys(value).length > 0, "At least one setting is required");
 
 export type SettingsUpdate = z.infer<typeof settingsUpdateSchema>;
@@ -546,6 +560,477 @@ export const evidenceSchema = z.object({
 });
 export type Evidence = z.infer<typeof evidenceSchema>;
 
+const autofixShaSchema = z.string().regex(/^[0-9a-fA-F]{7,64}$/);
+const autofixHashSchema = z.string().regex(/^[0-9a-f]{64}$/);
+const autofixRelativePathSchema = z.string().min(1).max(4096).superRefine((value, context) => {
+  const normalized = value.replaceAll("\\", "/");
+  if (normalized.startsWith("/") || /^[A-Za-z]:\//.test(normalized) || normalized.split("/").includes("..")) {
+    context.addIssue({ code: "custom", message: "Expected a bounded repository-relative path" });
+  }
+});
+const validationArgumentSchema = z.string().min(1).max(4096).refine(
+  (value) => !value.includes("\0"),
+  "Validation arguments cannot contain NUL bytes",
+);
+
+export const fixEligibilityStatusSchema = z.enum([
+  "ELIGIBLE",
+  "NEEDS_CONFIRMATION",
+  "INSUFFICIENT_EVIDENCE",
+  "STALE_HEAD",
+  "UNSUPPORTED_FILE",
+  "SENSITIVE_PATH",
+  "BLOCKED",
+]);
+export type FixEligibilityStatus = z.infer<typeof fixEligibilityStatusSchema>;
+
+export const fixPermissionModeSchema = z.enum([
+  "PROPOSE_ONLY",
+  "APPLY_IN_ISOLATED_WORKSPACE",
+]);
+export type FixPermissionMode = z.infer<typeof fixPermissionModeSchema>;
+
+export const fixSessionStatusSchema = z.enum([
+  "CREATED",
+  "CHECKING_ELIGIBILITY",
+  "ELIGIBLE",
+  "PLANNING",
+  "PLAN_READY",
+  "GENERATING_PATCH",
+  "VALIDATING_PATCH",
+  "AWAITING_USER_CONFIRMATION",
+  "APPLYING_PATCH",
+  "PATCH_APPLIED",
+  "RUNNING_VALIDATION",
+  "VALIDATION_COMPLETE",
+  "REINDEXING_CHANGES",
+  "RE_REVIEWING",
+  "FINALIZING",
+  "COMPLETED",
+  "FAILED",
+  "CANCELLED",
+  "ROLLED_BACK",
+  "STALE",
+]);
+export type FixSessionStatus = z.infer<typeof fixSessionStatusSchema>;
+
+export const fixWorkflowNodeSchema = z.enum([
+  "LOAD_FINDING",
+  "CHECK_FIX_ELIGIBILITY",
+  "PLAN_FIX",
+  "GENERATE_PATCH",
+  "VALIDATE_PATCH",
+  "AWAIT_USER_CONFIRMATION",
+  "APPLY_PATCH",
+  "RUN_VALIDATION",
+  "REINDEX_CHANGES",
+  "RE_REVIEW",
+  "FINALIZE",
+]);
+export type FixWorkflowNode = z.infer<typeof fixWorkflowNodeSchema>;
+
+export const validationStatusSchema = z.enum([
+  "QUEUED",
+  "RUNNING",
+  "PASSED",
+  "FAILED",
+  "CANCELLED",
+  "NO_TEST_COMMAND_AVAILABLE",
+]);
+export type ValidationStatus = z.infer<typeof validationStatusSchema>;
+
+export const fixResolutionSchema = z.enum([
+  "RESOLVED",
+  "PARTIALLY_RESOLVED",
+  "NOT_RESOLVED",
+  "VERIFICATION_FAILED",
+  "NEEDS_HUMAN_REVIEW",
+]);
+export type FixResolution = z.infer<typeof fixResolutionSchema>;
+
+export const fixActionSchema = z.enum([
+  "PLAN",
+  "GENERATE",
+  "CONFIRM",
+  "APPLY",
+  "VALIDATE",
+  "RE_REVIEW",
+  "CANCEL",
+  "ROLLBACK",
+  "DELETE_WORKSPACE",
+  "EXPORT_PATCH",
+  "EXPORT_REPORT",
+]);
+export type FixAction = z.infer<typeof fixActionSchema>;
+
+export const fixWorkspaceCleanupStatusSchema = z.enum([
+  "NOT_CREATED",
+  "ACTIVE",
+  "CLEANUP_PENDING",
+  "DELETED",
+  "CLEANUP_FAILED",
+  "RETAINED",
+]);
+export type FixWorkspaceCleanupStatus = z.infer<typeof fixWorkspaceCleanupStatusSchema>;
+
+export const diagnosticFixWorkspaceSchema = z.object({
+  fix_session_id: z.string().regex(/^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/),
+  repository_id: z.string().regex(/^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/),
+  path: z.string().min(1).max(4096),
+  cleanup_status: z.enum([
+    "ACTIVE",
+    "CLEANUP_PENDING",
+    "CLEANUP_FAILED",
+    "RETAINED",
+    "ORPHANED",
+  ]),
+  last_active_at: isoDateSchema,
+  expired: z.boolean(),
+}).strict();
+export type DiagnosticFixWorkspace = z.infer<typeof diagnosticFixWorkspaceSchema>;
+
+export const diagnosticFixWorkspaceListSchema = z.object({
+  items: z.array(diagnosticFixWorkspaceSchema),
+  total: z.number().int().nonnegative(),
+  retention_hours: z.number().int().positive(),
+}).strict();
+export type DiagnosticFixWorkspaceList = z.infer<typeof diagnosticFixWorkspaceListSchema>;
+
+export const fixEligibilitySchema = z.object({
+  status: fixEligibilityStatusSchema,
+  reasons: z.array(z.string().min(1).max(4000)).max(32),
+  warnings: z.array(z.string().min(1).max(4000)).max(32),
+  force_allowed: z.boolean(),
+}).strict();
+export type FixEligibility = z.infer<typeof fixEligibilitySchema>;
+
+export const validationCommandSchema = z.object({
+  argv: z.array(validationArgumentSchema).min(1).max(32),
+  command_purpose: z.string().min(1).max(1000),
+  required: z.boolean(),
+  timeout: z.number().int().min(1).max(900),
+  expected_result: z.string().min(1).max(1000),
+  source: z.string().min(1).max(128),
+}).strict();
+export type ValidationCommand = z.infer<typeof validationCommandSchema>;
+
+export const validationPlanSchema = z.object({
+  commands: z.array(validationCommandSchema).max(16),
+  notes: z.array(z.string().min(1).max(4000)).max(16),
+}).strict();
+export type ValidationPlan = z.infer<typeof validationPlanSchema>;
+
+export const fixPlanSchema = z.object({
+  finding_id: z.string().uuid(),
+  objective: z.string().min(1).max(4000),
+  root_cause: z.string().min(1).max(8000),
+  affected_files: z.array(autofixRelativePathSchema).min(1).max(32),
+  affected_symbols: z.array(z.string().min(1).max(1000)).max(32),
+  constraints: z.array(z.string().min(1).max(4000)).max(32),
+  proposed_steps: z.array(z.string().min(1).max(4000)).min(1).max(24),
+  expected_behavior: z.string().min(1).max(4000),
+  validation_strategy: z.array(z.string().min(1).max(4000)).min(1).max(24),
+  risk_notes: z.array(z.string().min(1).max(4000)).max(32),
+  confidence: z.number().min(0).max(1),
+}).strict();
+export type FixPlan = z.infer<typeof fixPlanSchema>;
+
+export const patchProposalSchema = z.object({
+  finding_id: z.string().uuid(),
+  base_sha: autofixShaSchema,
+  head_sha: autofixShaSchema,
+  patch: z.string().min(1).max(1_000_000),
+  changed_files: z.array(autofixRelativePathSchema).min(1).max(32),
+  estimated_changed_lines: z.number().int().min(1).max(10_000),
+  rationale: z.string().min(1).max(8000),
+  assumptions: z.array(z.string().min(1).max(4000)).max(32),
+  validation_commands: z.array(validationCommandSchema).max(16),
+  residual_risks: z.array(z.string().min(1).max(4000)).max(32),
+  confidence: z.number().min(0).max(1),
+}).strict();
+export type PatchProposal = z.infer<typeof patchProposalSchema>;
+
+export const patchProposalSummarySchema = patchProposalSchema.omit({ patch: true }).extend({
+  patch_hash: autofixHashSchema,
+  created_at: isoDateSchema,
+  stale_at: isoDateSchema.nullable(),
+}).strict();
+export type PatchProposalSummary = z.infer<typeof patchProposalSummarySchema>;
+
+export const patchInspectionSchema = z.object({
+  patch_hash: autofixHashSchema,
+  changed_files: z.array(autofixRelativePathSchema).max(32),
+  changed_lines: z.number().int().nonnegative(),
+  additions: z.number().int().nonnegative(),
+  deletions: z.number().int().nonnegative(),
+  warnings: z.array(z.string().min(1).max(4000)).max(64),
+  requires_confirmation: z.boolean(),
+}).strict();
+export type PatchInspection = z.infer<typeof patchInspectionSchema>;
+
+export const fixPatchFileSchema = z.object({
+  path: autofixRelativePathSchema,
+  status: z.enum(["added", "modified", "deleted", "renamed"]),
+}).strict();
+export type FixPatchFile = z.infer<typeof fixPatchFileSchema>;
+
+export const fixPatchResponseSchema = z.object({
+  fix_session_id: z.string().uuid(),
+  head_sha: autofixShaSchema,
+  patch_hash: autofixHashSchema,
+  unified_diff: z.string().min(1).max(1_000_000),
+  changed_files: z.array(fixPatchFileSchema).min(1).max(32),
+  selected_path: autofixRelativePathSchema.nullable(),
+  original: z.string().max(1_000_000).nullable(),
+  modified: z.string().max(1_000_000).nullable(),
+}).strict();
+export type FixPatchResponse = z.infer<typeof fixPatchResponseSchema>;
+
+export const fixConfirmationSchema = z.object({
+  id: z.string().uuid(),
+  fix_session_id: z.string().uuid(),
+  patch_hash: autofixHashSchema,
+  expires_at: isoDateSchema,
+  confirmed_at: isoDateSchema.nullable(),
+  consumed_at: isoDateSchema.nullable(),
+  invalidated_at: isoDateSchema.nullable(),
+  created_at: isoDateSchema,
+}).strict();
+export type FixConfirmation = z.infer<typeof fixConfirmationSchema>;
+
+export const validationRunSchema = z.object({
+  id: z.string().uuid(),
+  fix_session_id: z.string().uuid(),
+  sequence: z.number().int().positive(),
+  command: z.array(validationArgumentSchema).min(1).max(32),
+  purpose: z.string().min(1).max(1000),
+  required: z.boolean(),
+  status: validationStatusSchema,
+  return_code: z.number().int().nullable(),
+  stdout_summary: z.string().max(64_000).nullable(),
+  stderr_summary: z.string().max(64_000).nullable(),
+  output_truncated: z.boolean(),
+  error_code: z.string().max(128).nullable(),
+  started_at: isoDateSchema.nullable(),
+  finished_at: isoDateSchema.nullable(),
+  duration_ms: z.number().int().nonnegative().nullable(),
+  created_at: isoDateSchema,
+}).strict();
+export type ValidationRun = z.infer<typeof validationRunSchema>;
+
+export const fixToolCallSchema = z.object({
+  id: z.string().uuid(),
+  fix_step_id: z.string().uuid(),
+  tool_name: z.string().min(1).max(128),
+  permission: z.string().min(1).max(128),
+  arguments_summary: z.string().max(16_000),
+  output_summary: z.string().max(16_000).nullable(),
+  status: z.string().min(1).max(64),
+  duration_ms: z.number().int().nonnegative().nullable(),
+  error_code: z.string().max(128).nullable(),
+  created_at: isoDateSchema,
+}).strict();
+export type FixToolCall = z.infer<typeof fixToolCallSchema>;
+
+export const fixStepSchema = z.object({
+  id: z.string().uuid(),
+  fix_session_id: z.string().uuid(),
+  sequence: z.number().int().positive(),
+  node: fixWorkflowNodeSchema,
+  status: z.string().min(1).max(64),
+  input_summary: z.string().max(16_000).nullable(),
+  output_summary: z.string().max(16_000).nullable(),
+  error_code: z.string().max(128).nullable(),
+  error_message: z.string().max(8_000).nullable(),
+  started_at: isoDateSchema.nullable(),
+  finished_at: isoDateSchema.nullable(),
+  duration_ms: z.number().int().nonnegative().nullable(),
+  created_at: isoDateSchema,
+  tool_calls: z.array(fixToolCallSchema).max(64),
+}).strict();
+export type FixStep = z.infer<typeof fixStepSchema>;
+
+export const reReviewAssessmentSchema = z.object({
+  original_finding_supported: z.boolean(),
+  residual_findings: z.array(z.string().min(1).max(4000)).max(32),
+  residual_risks: z.array(z.string().min(1).max(4000)).max(32),
+  new_high_risk: z.boolean(),
+  summary: z.string().min(1).max(8000),
+  confidence: z.number().min(0).max(1),
+}).strict();
+export type ReReviewAssessment = z.infer<typeof reReviewAssessmentSchema>;
+
+export const postFixReportSchema = z.object({
+  fix_session_id: z.string().uuid(),
+  finding_id: z.string().uuid(),
+  patch_hash: autofixHashSchema,
+  applied: z.boolean(),
+  validation_status: validationStatusSchema,
+  commands_run: z.array(z.array(validationArgumentSchema).min(1).max(32)).max(16),
+  passed_commands: z.array(z.array(validationArgumentSchema).min(1).max(32)).max(16),
+  failed_commands: z.array(z.array(validationArgumentSchema).min(1).max(32)).max(16),
+  re_review_status: z.string().min(1).max(128),
+  finding_resolution: fixResolutionSchema,
+  residual_findings: z.array(z.string().min(1).max(4000)).max(64),
+  residual_risks: z.array(z.string().min(1).max(4000)).max(64),
+  final_summary: z.string().min(1).max(8000),
+}).strict().superRefine((value, context) => {
+  if (value.finding_resolution === "RESOLVED" && (!value.applied || value.validation_status !== "PASSED")) {
+    context.addIssue({ code: "custom", message: "RESOLVED requires an applied patch and passed validation" });
+  }
+});
+export type PostFixReport = z.infer<typeof postFixReportSchema>;
+
+export const fixResultSchema = z.object({
+  id: z.string().uuid(),
+  fix_session_id: z.string().uuid(),
+  resolution: fixResolutionSchema,
+  validation_status: validationStatusSchema.nullable(),
+  re_review_status: z.string().min(1).max(128),
+  residual_findings: z.array(z.string().min(1).max(4000)).max(64),
+  residual_risks: z.array(z.string().min(1).max(4000)).max(64),
+  report: postFixReportSchema,
+  created_at: isoDateSchema,
+}).strict();
+export type FixResult = z.infer<typeof fixResultSchema>;
+
+export const fixSessionSchema = z.object({
+  id: z.string().uuid(),
+  repository_id: z.string().uuid(),
+  pull_request_id: z.string().uuid(),
+  finding_id: z.string().uuid(),
+  source_agent_run_id: z.string().uuid(),
+  base_sha: autofixShaSchema,
+  head_sha: autofixShaSchema,
+  index_version_id: z.string().uuid().nullable(),
+  workspace_index_version_id: z.string().uuid().nullable(),
+  status: fixSessionStatusSchema,
+  current_node: fixWorkflowNodeSchema.nullable(),
+  permission_mode: fixPermissionModeSchema,
+  workspace_path: z.string().max(4096).nullable(),
+  workspace_state_hash: autofixHashSchema.nullable(),
+  cleanup_status: fixWorkspaceCleanupStatusSchema,
+  model_profile: z.string().max(512).nullable(),
+  workflow_version: z.string().min(1).max(128).nullable(),
+  eligibility: fixEligibilitySchema.nullable(),
+  allowed_actions: z.array(fixActionSchema),
+  lock_version: z.number().int().nonnegative(),
+  cancellation_requested: z.boolean(),
+  input_tokens: z.number().int().nonnegative(),
+  output_tokens: z.number().int().nonnegative(),
+  latency_ms: z.number().int().nonnegative(),
+  retry_count: z.number().int().nonnegative(),
+  created_at: isoDateSchema,
+  started_at: isoDateSchema.nullable(),
+  finished_at: isoDateSchema.nullable(),
+  error_code: z.string().max(128).nullable(),
+  error_message: z.string().max(8000).nullable(),
+  last_active_at: isoDateSchema,
+  updated_at: isoDateSchema,
+}).strict();
+export type FixSession = z.infer<typeof fixSessionSchema>;
+
+export const fixSessionDetailSchema = fixSessionSchema.extend({
+  plan: fixPlanSchema.nullable(),
+  proposal: patchProposalSummarySchema.nullable(),
+  patch_inspection: patchInspectionSchema.nullable(),
+  confirmation: fixConfirmationSchema.nullable(),
+  validation_plan: validationPlanSchema.nullable(),
+  validation_runs: z.array(validationRunSchema),
+  steps: z.array(fixStepSchema).max(64),
+  re_review: reReviewAssessmentSchema.nullable(),
+  result: fixResultSchema.nullable(),
+}).strict();
+export type FixSessionDetail = z.infer<typeof fixSessionDetailSchema>;
+
+export const fixSessionListSchema = z.object({
+  items: z.array(fixSessionSchema),
+  total: z.number().int().nonnegative(),
+  limit: z.number().int().positive(),
+  offset: z.number().int().nonnegative(),
+}).strict();
+export type FixSessionList = z.infer<typeof fixSessionListSchema>;
+
+export const fixSessionCreateSchema = z.object({
+  finding_id: z.string().uuid(),
+  permission_mode: fixPermissionModeSchema,
+}).strict();
+export type FixSessionCreate = z.infer<typeof fixSessionCreateSchema>;
+
+export const fixActionRequestSchema = z.object({
+  expected_lock_version: z.number().int().nonnegative(),
+}).strict();
+export type FixActionRequest = z.infer<typeof fixActionRequestSchema>;
+
+export const fixPlanRequestSchema = fixActionRequestSchema.extend({
+  force_eligibility: z.boolean(),
+}).strict();
+export type FixPlanRequest = z.infer<typeof fixPlanRequestSchema>;
+
+export const fixConfirmationRequestSchema = fixActionRequestSchema.extend({
+  patch_hash: autofixHashSchema,
+}).strict();
+export type FixConfirmationRequest = z.infer<typeof fixConfirmationRequestSchema>;
+
+export const fixApplyRequestSchema = fixActionRequestSchema.extend({
+  patch_hash: autofixHashSchema,
+}).strict();
+export type FixApplyRequest = z.infer<typeof fixApplyRequestSchema>;
+
+const fixEventBase = {
+  event_id: z.string().min(1).max(128),
+  sequence: z.number().int().positive(),
+  fix_session_id: z.string().uuid(),
+  created_at: isoDateSchema,
+};
+
+export const fixSessionEventSchema = z.discriminatedUnion("type", [
+  z.object({ ...fixEventBase, type: z.literal("session"), data: fixSessionSchema }).strict(),
+  z.object({
+    ...fixEventBase,
+    type: z.literal("workflow_step"),
+    data: z.object({
+      status: fixSessionStatusSchema,
+      current_node: fixWorkflowNodeSchema.nullable(),
+      message: z.string().min(1).max(8000),
+    }).strict(),
+  }).strict(),
+  z.object({ ...fixEventBase, type: z.literal("patch_ready"), data: patchInspectionSchema }).strict(),
+  z.object({ ...fixEventBase, type: z.literal("validation_started"), data: validationRunSchema }).strict(),
+  z.object({
+    ...fixEventBase,
+    type: z.literal("validation_output"),
+    data: z.object({
+      validation_run_id: z.string().uuid(),
+      stream: z.enum(["stdout", "stderr"]),
+      chunk: z.string().max(64_000),
+      truncated: z.boolean(),
+    }).strict(),
+  }).strict(),
+  z.object({ ...fixEventBase, type: z.literal("validation_finished"), data: validationRunSchema }).strict(),
+  z.object({ ...fixEventBase, type: z.literal("re_review"), data: reReviewAssessmentSchema }).strict(),
+  z.object({ ...fixEventBase, type: z.literal("report"), data: fixResultSchema }).strict(),
+  z.object({
+    ...fixEventBase,
+    type: z.literal("terminal"),
+    data: z.object({
+      status: z.enum(["COMPLETED", "FAILED", "CANCELLED", "ROLLED_BACK", "STALE"]),
+      error_code: z.string().max(128).nullable(),
+      error_message: z.string().max(8000).nullable(),
+    }).strict(),
+  }).strict(),
+  z.object({
+    ...fixEventBase,
+    type: z.literal("error"),
+    data: z.object({
+      code: z.string().min(1).max(128),
+      message: z.string().min(1).max(8000),
+      recoverable: z.boolean(),
+    }).strict(),
+  }).strict(),
+]);
+export type FixSessionEvent = z.infer<typeof fixSessionEventSchema>;
+
 export const notificationKindSchema = z.enum([
   "new_pull_request",
   "new_pull_request_commit",
@@ -553,6 +1038,12 @@ export const notificationKindSchema = z.enum([
   "high_risk_finding",
   "analysis_completed",
   "analysis_failed",
+  "fix_proposal_ready",
+  "fix_awaiting_confirmation",
+  "fix_validation_passed",
+  "fix_validation_failed",
+  "fix_resolved",
+  "fix_needs_human_review",
   "github_authentication_failed",
   "sidecar_restart_failed",
   "test",

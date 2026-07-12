@@ -22,7 +22,8 @@ export type TrayAction =
 export type DeepLinkRoute =
   | { kind: "repository"; owner: string; repository: string }
   | { kind: "pull_request"; owner: string; repository: string; number: number }
-  | { kind: "run"; run_id: string };
+  | { kind: "run"; run_id: string }
+  | { kind: "fix"; fix_session_id: string };
 
 export interface GitHubDeviceAuthorization {
   userCode: string;

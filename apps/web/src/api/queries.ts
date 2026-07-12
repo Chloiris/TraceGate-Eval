@@ -1,5 +1,16 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { OnboardingUpdate, RepositoryCreate, RepositoryUpdate, SettingsUpdate } from "@tracegate/shared-types";
+import { useMutation, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
+import type {
+  FixActionRequest,
+  FixApplyRequest,
+  FixConfirmationRequest,
+  FixPlanRequest,
+  FixSessionCreate,
+  FixSessionDetail,
+  OnboardingUpdate,
+  RepositoryCreate,
+  RepositoryUpdate,
+  SettingsUpdate,
+} from "@tracegate/shared-types";
 
 import { useApiClient } from "./clientContext";
 
@@ -22,12 +33,22 @@ export const queryKeys = {
   runs: (pullRequestId?: string) => ["runs", pullRequestId ?? "all"] as const,
   findings: (runId?: string) => ["findings", runId ?? "all"] as const,
   evidence: (runId?: string) => ["evidence", runId ?? "all"] as const,
+  fixSessions: (pullRequestId?: string, findingId?: string) => ["fix-sessions", pullRequestId ?? "all", findingId ?? "all"] as const,
+  fixSession: (fixSessionId: string) => ["fix-session", fixSessionId] as const,
+  fixPatch: (fixSessionId: string, path?: string) => ["fix-patch", fixSessionId, path ?? "all"] as const,
+  fixReport: (fixSessionId: string) => ["fix-report", fixSessionId] as const,
+  fixWorkspaces: ["fix-workspaces"] as const,
   evaluations: ["evaluations"] as const,
   agents: ["agents"] as const,
   tools: ["tools"] as const,
   diagnostics: ["diagnostics"] as const,
   updateStatus: ["update-status"] as const,
 };
+
+function storeFixSession(queryClient: QueryClient, session: FixSessionDetail): void {
+  queryClient.setQueryData(queryKeys.fixSession(session.id), session);
+  void queryClient.invalidateQueries({ queryKey: ["fix-sessions"] });
+}
 
 export function useSystemStatus() {
   const client = useApiClient();
@@ -344,6 +365,190 @@ export function useEvidence(runId?: string) {
     queryFn: ({ signal }) => client.listEvidence(runId, signal),
     enabled: Boolean(runId),
     retry: 1,
+  });
+}
+
+export function useFixSessions(pullRequestId?: string, findingId?: string) {
+  const client = useApiClient();
+  return useQuery({
+    queryKey: queryKeys.fixSessions(pullRequestId, findingId),
+    queryFn: ({ signal }) => client.listFixSessions({
+      ...(pullRequestId ? { pullRequestId } : {}),
+      ...(findingId ? { findingId } : {}),
+    }, signal),
+    refetchInterval: 5_000,
+    retry: 1,
+  });
+}
+
+export function useFixSession(fixSessionId?: string) {
+  const client = useApiClient();
+  return useQuery({
+    queryKey: queryKeys.fixSession(fixSessionId ?? "none"),
+    queryFn: ({ signal }) => client.getFixSession(fixSessionId ?? "", signal),
+    enabled: Boolean(fixSessionId),
+    retry: 1,
+  });
+}
+
+export function useFixPatch(fixSessionId?: string, path?: string) {
+  const client = useApiClient();
+  return useQuery({
+    queryKey: queryKeys.fixPatch(fixSessionId ?? "none", path),
+    queryFn: ({ signal }) => client.getFixPatch(fixSessionId ?? "", path, signal),
+    enabled: Boolean(fixSessionId),
+    retry: 1,
+  });
+}
+
+export function useFixReport(fixSessionId?: string) {
+  const client = useApiClient();
+  return useQuery({
+    queryKey: queryKeys.fixReport(fixSessionId ?? "none"),
+    queryFn: ({ signal }) => client.getFixReport(fixSessionId ?? "", signal),
+    enabled: Boolean(fixSessionId),
+    retry: 1,
+  });
+}
+
+export function useCreateFixSession() {
+  const client = useApiClient();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: FixSessionCreate) => client.createFixSession(input),
+    onSuccess: (session) => storeFixSession(queryClient, session),
+  });
+}
+
+export function usePlanFixSession() {
+  const client = useApiClient();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ fixSessionId, input }: { fixSessionId: string; input: FixPlanRequest }) =>
+      client.planFixSession(fixSessionId, input),
+    onSuccess: (session) => storeFixSession(queryClient, session),
+  });
+}
+
+export function useGenerateFixPatch() {
+  const client = useApiClient();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ fixSessionId, input }: { fixSessionId: string; input: FixActionRequest }) =>
+      client.generateFixPatch(fixSessionId, input),
+    onSuccess: (session) => {
+      storeFixSession(queryClient, session);
+      void queryClient.invalidateQueries({ queryKey: ["fix-patch", session.id] });
+    },
+  });
+}
+
+export function useConfirmFixSession() {
+  const client = useApiClient();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ fixSessionId, input }: { fixSessionId: string; input: FixConfirmationRequest }) =>
+      client.confirmFixSession(fixSessionId, input),
+    onSuccess: (session) => storeFixSession(queryClient, session),
+  });
+}
+
+export function useApplyFixSession() {
+  const client = useApiClient();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ fixSessionId, input }: { fixSessionId: string; input: FixApplyRequest }) =>
+      client.applyFixSession(fixSessionId, input),
+    onSuccess: (session) => {
+      storeFixSession(queryClient, session);
+      void queryClient.invalidateQueries({ queryKey: ["fix-patch", session.id] });
+    },
+  });
+}
+
+export function useValidateFixSession() {
+  const client = useApiClient();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ fixSessionId, input }: { fixSessionId: string; input: FixActionRequest }) =>
+      client.validateFixSession(fixSessionId, input),
+    onSuccess: (session) => storeFixSession(queryClient, session),
+  });
+}
+
+export function useRereviewFixSession() {
+  const client = useApiClient();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ fixSessionId, input }: { fixSessionId: string; input: FixActionRequest }) =>
+      client.rereviewFixSession(fixSessionId, input),
+    onSuccess: (session) => {
+      storeFixSession(queryClient, session);
+      void queryClient.invalidateQueries({ queryKey: ["fix-report", session.id] });
+      void queryClient.invalidateQueries({ queryKey: ["findings"] });
+      void queryClient.invalidateQueries({ queryKey: ["evidence"] });
+      void queryClient.invalidateQueries({ queryKey: ["pull-request-diff"] });
+      void queryClient.invalidateQueries({ queryKey: ["pull-request-graph"] });
+    },
+  });
+}
+
+export function useCancelFixSession() {
+  const client = useApiClient();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ fixSessionId, input }: { fixSessionId: string; input: FixActionRequest }) =>
+      client.cancelFixSession(fixSessionId, input),
+    onSuccess: (session) => storeFixSession(queryClient, session),
+  });
+}
+
+export function useRollbackFixSession() {
+  const client = useApiClient();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ fixSessionId, input }: { fixSessionId: string; input: FixActionRequest }) =>
+      client.rollbackFixSession(fixSessionId, input),
+    onSuccess: (session) => {
+      storeFixSession(queryClient, session);
+      void queryClient.invalidateQueries({ queryKey: ["fix-patch", session.id] });
+      void queryClient.invalidateQueries({ queryKey: ["fix-report", session.id] });
+    },
+  });
+}
+
+export function useDeleteFixWorkspace() {
+  const client = useApiClient();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ fixSessionId, expectedLockVersion }: { fixSessionId: string; expectedLockVersion: number }) =>
+      client.deleteFixWorkspace(fixSessionId, expectedLockVersion),
+    onSuccess: (_result, variables) => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.fixSession(variables.fixSessionId) });
+      void queryClient.invalidateQueries({ queryKey: ["fix-sessions"] });
+    },
+  });
+}
+
+export function useFixWorkspaces() {
+  const client = useApiClient();
+  return useQuery({
+    queryKey: queryKeys.fixWorkspaces,
+    queryFn: ({ signal }) => client.listFixWorkspaces(signal),
+    retry: 1,
+  });
+}
+
+export function useCleanupFixWorkspace() {
+  const client = useApiClient();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ fixSessionId }: { fixSessionId: string }) =>
+      client.cleanupFixWorkspace(fixSessionId),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.fixWorkspaces });
+      void queryClient.invalidateQueries({ queryKey: ["fix-sessions"] });
+    },
   });
 }
 

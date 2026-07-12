@@ -352,6 +352,10 @@ function SettingsEditor({ settings, host }: { settings: Settings; host: HostBrid
   const [automaticAnalysisEnabled, setAutomaticAnalysisEnabled] = useState(settings.automatic_analysis_enabled);
   const [automaticAnalysisIncludeDrafts, setAutomaticAnalysisIncludeDrafts] = useState(settings.automatic_analysis_include_drafts);
   const [automaticAnalysisRequireChecksSuccess, setAutomaticAnalysisRequireChecksSuccess] = useState(settings.automatic_analysis_require_checks_success);
+  const [autofixMaxFiles, setAutofixMaxFiles] = useState(settings.autofix_max_files);
+  const [autofixMaxChangedLines, setAutofixMaxChangedLines] = useState(settings.autofix_max_changed_lines);
+  const [autofixConfirmationTtlSeconds, setAutofixConfirmationTtlSeconds] = useState(settings.autofix_confirmation_ttl_seconds);
+  const [autofixWorkspaceRetentionHours, setAutofixWorkspaceRetentionHours] = useState(settings.autofix_workspace_retention_hours);
   const [webhookRelayUrl, setWebhookRelayUrl] = useState(settings.webhook_relay_url ?? "");
   const [webhookRelayDeviceId, setWebhookRelayDeviceId] = useState(settings.webhook_relay_device_id ?? "");
   const [relayPairingCode, setRelayPairingCode] = useState("");
@@ -416,6 +420,10 @@ function SettingsEditor({ settings, host }: { settings: Settings; host: HostBrid
         automatic_analysis_enabled: automaticAnalysisEnabled,
         automatic_analysis_include_drafts: automaticAnalysisIncludeDrafts,
         automatic_analysis_require_checks_success: automaticAnalysisRequireChecksSuccess,
+        autofix_max_files: autofixMaxFiles,
+        autofix_max_changed_lines: autofixMaxChangedLines,
+        autofix_confirmation_ttl_seconds: autofixConfirmationTtlSeconds,
+        autofix_workspace_retention_hours: autofixWorkspaceRetentionHours,
         webhook_relay_url: webhookRelayUrl.trim() || null,
         webhook_relay_device_id: webhookRelayDeviceId.trim() || null,
       });
@@ -613,6 +621,16 @@ function SettingsEditor({ settings, host }: { settings: Settings; host: HostBrid
         <label className="switch-row"><span><strong>{text("启用自动分析", "Enable automatic analysis")}</strong><small>{text("默认关闭；相同 Head SHA、索引、Prompt 和模型不会重复入队。", "Off by default; the same Head SHA, index, prompt, and model are never queued twice.")}</small></span><input type="checkbox" checked={automaticAnalysisEnabled} onChange={(event) => setAutomaticAnalysisEnabled(event.target.checked)} /></label>
         <label className="switch-row"><span><strong>{text("包含 Draft PR", "Include draft PRs")}</strong><small>{text("关闭时只处理非草稿的开放 PR。", "When off, only non-draft open PRs are eligible.")}</small></span><input type="checkbox" checked={automaticAnalysisIncludeDrafts} disabled={!automaticAnalysisEnabled} onChange={(event) => setAutomaticAnalysisIncludeDrafts(event.target.checked)} /></label>
         <label className="switch-row"><span><strong>{text("要求 Checks 通过", "Require successful Checks")}</strong><small>{text("开启后，只有聚合 Check Run 状态为 success 的 PR 才会入队。", "When enabled, only PRs with an aggregate Check Run status of success are queued.")}</small></span><input type="checkbox" checked={automaticAnalysisRequireChecksSuccess} disabled={!automaticAnalysisEnabled} onChange={(event) => setAutomaticAnalysisRequireChecksSuccess(event.target.checked)} /></label>
+      </div>
+
+      <div className="settings-subsection">
+        <div><span className="eyebrow">AUTOFIX SAFETY BOUNDARIES</span><h3>{text("受控修复安全边界", "Controlled fix safety boundaries")}</h3><p className="field-note">{text("这些是后端硬上限，不是给模型的建议；超限补丁会在用户确认前被拒绝。", "These are server-enforced limits, not suggestions to the model. Oversized patches are rejected before confirmation.")}</p></div>
+        <div className="form-grid">
+          <label className="field"><span>{text("单次最多文件数", "Maximum files per fix")}</span><input type="number" min="1" max="32" value={autofixMaxFiles} onChange={(event) => setAutofixMaxFiles(event.target.valueAsNumber)} /><small>1–32</small></label>
+          <label className="field"><span>{text("单次最多变更行数", "Maximum changed lines")}</span><input type="number" min="50" max="5000" step="50" value={autofixMaxChangedLines} onChange={(event) => setAutofixMaxChangedLines(event.target.valueAsNumber)} /><small>50–5000</small></label>
+          <label className="field"><span>{text("确认有效期（秒）", "Confirmation TTL (seconds)")}</span><input type="number" min="60" max="3600" step="60" value={autofixConfirmationTtlSeconds} onChange={(event) => setAutofixConfirmationTtlSeconds(event.target.valueAsNumber)} /><small>60–3600</small></label>
+          <label className="field"><span>{text("隔离工作区保留（小时）", "Workspace retention (hours)")}</span><input type="number" min="1" max="168" value={autofixWorkspaceRetentionHours} onChange={(event) => setAutofixWorkspaceRetentionHours(event.target.valueAsNumber)} /><small>1–168</small></label>
+        </div>
       </div>
 
       <label className="switch-row">

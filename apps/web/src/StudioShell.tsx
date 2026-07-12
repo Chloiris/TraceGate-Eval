@@ -1,7 +1,7 @@
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 
-import { usePullRequests, useRepositories, useRuns, useSettings, useSystemStatus } from "./api/queries";
+import { useFixSessions, usePullRequests, useRepositories, useRuns, useSettings, useSystemStatus } from "./api/queries";
 import { useApiClient } from "./api/clientContext";
 import { ErrorState, LoadingState } from "./components/RequestState";
 import { PendingStatusBadge, StatusBadge } from "./components/StatusBadge";
@@ -52,12 +52,14 @@ export function StudioShell({ host }: { host: HostBridge }) {
   const notificationPullRequests = usePullRequests();
   const notificationRepositories = useRepositories();
   const notificationRuns = useRuns();
+  const notificationFixSessions = useFixSessions();
   const [nativeNotice, setNativeNotice] = useState<{ kind: "success" | "error"; message: string } | null>(null);
   const [closePromptOpen, setClosePromptOpen] = useState(false);
   const [dismissClosePrompt, setDismissClosePrompt] = useState(false);
   const [closeBusy, setCloseBusy] = useState(false);
   const previousPullRequests = useRef<Map<string, string | null> | null>(null);
   const previousRuns = useRef<Map<string, string> | null>(null);
+  const previousFixSessions = useRef<Map<string, string> | null>(null);
   const previousGithubState = useRef<string | null>(null);
   const locale: StudioLocale = settingsQuery.data?.language ?? "zh-CN";
   const text = useCallback((zh: string, en: string) => locale === "en-US" ? en : zh, [locale]);
@@ -137,6 +139,46 @@ export function StudioShell({ host }: { host: HostBridge }) {
   }, [client, deliverNotification, host.showReviewNotification, notificationRuns.data, settingsQuery.data?.notifications_enabled, text]);
 
   useEffect(() => {
+    const items = notificationFixSessions.data?.items;
+    if (!items) return;
+    const current = new Map(items.map((item) => [item.id, item.status]));
+    const previous = previousFixSessions.current;
+    previousFixSessions.current = current;
+    if (!previous || !settingsQuery.data?.notifications_enabled || !host.showReviewNotification) return;
+    for (const session of items) {
+      const oldStatus = previous.get(session.id);
+      if (!oldStatus || oldStatus === session.status) continue;
+      const deepLink = `tracegate://fix/${session.id}`;
+      const common = { deep_link: deepLink, repository_id: session.repository_id, pull_request_id: session.pull_request_id };
+      if (session.status === "AWAITING_USER_CONFIRMATION") {
+        void Promise.all([
+          deliverNotification({ ...common, kind: "fix_proposal_ready", title: "TraceGate · Patch Proposal ready", body: text("补丁已生成并通过静态安全检查。", "The patch was generated and passed static safety inspection.") }),
+          deliverNotification({ ...common, kind: "fix_awaiting_confirmation", title: "TraceGate · Fix awaits confirmation", body: text("请核对完整 Patch Hash、风险与验证命令。", "Review the full Patch Hash, risks, and validation commands.") }),
+        ]).catch((error: unknown) => setNativeNotice({ kind: "error", message: `${text("Fix 通知失败", "Fix notification failed")}: ${errorMessage(error)}` }));
+      } else if (session.status === "VALIDATION_COMPLETE") {
+        void client.getFixSession(session.id).then((detail) => {
+          const failed = detail.validation_runs.some((run) => run.required && run.status !== "PASSED");
+          return deliverNotification({
+            ...common,
+            kind: failed ? "fix_validation_failed" : "fix_validation_passed",
+            title: failed ? "TraceGate · Fix validation failed" : "TraceGate · Fix validation passed",
+            body: failed
+              ? text("至少一个必需验证未通过；不会标记为已解决。", "At least one required validation failed; the Finding will not be marked resolved.")
+              : text("受控验证已通过，等待重新索引与审查。", "Controlled validation passed; reindex and re-review are next."),
+          });
+        }).catch((error: unknown) => setNativeNotice({ kind: "error", message: `${text("Fix 通知准备失败", "Could not prepare Fix notification")}: ${errorMessage(error)}` }));
+      } else if (session.status === "FAILED" && (session.current_node === "RUN_VALIDATION" || session.error_code?.toLowerCase().includes("validation"))) {
+        void deliverNotification({ ...common, kind: "fix_validation_failed", title: "TraceGate · Fix validation failed", body: session.error_message ?? session.error_code ?? text("必需验证未通过。", "Required validation did not pass.") }).catch((error: unknown) => setNativeNotice({ kind: "error", message: `${text("Fix 通知失败", "Fix notification failed")}: ${errorMessage(error)}` }));
+      } else if (session.status === "COMPLETED") {
+        void client.getFixSession(session.id).then((detail) => {
+          const resolved = detail.result?.resolution === "RESOLVED";
+          return deliverNotification({ ...common, kind: resolved ? "fix_resolved" : "fix_needs_human_review", title: resolved ? "TraceGate · Finding resolved" : "TraceGate · Human review required", body: detail.result?.report.final_summary ?? text("Fix 已完成，但没有可验证的最终结论。", "The fix completed without a verifiable final conclusion.") });
+        }).catch((error: unknown) => setNativeNotice({ kind: "error", message: `${text("Fix 通知准备失败", "Could not prepare Fix notification")}: ${errorMessage(error)}` }));
+      }
+    }
+  }, [client, deliverNotification, host.showReviewNotification, notificationFixSessions.data, settingsQuery.data?.notifications_enabled, text]);
+
+  useEffect(() => {
     const state = statusQuery.data?.components.github.state;
     if (!state) return;
     const previous = previousGithubState.current;
@@ -199,6 +241,11 @@ export function StudioShell({ host }: { host: HostBridge }) {
         if (route.kind === "run") {
           await client.getRun(route.run_id);
           useUiStore.getState().selectRun(route.run_id);
+          return;
+        }
+        if (route.kind === "fix") {
+          const session = await client.getFixSession(route.fix_session_id);
+          useUiStore.getState().selectFixSession(session.id, session.pull_request_id, session.repository_id);
           return;
         }
         const repositories = await client.listRepositories();

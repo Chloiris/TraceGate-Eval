@@ -15,6 +15,7 @@ import {
   useAnalyzePullRequest,
   useEvidence,
   useFindings,
+  useCreateFixSession,
   usePullRequest,
   usePullRequestChecks,
   usePullRequestCommits,
@@ -27,6 +28,7 @@ import {
   useRuns,
   useSyncRepository,
 } from "../api/queries";
+import { FixExperience } from "../components/FixExperience";
 import { ErrorState, LoadingState } from "../components/RequestState";
 import type { HostBridge } from "../host/hostBridge";
 import { errorMessage } from "../lib/errors";
@@ -36,10 +38,10 @@ import { useI18n } from "../i18n";
 self.MonacoEnvironment = { getWorker: () => new EditorWorker() };
 loader.config({ monaco });
 
-type DetailTab = "overview" | "files" | "map" | "tour" | "findings" | "evidence" | "trace" | "checks" | "history";
+type DetailTab = "overview" | "files" | "map" | "tour" | "findings" | "fix" | "evidence" | "trace" | "checks" | "history";
 const tabs: readonly [DetailTab, string][] = [
   ["overview", "Overview"], ["files", "Files & Diff"], ["map", "Review Map"], ["tour", "Change Tour"],
-  ["findings", "Findings"], ["evidence", "Evidence"], ["trace", "Agent Trace"], ["checks", "Checks"], ["history", "History"],
+  ["findings", "Findings"], ["fix", "Fix / 自动修复"], ["evidence", "Evidence"], ["trace", "Agent Trace"], ["checks", "Checks"], ["history", "History"],
 ];
 
 function languageFor(path: string | null): string {
@@ -52,8 +54,10 @@ export function PullRequestDetailPage({ host }: { host: HostBridge }) {
   const pullRequestId = useUiStore((state) => state.selectedPullRequestId);
   const selectedDiffPath = useUiStore((state) => state.selectedDiffPath);
   const selectedRunId = useUiStore((state) => state.selectedRunId);
+  const selectedFixSessionId = useUiStore((state) => state.selectedFixSessionId);
   const selectDiffPath = useUiStore((state) => state.selectDiffPath);
   const selectRun = useUiStore((state) => state.selectRun);
+  const selectFixSession = useUiStore((state) => state.selectFixSession);
   const setActiveView = useUiStore((state) => state.setActiveView);
   const [tab, setTab] = useState<DetailTab>("overview");
   const [targetLine, setTargetLine] = useState<number | null>(null);
@@ -70,8 +74,13 @@ export function PullRequestDetailPage({ host }: { host: HostBridge }) {
   const run = useRun(effectiveRunId);
   const findings = useFindings(effectiveRunId);
   const evidence = useEvidence(effectiveRunId);
+  const createFixSession = useCreateFixSession();
   const analyze = useAnalyzePullRequest();
   const syncRepository = useSyncRepository();
+
+  useEffect(() => {
+    if (selectedFixSessionId) setTab("fix");
+  }, [selectedFixSessionId]);
 
   function jumpToPath(path: string | null, line?: number | null) {
     if (!path) return;
@@ -95,6 +104,7 @@ export function PullRequestDetailPage({ host }: { host: HostBridge }) {
         <div className="detail-actions"><a className="button button-secondary" href={current.url} target="_blank" rel="noreferrer">{text("在 GitHub 打开", "Open on GitHub")}</a><button className="button button-primary" type="button" disabled={analyze.isPending} onClick={() => analyze.mutate({ pullRequestId: current.id })}>{analyze.isPending ? text("启动中…", "Starting…") : text("启动 Agent 分析", "Start Agent analysis")}</button></div>
       </header>
       {analyze.isError ? <p className="inline-error" role="alert">{text("分析未启动", "Analysis did not start")}: {errorMessage(analyze.error)}</p> : null}
+      {createFixSession.isError ? <p className="inline-error" role="alert">{text("修复会话未创建", "Fix session was not created")}: {errorMessage(createFixSession.error)}</p> : null}
       {analyze.data?.reused ? <p className="inline-success">{text("相同 Head SHA、索引、Prompt 和模型已有运行，已复用该 Run。", "An existing run with the same Head SHA, index, prompt, and model was reused.")}</p> : null}
       <div className="tab-list" role="tablist" aria-label={text("PR 详情视图", "PR detail views")}>{tabs.map(([id, label]) => <button key={id} className={tab === id ? "tab-active" : ""} type="button" role="tab" aria-selected={tab === id} onClick={() => setTab(id)}>{label}</button>)}</div>
 
@@ -102,7 +112,8 @@ export function PullRequestDetailPage({ host }: { host: HostBridge }) {
       {tab === "files" ? <DiffPanel query={diff} selectedPath={selectedDiffPath} onSelectPath={(path) => { selectDiffPath(path); setTargetLine(null); }} targetLine={targetLine} findings={findings.data ?? []} evidence={evidence.data ?? []} fileDetails={fileDetails.data ?? []} pullRequestUrl={current.url} workspace={repository?.local_path ?? null} host={host} /> : null}
       {tab === "map" ? <ReviewMapPanel query={reviewMap} onSelectPath={jumpToPath} /> : null}
       {tab === "tour" ? <TourPanel query={tour} onSelectPath={jumpToPath} /> : null}
-      {tab === "findings" ? <FindingsPanel query={findings} onSelectPath={jumpToPath} /> : null}
+      {tab === "findings" ? <FindingsPanel query={findings} onSelectPath={jumpToPath} createPending={createFixSession.isPending} onStartFix={(findingId) => createFixSession.mutate({ finding_id: findingId, permission_mode: "APPLY_IN_ISOLATED_WORKSPACE" }, { onSuccess: (session) => selectFixSession(session.id, current.id, current.repository_id) })} /> : null}
+      {tab === "fix" ? <FixExperience pullRequestId={current.id} currentHead={current.head_sha} findings={findings.data ?? []} evidence={evidence.data ?? []} preferredSessionId={selectedFixSessionId} onSelectSession={(sessionId) => selectFixSession(sessionId, current.id, current.repository_id)} onOpenDiff={jumpToPath} /> : null}
       {tab === "evidence" ? <EvidencePanel query={evidence} onSelectPath={jumpToPath} /> : null}
       {tab === "trace" ? <TracePanel query={run} onOpenRun={() => effectiveRunId && selectRun(effectiveRunId)} /> : null}
       {tab === "checks" ? <ChecksPanel query={checks} syncPending={syncRepository.isPending} syncError={syncRepository.error} onRefresh={() => syncRepository.mutate(current.repository_id)} /> : null}
@@ -233,12 +244,12 @@ function TourPanel({ query, onSelectPath }: { query: ReturnType<typeof usePullRe
   return <section className="panel"><p className={query.data.complete ? "inline-success" : "blocker-note"}>{query.data.message}</p><ol className="tour-list">{query.data.steps.map((step) => <li key={step.sequence}><button type="button" onClick={() => onSelectPath(step.files[0] ?? null)}><span>{String(step.sequence).padStart(2, "0")}</span><div><strong>{step.title}</strong><small>{step.files.join(", ")} · confidence {step.confidence}{step.prerequisite_step ? ` · after ${step.prerequisite_step}` : ""}</small><p>{step.purpose}</p>{step.risk ? <em>{text("风险", "Risk")}: {step.risk}</em> : null}<dl className="tour-metadata"><div><dt>{text("相关符号", "Symbols")}</dt><dd>{step.symbols.length ? step.symbols.join(" · ") : text("静态索引未解析出相关符号", "No related symbol resolved by the static index")}</dd></div><div><dt>Evidence</dt><dd>{step.evidence_ids.length ? step.evidence_ids.join(" · ") : text("尚无 Agent Evidence", "No Agent Evidence yet")}</dd></div><div><dt>{text("建议检查点", "Checkpoints")}</dt><dd><ul>{step.checkpoints.map((checkpoint) => <li key={checkpoint}>{checkpoint}</li>)}</ul></dd></div></dl></div></button></li>)}</ol></section>;
 }
 
-function FindingsPanel({ query, onSelectPath }: { query: ReturnType<typeof useFindings>; onSelectPath: (path: string | null, line?: number | null) => void }) {
+function FindingsPanel({ query, onSelectPath, onStartFix, createPending }: { query: ReturnType<typeof useFindings>; onSelectPath: (path: string | null, line?: number | null) => void; onStartFix: (findingId: string) => void; createPending: boolean }) {
   const { text } = useI18n();
   if (query.isPending) return <LoadingState label={text("正在读取 Findings…", "Reading Findings…")} />;
   if (query.isError) return <ErrorState title={text("Findings 不可用", "Findings unavailable")} message={errorMessage(query.error)} />;
   if (!query.data.length) return <div className="honest-empty-state"><div className="empty-mark">F</div><div><h2>{text("当前 Run 没有 Finding", "This run has no Findings")}</h2><p>{text("这表示后端未持久化 Finding，不代表代码自动安全。", "This means the backend persisted no Finding; it does not mean the code is automatically safe.")}</p></div></div>;
-  return <div className="finding-list">{query.data.map((finding) => <article key={finding.id} className={`finding-card severity-${finding.severity}`}><div><span className="pill">{finding.severity} · {Math.round(finding.confidence * 100)}%</span><span className="mono">{finding.verifier_status}</span></div><h3>{finding.title}</h3><p>{finding.message}</p><button className="text-button" type="button" disabled={!finding.file_path} onClick={() => onSelectPath(finding.file_path, finding.line_start)}>{finding.file_path ? `${finding.file_path}:${finding.line_start ?? "?"}` : text("没有可跳转的源码位置", "No source location to open")}</button><small>commit {finding.commit_sha?.slice(0, 12) ?? text("未记录", "not recorded")} · evidence {finding.evidence_ids_json.length}</small></article>)}</div>;
+  return <div className="finding-list">{query.data.map((finding) => <article key={finding.id} className={`finding-card severity-${finding.severity}`}><div><span className="pill">{finding.severity} · {Math.round(finding.confidence * 100)}%</span><span className="mono">{finding.verifier_status}</span></div><h3>{finding.title}</h3><p>{finding.message}</p><div className="action-row compact"><button className="text-button" type="button" disabled={!finding.file_path} onClick={() => onSelectPath(finding.file_path, finding.line_start)}>{finding.file_path ? `${finding.file_path}:${finding.line_start ?? "?"}` : text("没有可跳转的源码位置", "No source location to open")}</button><button className="button button-primary button-small" type="button" disabled={createPending || !finding.file_path || finding.evidence_ids_json.length === 0} title={finding.evidence_ids_json.length === 0 ? text("缺少 Evidence，不能启动修复", "Cannot start a fix without Evidence") : undefined} onClick={() => onStartFix(finding.id)}>{createPending ? text("正在创建…", "Creating…") : text("启动受控修复", "Start controlled fix")}</button></div><small>commit {finding.commit_sha?.slice(0, 12) ?? text("未记录", "not recorded")} · evidence {finding.evidence_ids_json.length}</small></article>)}</div>;
 }
 
 function EvidencePanel({ query, onSelectPath }: { query: ReturnType<typeof useEvidence>; onSelectPath: (path: string | null, line?: number | null) => void }) {

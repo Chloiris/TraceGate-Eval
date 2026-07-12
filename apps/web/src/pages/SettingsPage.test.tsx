@@ -34,6 +34,10 @@ const settings = {
   automatic_analysis_include_drafts: false,
   automatic_analysis_require_checks_success: false,
   analysis_paused: false,
+  autofix_max_files: 6,
+  autofix_max_changed_lines: 600,
+  autofix_confirmation_ttl_seconds: 600,
+  autofix_workspace_retention_hours: 12,
   webhook_relay_url: null,
   webhook_relay_device_id: null,
   updated_at: "2026-07-11T10:00:00Z",
@@ -93,6 +97,15 @@ const diagnostics = {
   telemetry_enabled: false,
 };
 
+const residualWorkspace = {
+  fix_session_id: "orphan-session-0001",
+  repository_id: "repository-0001",
+  path: "/managed/autofix/repository-0001/orphan-session-0001/worktree",
+  cleanup_status: "ORPHANED",
+  last_active_at: "2026-07-12T10:00:00Z",
+  expired: true,
+};
+
 function jsonResponse(payload: unknown): Response {
   return new Response(JSON.stringify(payload), { status: 200, headers: { "Content-Type": "application/json" } });
 }
@@ -125,7 +138,8 @@ afterEach(() => {
 describe("Settings secondary navigation", () => {
   it("keeps the full redacted diagnostics view inside Settings and refreshes it", async () => {
     let diagnosticsRequests = 0;
-    vi.stubGlobal("fetch", vi.fn<typeof fetch>(async (input) => {
+    let workspacePresent = true;
+    vi.stubGlobal("fetch", vi.fn<typeof fetch>(async (input, init) => {
       const url = String(input);
       if (url.endsWith("/settings")) return jsonResponse(settings);
       if (url.endsWith("/system/status")) {
@@ -138,6 +152,17 @@ describe("Settings secondary navigation", () => {
       if (url.endsWith("/diagnostics")) {
         diagnosticsRequests += 1;
         return jsonResponse(diagnostics);
+      }
+      if (url.endsWith(`/fix-workspaces/${residualWorkspace.fix_session_id}`) && init?.method === "DELETE") {
+        workspacePresent = false;
+        return new Response(null, { status: 204 });
+      }
+      if (url.endsWith("/fix-workspaces")) {
+        return jsonResponse({
+          items: workspacePresent ? [residualWorkspace] : [],
+          total: workspacePresent ? 1 : 0,
+          retention_hours: 12,
+        });
       }
       if (url.endsWith("/system/update")) {
         return jsonResponse({ current_version: "0.1.0", channel: "stable", configured: false, update_available: false, latest_version: null, manifest_url: null, signature_verification: false, message: "not configured" });
@@ -152,12 +177,23 @@ describe("Settings secondary navigation", () => {
     expect(navigation).toContainElement(diagnosticsLink);
     expect(diagnosticsLink).toHaveAttribute("href", "#settings-diagnostics");
     expect(screen.getByRole("link", { name: /常规/ })).toHaveAttribute("aria-current", "location");
+    expect(screen.getByLabelText(/单次最多文件数/)).toHaveValue(6);
+    expect(screen.getByLabelText(/单次最多变更行数/)).toHaveValue(600);
+    expect(screen.getByLabelText(/确认有效期（秒）/)).toHaveValue(600);
+    expect(screen.getByLabelText(/隔离工作区保留（小时）/)).toHaveValue(12);
 
     await userEvent.click(diagnosticsLink);
     expect(diagnosticsLink).toHaveAttribute("aria-current", "location");
     expect(await screen.findByRole("heading", { name: "版本与进程" })).toBeInTheDocument();
     expect(screen.getByText("Darwin / arm64")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "后台队列" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "隔离修复工作区" })).toBeInTheDocument();
+    expect(screen.getByText("orphan-session-0001")).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: "清理" }));
+    expect(screen.getByText(/确认只删除上方这一份隔离 worktree/)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "确认清理" }));
+    expect(await screen.findByText("没有残留的隔离修复工作区。")).toBeInTheDocument();
 
     const beforeRefresh = diagnosticsRequests;
     await userEvent.click(screen.getByRole("button", { name: "刷新" }));
@@ -170,6 +206,7 @@ describe("Settings secondary navigation", () => {
       if (url.endsWith("/settings")) return jsonResponse(settings);
       if (url.endsWith("/system/status")) return jsonResponse({ status: "ready", components: { api: component, database: component, github: component, model: component, webhook_relay: diagnostics.webhook_relay, eval: component }, checked_at: "2026-07-11T10:00:00Z" });
       if (url.endsWith("/diagnostics")) return jsonResponse(diagnostics);
+      if (url.endsWith("/fix-workspaces")) return jsonResponse({ items: [], total: 0, retention_hours: 12 });
       if (url.endsWith("/system/update")) return jsonResponse({ current_version: "0.1.0", channel: "stable", configured: false, update_available: false, latest_version: null, manifest_url: null, signature_verification: false, message: "not configured" });
       return new Response(null, { status: 404 });
     }));
