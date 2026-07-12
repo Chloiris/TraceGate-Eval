@@ -515,9 +515,13 @@ async def test_lint_only_validation_cannot_be_resolved_by_model(
 ) -> None:
     fake_bin = tmp_path / "fake-bin"
     fake_bin.mkdir()
-    fake_npm = fake_bin / "npm"
-    fake_npm.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
-    fake_npm.chmod(0o755)
+    fake_npm = fake_bin / ("npm.cmd" if os.name == "nt" else "npm")
+    fake_npm.write_text(
+        "@echo off\r\nexit /b 0\r\n" if os.name == "nt" else "#!/bin/sh\nexit 0\n",
+        encoding="utf-8",
+    )
+    if os.name != "nt":
+        fake_npm.chmod(0o755)
     monkeypatch.setenv("PATH", f"{fake_bin}{os.pathsep}{os.environ.get('PATH', '')}")
     fixture = _fixture(tmp_path, python_project=False)
     try:

@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import shutil
 import signal
 import sys
 import time
@@ -213,10 +214,17 @@ class ValidationExecutor:
         self._validate_command(command.argv)
         self.safe_home.mkdir(parents=True, mode=0o700, exist_ok=True)
         environment = self._environment()
+        executable_argv = list(command.argv)
+        if os.name == "nt" and not Path(executable_argv[0]).is_absolute():
+            resolved = shutil.which(
+                executable_argv[0], path=environment.get("PATH")
+            )
+            if resolved:
+                executable_argv[0] = resolved
         started = time.monotonic()
         try:
             process = await asyncio.create_subprocess_exec(
-                *command.argv,
+                *executable_argv,
                 cwd=self.boundary.root,
                 env=environment,
                 stdout=asyncio.subprocess.PIPE,
@@ -337,6 +345,16 @@ class ValidationExecutor:
                 "XDG_CONFIG_HOME": str(self.safe_home / "config"),
             }
         )
+        if os.name == "nt":
+            environment.update(
+                {
+                    "GIT_CONFIG_COUNT": "2",
+                    "GIT_CONFIG_KEY_0": "core.autocrlf",
+                    "GIT_CONFIG_VALUE_0": "true",
+                    "GIT_CONFIG_KEY_1": "core.safecrlf",
+                    "GIT_CONFIG_VALUE_1": "false",
+                }
+            )
         return environment
 
     @staticmethod

@@ -4,6 +4,7 @@ import hashlib
 import os
 import re
 import subprocess
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 
@@ -99,7 +100,12 @@ def compute_patch_hash(patch: str) -> str:
     return hashlib.sha256(normalize_patch(patch).encode("utf-8")).hexdigest()
 
 
-def prepare_patch_bytes(patch: str, boundary: RepositoryBoundary) -> bytes:
+def prepare_patch_bytes(
+    patch: str,
+    boundary: RepositoryBoundary,
+    *,
+    content_loader: Callable[[str], bytes | None] | None = None,
+) -> bytes:
     """Preserve a target file's uniform LF/CRLF convention without relaxing context.
 
     Model and API patches are normalized to LF for a stable confirmation hash. Git
@@ -123,7 +129,9 @@ def prepare_patch_bytes(patch: str, boundary: RepositoryBoundary) -> bytes:
                 in_hunk = False
             else:
                 target_path = path or previous_path
-                target_eol = _target_line_ending(boundary, target_path)
+                target_eol = _target_line_ending(
+                    boundary, target_path, content_loader=content_loader
+                )
                 in_hunk = False
             output.append(line.encode("utf-8"))
             continue
@@ -145,15 +153,24 @@ def prepare_patch_bytes(patch: str, boundary: RepositoryBoundary) -> bytes:
 
 
 def _target_line_ending(
-    boundary: RepositoryBoundary, relative_path: str | None
+    boundary: RepositoryBoundary,
+    relative_path: str | None,
+    *,
+    content_loader: Callable[[str], bytes | None] | None,
 ) -> bytes:
     if relative_path is None:
         return b"\n"
     path = boundary.resolve(relative_path, allow_missing=True)
-    if not path.is_file():
-        return b"\n"
-    with path.open("rb") as handle:
-        raw = handle.read(_MAX_EOL_INSPECTION_BYTES + 1)
+    if content_loader is None:
+        if not path.is_file():
+            return b"\n"
+        with path.open("rb") as handle:
+            raw = handle.read(_MAX_EOL_INSPECTION_BYTES + 1)
+    else:
+        loaded = content_loader(relative_path)
+        if loaded is None:
+            return b"\n"
+        raw = loaded
     if len(raw) > _MAX_EOL_INSPECTION_BYTES:
         raise AutofixError(
             "fix_patch_unsafe",
@@ -170,6 +187,14 @@ def _target_line_ending(
 
 def _decode_git_error(value: bytes) -> str:
     return value.decode("utf-8", errors="replace")[:2_000].strip()
+
+
+def _git_command(root: Path, *arguments: str) -> list[str]:
+    command = ["git"]
+    if os.name == "nt":
+        command.extend(["-c", "core.autocrlf=true", "-c", "core.safecrlf=false"])
+    command.extend(["-C", str(root), *arguments])
+    return command
 
 
 def _clean_diff_path(raw_path: str) -> str | None:
@@ -363,7 +388,13 @@ class PatchSafetyValidator:
 
         prepared = prepare_patch_bytes(normalized, self.boundary)
         process = subprocess.run(
-            ["git", "-C", str(self.boundary.root), "apply", "--check", "--whitespace=nowarn", "-"],
+            _git_command(
+                self.boundary.root,
+                "apply",
+                "--check",
+                "--whitespace=nowarn",
+                "-",
+            ),
             input=prepared,
             capture_output=True,
             timeout=30,
@@ -392,7 +423,9 @@ class PatchSafetyValidator:
             raise AutofixError("fix_head_stale", "Fix workspace Head SHA changed before apply")
         prepared = prepare_patch_bytes(normalized, self.boundary)
         process = subprocess.run(
-            ["git", "-C", str(self.boundary.root), "apply", "--whitespace=nowarn", "-"],
+            _git_command(
+                self.boundary.root, "apply", "--whitespace=nowarn", "-"
+            ),
             input=prepared,
             capture_output=True,
             timeout=30,
@@ -407,7 +440,7 @@ class PatchSafetyValidator:
 
     def _git(self, *arguments: str) -> subprocess.CompletedProcess[str]:
         process = subprocess.run(
-            ["git", "-C", str(self.boundary.root), *arguments],
+            _git_command(self.boundary.root, *arguments),
             capture_output=True,
             text=True,
             errors="replace",

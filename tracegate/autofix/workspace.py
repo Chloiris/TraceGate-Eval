@@ -18,6 +18,14 @@ from .patch_safety import prepare_patch_bytes
 _SAFE_IDENTIFIER = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$")
 
 
+def _git_command(root: Path, *arguments: str) -> list[str]:
+    command = ["git"]
+    if os.name == "nt":
+        command.extend(["-c", "core.autocrlf=true", "-c", "core.safecrlf=false"])
+    command.extend(["-C", str(root), *arguments])
+    return command
+
+
 def _git_environment() -> dict[str, str]:
     allowed = ("LANG", "LC_ALL", "PATH", "SYSTEMROOT", "TEMP", "TMP")
     environment = {name: os.environ[name] for name in allowed if name in os.environ}
@@ -267,7 +275,9 @@ class FixWorkspaceManager:
             environment = _git_environment()
             environment["GIT_INDEX_FILE"] = str(Path(temporary) / "index")
             read_tree = subprocess.run(
-                ["git", "-C", str(workspace.worktree_root), "read-tree", workspace.head_sha],
+                _git_command(
+                    workspace.worktree_root, "read-tree", workspace.head_sha
+                ),
                 capture_output=True,
                 text=True,
                 errors="replace",
@@ -280,17 +290,35 @@ class FixWorkspaceManager:
                     "fix_workspace_unavailable",
                     read_tree.stderr[:2_000].strip() or "Patch projection index failed",
                 )
+            def blob_content(path: str) -> bytes | None:
+                result = subprocess.run(
+                    _git_command(
+                        workspace.worktree_root,
+                        "show",
+                        f"{workspace.head_sha}:{path}",
+                    ),
+                    capture_output=True,
+                    timeout=30,
+                    env=environment,
+                    check=False,
+                )
+                return result.stdout if result.returncode == 0 else None
+
             applied = subprocess.run(
                 [
-                    "git",
-                    "-C",
-                    str(workspace.worktree_root),
-                    "apply",
-                    "--cached",
-                    "--whitespace=nowarn",
-                    "-",
+                    *_git_command(
+                        workspace.worktree_root,
+                        "apply",
+                        "--cached",
+                        "--whitespace=nowarn",
+                        "-",
+                    )
                 ],
-                input=prepare_patch_bytes(patch, workspace.boundary),
+                input=prepare_patch_bytes(
+                    patch,
+                    workspace.boundary,
+                    content_loader=blob_content,
+                ),
                 capture_output=True,
                 timeout=30,
                 env=environment,
@@ -306,11 +334,9 @@ class FixWorkspaceManager:
             def show(specification: str) -> str | None:
                 result = subprocess.run(
                     [
-                        "git",
-                        "-C",
-                        str(workspace.worktree_root),
-                        "show",
-                        specification,
+                        *_git_command(
+                            workspace.worktree_root, "show", specification
+                        )
                     ],
                     capture_output=True,
                     text=True,
@@ -380,7 +406,9 @@ class FixWorkspaceManager:
     @staticmethod
     def _tracked(root: Path, relative_path: str) -> bool:
         result = subprocess.run(
-            ["git", "-C", str(root), "ls-files", "--error-unmatch", "--", relative_path],
+            _git_command(
+                root, "ls-files", "--error-unmatch", "--", relative_path
+            ),
             capture_output=True,
             text=True,
             timeout=20,
@@ -398,7 +426,7 @@ class FixWorkspaceManager:
     ) -> subprocess.CompletedProcess[str]:
         try:
             result = subprocess.run(
-                ["git", "-C", str(root), *arguments],
+                _git_command(root, *arguments),
                 capture_output=True,
                 text=True,
                 errors="replace",
