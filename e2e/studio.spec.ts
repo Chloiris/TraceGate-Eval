@@ -1,7 +1,17 @@
 import { expect, test } from "@playwright/test";
-import { readFile } from "node:fs/promises";
+import { mkdir, readFile } from "node:fs/promises";
+import { resolve } from "node:path";
 
 import { annotateAutofixFixtureScreenshot, installAutofixUiFixture } from "./autofix-fixture";
+
+const productCaptureRoot = resolve("build/site-product-captures");
+const captureSiteProduct = process.env.TRACEGATE_CAPTURE_SITE_PRODUCT === "1";
+
+async function captureProduct(page: import("@playwright/test").Page, name: string) {
+  if (!captureSiteProduct) return;
+  await mkdir(productCaptureRoot, { recursive: true });
+  await page.screenshot({ path: resolve(productCaptureRoot, `${name}.png`), fullPage: true });
+}
 
 test("loads authenticated real service and benchmark state", async ({ page }) => {
   await page.goto("/");
@@ -10,18 +20,21 @@ test("loads authenticated real service and benchmark state", async ({ page }) =>
   await expect(page.getByText("模型尚未配置", { exact: true }).first()).toBeVisible();
   await expect(page.getByText("工作区活动")).toBeVisible();
   await expect(page.getByText("1", { exact: true }).first()).toBeVisible();
+  await captureProduct(page, "dashboard");
 
   await page.getByRole("button", { name: /设置.*本地偏好与宿主/ }).click();
   await page.getByRole("link", { name: /诊断.*版本、指标与队列/ }).click();
   await expect(page.getByRole("heading", { name: "诊断", level: 2 })).toBeVisible();
   await expect(page.getByRole("heading", { name: "最近持久化指标" })).toBeVisible();
   await expect(page.getByText("not configured", { exact: true })).toBeVisible();
+  await captureProduct(page, "settings-diagnostics");
 
   await page.getByRole("button", { name: /评测中心.*真实基准与声明评测/ }).click();
   await expect(page.getByRole("heading", { name: "TraceGate v0.2-alpha hard real-data mini benchmark" })).toBeVisible();
   await expect(page.getByText("160 ClaimBench runs")).toBeVisible();
   await expect(page.getByText("dataset version / sha256", { exact: false })).toBeVisible();
   await page.screenshot({ path: "docs/screenshots/p1-eval-center-macos.png", fullPage: true });
+  await captureProduct(page, "eval-center");
 });
 
 test("indexes an explicitly enrolled repository through the UI", async ({ page }) => {
@@ -43,6 +56,7 @@ test("indexes an explicitly enrolled repository through the UI", async ({ page }
   await expect(secondCard.getByText("尚未索引")).toHaveCount(0);
   await secondCard.getByRole("button", { name: "Repository Map" }).click();
   await expect(page.getByRole("heading", { name: "Repository Map" })).toBeVisible();
+  await captureProduct(page, "repository-map");
   const [download] = await Promise.all([
     page.waitForEvent("download"),
     page.getByRole("button", { name: "导出 PNG" }).click(),
@@ -60,6 +74,7 @@ test("navigates PR diff, Review Map, Finding and Agent Trace", async ({ page }) 
   await page.goto("/");
   await page.getByRole("button", { name: /审查队列.*拉取请求审查与分析/ }).click();
   await expect(page.getByText("#17 · Double the calculated total")).toBeVisible();
+  await captureProduct(page, "pr-inbox");
   await page.getByText("#17 · Double the calculated total").click();
   await page.waitForTimeout(250);
   expect(pageErrors).toEqual([]);
@@ -69,11 +84,13 @@ test("navigates PR diff, Review Map, Finding and Agent Trace", async ({ page }) 
   await expect(page.getByRole("button", { name: /^M service\.py$/ })).toBeVisible();
   await expect(page.locator(".monaco-diff-editor")).toBeVisible();
   await page.screenshot({ path: "docs/screenshots/p1-pr-diff-macos.png", fullPage: true });
+  await captureProduct(page, "pr-diff");
 
   await page.getByRole("tab", { name: "Review Map" }).click();
   await expect(page.getByText("Impact depth uses exact Head-side changed lines", { exact: false })).toBeVisible();
   await expect(page.locator(".review-flow .react-flow")).toBeVisible();
   await page.screenshot({ path: "docs/screenshots/p1-review-map-macos.png", fullPage: true });
+  await captureProduct(page, "review-map");
 
   await page.getByRole("tab", { name: "Change Tour" }).click();
   await expect(page.getByText("Single changed indexed code file", { exact: false })).toBeVisible();
@@ -82,12 +99,14 @@ test("navigates PR diff, Review Map, Finding and Agent Trace", async ({ page }) 
 
   await page.getByRole("tab", { name: "Findings" }).click();
   await expect(page.getByRole("heading", { name: "Return value semantics changed" })).toBeVisible();
+  await captureProduct(page, "findings-evidence");
   await page.getByRole("button", { name: "service.py:2" }).click();
   await expect(page.getByRole("tab", { name: "Files & Diff", selected: true })).toBeVisible();
 
   await page.getByRole("tab", { name: "Agent Trace" }).click();
   await expect(page.getByText("Repository Retriever", { exact: true })).toBeVisible();
   await expect(page.getByText("read_file", { exact: false })).toBeVisible();
+  await captureProduct(page, "agent-trace");
 });
 
 test("shows explicit retry failure and actual registry permissions", async ({ page }) => {
@@ -141,10 +160,12 @@ test("runs the complete controlled autofix UI fixture without presenting it as p
   await page.getByRole("button", { name: "检查资格并规划" }).click();
   await expect(page.getByRole("heading", { name: "计划已就绪" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Restore the original return-value contract" })).toBeVisible();
+  await captureProduct(page, "fix-plan");
 
   await page.getByRole("button", { name: "生成并静态校验补丁" }).click();
   await expect(page.getByRole("heading", { name: "等待用户确认" })).toBeVisible();
   await expect(page.getByText("f1".repeat(32)).first()).toBeVisible();
+  await captureProduct(page, "patch-proposal");
   await page.getByRole("button", { name: "核对并确认补丁" }).click();
   await expect(page.getByRole("dialog", { name: "确认这一个精确补丁" })).toBeVisible();
   await expect(page.getByRole("dialog", { name: "确认这一个精确补丁" }).getByText("Playwright UI fixture only")).toBeVisible();
@@ -161,10 +182,12 @@ test("runs the complete controlled autofix UI fixture without presenting it as p
   await expect(validationResult.getByText("PASSED", { exact: true })).toBeVisible();
   await validationResult.locator("summary").click();
   await expect(validationResult.getByText("1 passed in 0.04s")).toBeVisible();
+  await captureProduct(page, "validation");
   await page.getByRole("button", { name: "重建索引并重新审查" }).click();
   const resolvedHeading = page.getByRole("heading", { name: "RESOLVED" });
   await expect(resolvedHeading).toBeVisible();
   await expect(page.getByText("Public callers were not evaluated by this Playwright fixture")).toBeVisible();
+  await captureProduct(page, "final-report");
   await resolvedHeading.scrollIntoViewIfNeeded();
   await page.screenshot({ path: "docs/screenshots/autofix-playwright-fixture-result-macos.png" });
 

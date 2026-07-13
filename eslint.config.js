@@ -35,12 +35,18 @@ export default tseslint.config(
     },
   },
   {
-    files: ["apps/web/src/**/*.{ts,tsx}"],
+    files: ["apps/{web,site}/src/**/*.{ts,tsx}"],
     plugins: {
       "react-refresh": reactRefresh,
     },
     rules: {
       "react-refresh/only-export-components": ["warn", { "allowConstantExport": true }],
+    },
+  },
+  {
+    files: ["apps/site/src/i18n.tsx"],
+    rules: {
+      "react-refresh/only-export-components": "off",
     },
   },
 );
