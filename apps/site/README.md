@@ -11,9 +11,31 @@ desktop product or FastAPI Sidecar.
 - Motion for workflow state transitions; CSS/SVG for the lightweight hero graph
 - Vitest and React Testing Library
 - Playwright for desktop, language, mobile navigation, Autofix, gallery, links,
-  resources, and screenshot acceptance
+  resources, both themes, persistence, and screenshot acceptance
 - Sharp for AVIF/WebP asset variants
 - Lighthouse desktop CI-style thresholds
+
+## Theme system
+
+The first visit always starts in the independently designed light theme; it
+does not follow the operating-system preference. The header toggle switches
+between `light` and `dark` without navigation, preserves the current language,
+scroll position, mobile drawer, and gallery state, and stores only one of those
+two values under `tracegate-site-theme`.
+
+`public/theme-init.js` runs synchronously in the document head before the React
+entry and its imported CSS. It safely reads the stored value, falls back to
+`light`, and sets `document.documentElement.dataset.theme` plus
+`color-scheme`, preventing a light-to-dark or dark-to-light first-paint flash.
+It is a same-origin external script, so the production CSP remains
+`script-src 'self'` without `unsafe-inline`. React then owns changes through
+`ThemeProvider`, including the matching `theme-color` meta value.
+
+Canonical semantic tokens live in `src/styles/tokens.css`. New components must
+use the `--color-*`, `--shadow-*`, gradient, and graph tokens rather than
+hard-coded dark surfaces. Theme transitions are limited to color, background,
+border, shadow, opacity, and the small icon transform; reduced-motion users get
+near-instant changes through the global media query.
 
 ## Commands
 

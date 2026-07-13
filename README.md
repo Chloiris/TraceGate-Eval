@@ -14,7 +14,14 @@
   </p>
 </div>
 
-[![TraceGate Studio product website](docs/site-screenshots/desktop-1440-home.png)](docs/site-screenshots/desktop-1440-home.png)
+[![TraceGate Studio product website in light mode](docs/site-screenshots/light-desktop-1440-home.png)](docs/site-screenshots/light-desktop-1440-home.png)
+
+<details>
+<summary>Night mode</summary>
+
+[![TraceGate Studio product website in dark mode](docs/site-screenshots/dark-desktop-1440-home.png)](docs/site-screenshots/dark-desktop-1440-home.png)
+
+</details>
 
 > Local acceptance capture of the bilingual static product site. Product UI
 > shown inside the composition retains its fixture provenance; it is not a
@@ -23,6 +30,8 @@
 The repository includes the commercial-grade static site in
 [`apps/site`](apps/site/README.md), with its own design system, evidence
 boundaries, responsive gallery, Playwright acceptance, and deployment path.
+New visitors start in the premium light theme; the accessible header control
+switches to the preserved dark experience and remembers the explicit choice.
 
 ## 1. Product Overview
 

@@ -8,13 +8,22 @@
   </p>
 </div>
 
-[![TraceGate Studio 产品官网](site-screenshots/desktop-1440-home.png)](site-screenshots/desktop-1440-home.png)
+[![TraceGate Studio 产品官网日间模式](site-screenshots/light-desktop-1440-home.png)](site-screenshots/light-desktop-1440-home.png)
+
+<details>
+<summary>夜间模式</summary>
+
+[![TraceGate Studio 产品官网夜间模式](site-screenshots/dark-desktop-1440-home.png)](site-screenshots/dark-desktop-1440-home.png)
+
+</details>
 
 > 这是双语静态产品官网的本地验收截图。画面内嵌的产品 UI 保留 fixture
 > 来源标记，不代表公共 PR 或真实模型结果。
 
 仓库内的 [`apps/site`](../apps/site/README.md) 是独立商业级静态官网工程，
 包含统一设计系统、证据边界、响应式图库、Playwright 验收与受限部署流程。
+新访客默认使用完整设计的日间模式；右上角无障碍主题按钮可立即切换到保留的
+夜间视觉，并持久化用户的明确选择。
 
 ## 1. 产品概览
 

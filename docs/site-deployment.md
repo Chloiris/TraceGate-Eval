@@ -44,6 +44,13 @@ Run those commands on the server from a trusted copy of the repository, or
 copy the reviewed config through the administrator's normal change process.
 Do not grant the deployment account root access.
 
+`scripts/install-site-nginx.sh` packages the same one-time administrator flow
+for the dedicated TraceGate host. It refuses non-root execution, stages and
+hash-verifies the reviewed config before installation, backs up a changed
+TraceGate config, tests Nginx before reload, and only then attempts Certbot. It
+does not alter any other virtual host. The routine deploy account remains
+unprivileged and never executes this script automatically.
+
 The config provides SPA fallback, hashed asset caching, bounded media caching,
 gzip, no-cache HTML, and conservative security headers.
 
@@ -69,9 +76,25 @@ Confirm:
 - title is `TraceGate Studio — Evidence-grounded AI Coding Agent`
 - JavaScript, CSS, AVIF/WebP, favicon, robots, sitemap, and OG image load
 - Chinese is the default and English switches without reload
+- a clean browser context paints light before React starts
+- the header toggle switches both directions without reloading or moving scroll
+- `tracegate-site-theme` persists light/dark across refresh and rejects invalid values
+- mobile navigation and the gallery dialog stay open during a theme change
 - mobile navigation, Autofix tabs, gallery dialog, and internal anchors work
 - GitHub CTAs point to the public TraceGate repository
 - console has no errors and no content exposes secrets or local paths
 
 Public acceptance screenshots belong in `docs/site-screenshots/` and must be
 regenerated after material visual changes.
+
+The required paired captures are:
+
+- `light-desktop-1440-home.png` / `dark-desktop-1440-home.png`
+- `light-desktop-autofix.png` / `dark-desktop-autofix.png`
+- `light-mobile-390-home.png` / `dark-mobile-390-home.png`
+- `light-mobile-navigation.png` / `dark-mobile-navigation.png`
+
+At the time the theme system was prepared, the origin Nginx served the site but
+the public hostname was still intercepted by the cloud provider's ICP filing
+gate. Upload success must not be reported as public acceptance until that
+external gate is removed and HTTP/HTTPS checks both complete.
