@@ -14,6 +14,8 @@ export default defineConfig({
     trace: "retain-on-failure",
     screenshot: "only-on-failure",
     video: "off",
+    // The app must still default to light; this deliberately hostile OS preference
+    // proves that first-visit behavior never follows prefers-color-scheme.
     colorScheme: "dark",
   },
   projects: [

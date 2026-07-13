@@ -15,6 +15,9 @@ class IntersectionObserverMock implements IntersectionObserver {
 beforeEach(() => {
   if (typeof window === "undefined") return;
   window.localStorage.clear();
+  document.documentElement.dataset.theme = "light";
+  document.documentElement.style.colorScheme = "light";
+  document.documentElement.classList.remove("theme-ready");
   Object.defineProperty(window, "matchMedia", {
     configurable: true,
     value: vi.fn().mockImplementation((query: string) => ({

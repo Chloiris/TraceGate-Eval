@@ -4,9 +4,10 @@ import { describe, expect, test, vi } from "vitest";
 import App from "./App";
 import { HeroGraph } from "./components/Hero";
 import { LanguageProvider } from "./i18n";
+import { ThemeProvider } from "./theme";
 
 function renderApp() {
-  return render(<LanguageProvider><App /></LanguageProvider>);
+  return render(<ThemeProvider><LanguageProvider><App /></LanguageProvider></ThemeProvider>);
 }
 
 describe("TraceGate marketing site", () => {

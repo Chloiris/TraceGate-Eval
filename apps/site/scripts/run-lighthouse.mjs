@@ -50,7 +50,7 @@ try {
     Object.entries(result.lhr.categories).map(([key, value]) => [key, Math.round((value.score ?? 0) * 100)]),
   );
   console.log(JSON.stringify(scores));
-  const thresholds = { performance: 90, accessibility: 95, "best-practices": 95, seo: 95 };
+  const thresholds = { performance: 95, accessibility: 95, "best-practices": 95, seo: 95 };
   const failures = Object.entries(thresholds).filter(([key, threshold]) => (scores[key] ?? 0) < threshold);
   if (failures.length > 0) {
     throw new Error(`Lighthouse thresholds missed: ${failures.map(([key, threshold]) => `${key}<${threshold}`).join(", ")}`);
