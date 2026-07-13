@@ -78,9 +78,9 @@ export function HeroGraph() {
         <svg viewBox="0 0 700 540" preserveAspectRatio="none" aria-hidden="true">
           <defs>
             <linearGradient id="path-gradient" x1="0" y1="0" x2="1" y2="1">
-              <stop stopColor="#67f6c4" />
-              <stop offset=".55" stopColor="#7cc7ff" />
-              <stop offset="1" stopColor="#a98cff" />
+              <stop stopColor="var(--color-accent)" />
+              <stop offset=".55" stopColor="var(--color-secondary-accent)" />
+              <stop offset="1" stopColor="var(--color-violet)" />
             </linearGradient>
             <filter id="line-glow"><feGaussianBlur stdDeviation="2.2" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
           </defs>

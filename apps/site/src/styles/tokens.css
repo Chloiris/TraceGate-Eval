@@ -1,24 +1,84 @@
-:root {
-  --background: #07100f;
-  --background-deep: #040908;
-  --surface: #0d1917;
-  --surface-2: #10211e;
-  --elevated-surface: #132723;
-  --text-primary: #f2fbf8;
-  --text-secondary: #9fb4af;
-  --text-muted: #6f8580;
-  --border: rgba(176, 222, 210, 0.14);
-  --border-strong: rgba(143, 241, 211, 0.28);
-  --accent: #67f6c4;
-  --accent-rgb: 103, 246, 196;
-  --accent-secondary: #83bbff;
-  --violet: #aa8cff;
-  --success: #70e2a7;
-  --warning: #f4bd62;
-  --danger: #ff7185;
-  --glow: 0 0 64px rgba(73, 233, 183, 0.16);
-  --shadow-sm: 0 16px 40px rgba(0, 0, 0, 0.22);
-  --shadow-lg: 0 32px 100px rgba(0, 0, 0, 0.45);
+:root,
+:root[data-theme="light"] {
+  color-scheme: light;
+
+  --color-page: #f2f7f4;
+  --color-page-secondary: #e7f0ec;
+  --color-page-deep: #dce9e4;
+  --color-surface: #fbfdfc;
+  --color-surface-elevated: #ffffff;
+  --color-surface-glass: rgba(250, 253, 251, 0.84);
+  --color-surface-muted: #edf4f1;
+  --color-surface-subtle: rgba(16, 81, 64, 0.035);
+  --color-surface-hover: rgba(10, 105, 82, 0.065);
+  --color-surface-media: #e4eeea;
+  --color-surface-code: #10241f;
+  --color-overlay: rgba(18, 35, 31, 0.6);
+
+  --color-text-primary: #10241f;
+  --color-text-secondary: #3e5b53;
+  --color-text-muted: #526a62;
+  --color-text-inverse: #f4fcf9;
+  --color-text-on-accent: #f7fffc;
+
+  --color-border: rgba(20, 82, 66, 0.14);
+  --color-border-strong: rgba(5, 125, 96, 0.3);
+  --color-divider: rgba(20, 82, 66, 0.1);
+
+  --color-accent: #06715c;
+  --color-accent-rgb: 6, 113, 92;
+  --color-accent-hover: #055e4d;
+  --color-accent-soft: rgba(6, 113, 92, 0.09);
+  --color-accent-glow: rgba(6, 113, 92, 0.15);
+  --color-secondary-accent: #3479bd;
+  --color-secondary-accent-rgb: 52, 121, 189;
+  --color-violet: #7058bd;
+  --color-success: #187b56;
+  --color-warning: #a25e0b;
+  --color-danger: #b72e49;
+  --color-risk-ink: #402508;
+
+  --color-grid: rgba(23, 112, 88, 0.075);
+  --color-noise: 0.018;
+  --color-selection: #b9f1de;
+  --color-selection-text: #092019;
+  --color-focus: #06715c;
+
+  --shadow-sm: 0 14px 38px rgba(29, 61, 51, 0.09), 0 2px 8px rgba(29, 61, 51, 0.045);
+  --shadow-md: 0 24px 64px rgba(24, 62, 51, 0.12), 0 8px 24px rgba(24, 62, 51, 0.07);
+  --shadow-lg: 0 34px 100px rgba(24, 55, 46, 0.17), 0 12px 32px rgba(24, 55, 46, 0.08);
+  --shadow-glow: 0 0 64px rgba(8, 127, 103, 0.1);
+  --shadow-inset: inset 0 1px rgba(255, 255, 255, 0.78);
+
+  --hero-gradient: linear-gradient(145deg, rgba(255, 255, 255, 0.96), rgba(229, 241, 236, 0.94));
+  --section-gradient: linear-gradient(180deg, transparent, rgba(219, 235, 228, 0.58), transparent);
+  --card-gradient: linear-gradient(145deg, rgba(255, 255, 255, 0.92), rgba(236, 244, 241, 0.95));
+  --workflow-gradient: linear-gradient(135deg, rgba(255, 255, 255, 0.94), rgba(232, 241, 238, 0.97));
+  --autofix-gradient: linear-gradient(145deg, rgba(253, 253, 255, 0.98), rgba(237, 235, 248, 0.94));
+
+  --graph-node-background: rgba(251, 254, 252, 0.93);
+  --graph-node-border: rgba(14, 111, 87, 0.2);
+  --graph-edge: rgba(23, 112, 88, 0.3);
+  --graph-edge-active: #06715c;
+  --graph-risk: #a25e0b;
+  --graph-resolved: #187b56;
+  --graph-panel: linear-gradient(145deg, rgba(255, 255, 255, 0.9), rgba(225, 239, 234, 0.94));
+  --graph-event-background: rgba(250, 253, 252, 0.92);
+  --graph-canvas: #eaf3ef;
+
+  --nav-glass: rgba(244, 249, 247, 0.82);
+  --nav-drawer: rgba(248, 252, 250, 0.97);
+  --control-background: rgba(255, 255, 255, 0.64);
+  --button-sheen: rgba(255, 255, 255, 0.42);
+  --browser-chrome: #eef5f2;
+  --browser-dot: #8ea29b;
+  --code-scope-background: rgba(54, 36, 7, 0.9);
+  --code-scope-text: #ffe0a4;
+  --footer-background: #e4eee9;
+  --gallery-background: #eaf2ef;
+  --orbit-inset: inset 0 0 90px rgba(19, 81, 63, 0.08);
+  --brand-mark-ink: #f7fffc;
+
   --radius-sm: 10px;
   --radius-md: 18px;
   --radius-lg: 28px;
@@ -36,6 +96,87 @@
   --shell: min(1240px, calc(100vw - 48px));
   --font-sans: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", "Noto Sans SC", Arial, sans-serif;
   --font-mono: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+
+  --color-page: #07100f;
+  --color-page-secondary: #091412;
+  --color-page-deep: #040908;
+  --color-surface: #0d1917;
+  --color-surface-elevated: #132723;
+  --color-surface-glass: rgba(13, 25, 23, 0.84);
+  --color-surface-muted: #10211e;
+  --color-surface-subtle: rgba(255, 255, 255, 0.018);
+  --color-surface-hover: rgba(255, 255, 255, 0.045);
+  --color-surface-media: #dfe9ee;
+  --color-surface-code: #091513;
+  --color-overlay: rgba(1, 6, 5, 0.88);
+
+  --color-text-primary: #f2fbf8;
+  --color-text-secondary: #9fb4af;
+  --color-text-muted: #6f8580;
+  --color-text-inverse: #07100f;
+  --color-text-on-accent: #04100d;
+
+  --color-border: rgba(176, 222, 210, 0.14);
+  --color-border-strong: rgba(143, 241, 211, 0.28);
+  --color-divider: rgba(176, 222, 210, 0.1);
+
+  --color-accent: #67f6c4;
+  --color-accent-rgb: 103, 246, 196;
+  --color-accent-hover: #8cffd6;
+  --color-accent-soft: rgba(103, 246, 196, 0.08);
+  --color-accent-glow: rgba(73, 233, 183, 0.16);
+  --color-secondary-accent: #83bbff;
+  --color-secondary-accent-rgb: 131, 187, 255;
+  --color-violet: #aa8cff;
+  --color-success: #70e2a7;
+  --color-warning: #f4bd62;
+  --color-danger: #ff7185;
+  --color-risk-ink: #281706;
+
+  --color-grid: rgba(113, 220, 190, 0.045);
+  --color-noise: 0.035;
+  --color-selection: #67f6c4;
+  --color-selection-text: #06100e;
+  --color-focus: #67f6c4;
+
+  --shadow-sm: 0 16px 40px rgba(0, 0, 0, 0.22);
+  --shadow-md: 0 24px 70px rgba(0, 0, 0, 0.32);
+  --shadow-lg: 0 32px 100px rgba(0, 0, 0, 0.45);
+  --shadow-glow: 0 0 64px rgba(73, 233, 183, 0.16);
+  --shadow-inset: inset 0 1px rgba(255, 255, 255, 0.04);
+
+  --hero-gradient: linear-gradient(145deg, rgba(19, 39, 35, 0.93), rgba(6, 14, 13, 0.98));
+  --section-gradient: linear-gradient(180deg, transparent, rgba(14, 35, 30, 0.65), transparent);
+  --card-gradient: linear-gradient(145deg, rgba(18, 38, 34, 0.78), rgba(8, 17, 15, 0.92));
+  --workflow-gradient: linear-gradient(135deg, rgba(16, 33, 30, 0.92), rgba(6, 14, 13, 0.96));
+  --autofix-gradient: linear-gradient(145deg, rgba(21, 30, 31, 0.96), rgba(10, 10, 18, 0.96));
+
+  --graph-node-background: rgba(9, 24, 21, 0.9);
+  --graph-node-border: rgba(149, 212, 194, 0.18);
+  --graph-edge: rgba(131, 196, 177, 0.18);
+  --graph-edge-active: #67f6c4;
+  --graph-risk: #f4bd62;
+  --graph-resolved: #70e2a7;
+  --graph-panel: var(--hero-gradient);
+  --graph-event-background: rgba(13, 25, 23, 0.87);
+  --graph-canvas: #091513;
+
+  --nav-glass: rgba(5, 12, 11, 0.76);
+  --nav-drawer: rgba(5, 13, 11, 0.96);
+  --control-background: rgba(255, 255, 255, 0.025);
+  --button-sheen: rgba(255, 255, 255, 0.35);
+  --browser-chrome: #091412;
+  --browser-dot: #32423e;
+  --code-scope-background: rgba(31, 22, 7, 0.88);
+  --code-scope-text: #ffe0a4;
+  --footer-background: #040a09;
+  --gallery-background: #050c0b;
+  --orbit-inset: inset 0 0 90px rgba(0, 0, 0, 0.36);
+  --brand-mark-ink: #07100f;
 }
 
 @media (max-width: 760px) {

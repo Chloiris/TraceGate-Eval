@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 
 import { copy, useLanguage } from "../i18n";
+import { useTheme } from "../theme-context";
 import { BrandMark, GithubIcon } from "./Primitives";
 
 const sections = ["product", "autofix", "intelligence", "evidence", "architecture", "verification"] as const;
@@ -27,6 +28,7 @@ function useActiveSection() {
 
 export function Navigation() {
   const { language, setLanguage } = useLanguage();
+  const { theme, toggleTheme } = useTheme();
   const text = copy[language].nav;
   const [open, setOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
@@ -56,11 +58,12 @@ export function Navigation() {
     ["architecture", text.architecture],
     ["verification", text.verification],
   ] as const;
+  const themeLabel = theme === "light" ? text.switchToDark : text.switchToLight;
 
   return (
     <header className={`site-nav ${scrolled ? "site-nav--scrolled" : ""}`}>
       <div className="site-nav__inner">
-        <a href="#top" className="site-nav__brand" aria-label="TraceGate Studio home" onClick={() => setOpen(false)}>
+        <a href="#top" className="site-nav__brand" title="TraceGate Studio home" onClick={() => setOpen(false)}>
           <BrandMark />
         </a>
         <nav className={`site-nav__links ${open ? "site-nav__links--open" : ""}`} aria-label="Primary navigation">
@@ -75,6 +78,21 @@ export function Navigation() {
           </a>
         </nav>
         <div className="site-nav__actions">
+          <button
+            className="theme-toggle"
+            type="button"
+            aria-label={themeLabel}
+            aria-pressed={theme === "dark"}
+            title={themeLabel}
+            onClick={toggleTheme}
+          >
+            <span className="theme-toggle__icon theme-toggle__icon--moon" aria-hidden="true">
+              <svg viewBox="0 0 24 24"><path d="M20.3 15.3A8.5 8.5 0 0 1 8.7 3.7 8.5 8.5 0 1 0 20.3 15.3Z" /></svg>
+            </span>
+            <span className="theme-toggle__icon theme-toggle__icon--sun" aria-hidden="true">
+              <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.4" /><path d="M12 2v2.2M12 19.8V22M4.9 4.9l1.6 1.6M17.5 17.5l1.6 1.6M2 12h2.2M19.8 12H22M4.9 19.1l1.6-1.6M17.5 6.5l1.6-1.6" /></svg>
+            </span>
+          </button>
           <div className="language-switch" role="group" aria-label="Language">
             <button type="button" aria-pressed={language === "zh"} onClick={() => setLanguage("zh")}>中</button>
             <button type="button" aria-pressed={language === "en"} onClick={() => setLanguage("en")}>EN</button>

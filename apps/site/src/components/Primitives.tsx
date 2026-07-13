@@ -4,16 +4,16 @@ import { imageSources } from "../data/gallery";
 
 export function BrandMark({ compact = false }: { compact?: boolean }) {
   return (
-    <span className={`brand ${compact ? "brand--compact" : ""}`} aria-label="TraceGate Studio">
+    <span className={`brand ${compact ? "brand--compact" : ""}`}>
       <svg className="brand__mark" viewBox="0 0 64 64" aria-hidden="true">
         <defs>
           <linearGradient id="brand-gradient" x1="8" y1="4" x2="56" y2="60">
-            <stop stopColor="#67f6c4" />
-            <stop offset="1" stopColor="#84b8ff" />
+            <stop stopColor="var(--color-accent)" />
+            <stop offset="1" stopColor="var(--color-secondary-accent)" />
           </linearGradient>
         </defs>
         <path d="M32 5 56 18v28L32 59 8 46V18L32 5Z" fill="url(#brand-gradient)" />
-        <path d="M19 20h26v9h-9v24h-8V29h-9v-9Z" fill="#07100f" />
+        <path d="M19 20h26v9h-9v24h-8V29h-9v-9Z" fill="var(--brand-mark-ink)" />
       </svg>
       <span className="brand__type">
         <strong>TraceGate</strong>

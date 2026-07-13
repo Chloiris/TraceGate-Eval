@@ -41,7 +41,7 @@ export function ProductGallery() {
         <div className="gallery__grid">
           {galleryItems.map((item, index) => (
             <Reveal className={`gallery-card gallery-card--${index % 5}`} delay={(index % 4) * 0.035} key={item.id}>
-              <button type="button" onClick={() => setSelected(index)} aria-label={`${text.open}: ${item.title[language]}`}>
+              <button type="button" onClick={() => setSelected(index)} title={`${text.open}: ${item.title[language]}`}>
                 <span className="gallery-card__image">
                   <ProductPicture id={item.id} alt={`${item.title[language]} — ${item.scopeLabel[language]}`} sizes="(max-width: 760px) 92vw, (max-width: 1200px) 45vw, 390px" />
                 </span>

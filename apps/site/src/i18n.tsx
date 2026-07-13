@@ -14,15 +14,23 @@ const LanguageContext = createContext<{
 } | null>(null);
 
 function initialLanguage(): Language {
-  const saved = window.localStorage.getItem("tracegate-site-language");
-  return saved === "en" ? "en" : "zh";
+  try {
+    const saved = window.localStorage.getItem("tracegate-site-language");
+    return saved === "en" ? "en" : "zh";
+  } catch {
+    return "zh";
+  }
 }
 
 export function LanguageProvider({ children }: { children: ReactNode }) {
   const [language, setLanguage] = useState<Language>(initialLanguage);
 
   useEffect(() => {
-    window.localStorage.setItem("tracegate-site-language", language);
+    try {
+      window.localStorage.setItem("tracegate-site-language", language);
+    } catch {
+      // Keep the current session usable when browser storage is unavailable.
+    }
     document.documentElement.lang = language === "zh" ? "zh-CN" : "en";
     document.title = "TraceGate Studio — Evidence-grounded AI Coding Agent";
     const meta = document.querySelector<HTMLMetaElement>('meta[name="description"]');
@@ -51,6 +59,8 @@ export const copy = {
       github: "GitHub",
       menu: "打开导航",
       close: "关闭导航",
+      switchToDark: "切换到夜间模式",
+      switchToLight: "切换到日间模式",
     },
     hero: {
       eyebrow: "EVIDENCE-GROUNDED CODING AGENT",
@@ -181,6 +191,8 @@ export const copy = {
       github: "GitHub",
       menu: "Open navigation",
       close: "Close navigation",
+      switchToDark: "Switch to dark mode",
+      switchToLight: "Switch to light mode",
     },
     hero: {
       eyebrow: "EVIDENCE-GROUNDED CODING AGENT",

@@ -87,19 +87,20 @@ for (const asset of assets) {
 const ogSvg = `
 <svg width="1200" height="630" viewBox="0 0 1200 630" xmlns="http://www.w3.org/2000/svg">
   <defs>
-    <radialGradient id="glow" cx="70%" cy="30%" r="65%"><stop stop-color="#2ee6b2" stop-opacity=".26"/><stop offset="1" stop-color="#07100f" stop-opacity="0"/></radialGradient>
-    <linearGradient id="line" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#67f6c4"/><stop offset="1" stop-color="#88b8ff"/></linearGradient>
+    <radialGradient id="glow" cx="72%" cy="26%" r="68%"><stop stop-color="#73d6bb" stop-opacity=".34"/><stop offset="1" stop-color="#f2f7f4" stop-opacity="0"/></radialGradient>
+    <linearGradient id="line" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#087f67"/><stop offset="1" stop-color="#3479bd"/></linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="160%"><feDropShadow dx="0" dy="16" stdDeviation="18" flood-color="#183d33" flood-opacity=".14"/></filter>
   </defs>
-  <rect width="1200" height="630" fill="#07100f"/>
+  <rect width="1200" height="630" fill="#f2f7f4"/>
   <rect width="1200" height="630" fill="url(#glow)"/>
-  <g stroke="#16342f" opacity=".6"><path d="M0 90h1200M0 180h1200M0 270h1200M0 360h1200M0 450h1200M0 540h1200"/><path d="M90 0v630M180 0v630M270 0v630M360 0v630M450 0v630M540 0v630M630 0v630M720 0v630M810 0v630M900 0v630M990 0v630M1080 0v630"/></g>
+  <g stroke="#b9d2c9" opacity=".48"><path d="M0 90h1200M0 180h1200M0 270h1200M0 360h1200M0 450h1200M0 540h1200"/><path d="M90 0v630M180 0v630M270 0v630M360 0v630M450 0v630M540 0v630M630 0v630M720 0v630M810 0v630M900 0v630M990 0v630M1080 0v630"/></g>
   <g transform="translate(84 76)"><path d="M54 0 104 28v58L54 114 4 86V28L54 0Z" fill="url(#line)"/><path d="M28 31h52v16H62v48H46V47H28V31Z" fill="#07100f"/></g>
-  <text x="220" y="130" fill="#eafdf8" font-family="Arial, sans-serif" font-size="44" font-weight="700">TraceGate Studio</text>
-  <text x="84" y="280" fill="#f2fbf8" font-family="Arial, sans-serif" font-size="72" font-weight="750">Review with evidence.</text>
-  <text x="84" y="368" fill="#67f6c4" font-family="Arial, sans-serif" font-size="72" font-weight="750">Fix with control.</text>
-  <text x="88" y="455" fill="#9ab2ad" font-family="Arial, sans-serif" font-size="26">Evidence-grounded PR review · Code intelligence · Controlled Autofix</text>
-  <g transform="translate(850 130)" fill="#0d1b19" stroke="#67f6c4" stroke-width="2"><rect x="0" y="0" width="220" height="64" rx="18"/><rect x="-90" y="124" width="220" height="64" rx="18"/><rect x="60" y="248" width="220" height="64" rx="18"/></g>
-  <g fill="#dffaf2" font-family="Arial, sans-serif" font-size="18" font-weight="600"><text x="914" y="169">EVIDENCE</text><text x="813" y="293">FINDING</text><text x="939" y="417">RESOLVED</text></g>
+  <text x="220" y="130" fill="#10241f" font-family="Arial, sans-serif" font-size="44" font-weight="700">TraceGate Studio</text>
+  <text x="84" y="280" fill="#10241f" font-family="Arial, sans-serif" font-size="66" font-weight="750">Review with evidence.</text>
+  <text x="84" y="368" fill="#087f67" font-family="Arial, sans-serif" font-size="68" font-weight="750">Fix with control.</text>
+  <text x="88" y="455" fill="#4c685f" font-family="Arial, sans-serif" font-size="26">Evidence-grounded PR review · Code intelligence · Controlled Autofix</text>
+  <g transform="translate(850 130)" fill="#fbfdfc" stroke="#087f67" stroke-width="2" filter="url(#shadow)"><rect x="0" y="0" width="220" height="64" rx="18"/><rect x="-90" y="124" width="220" height="64" rx="18"/><rect x="60" y="248" width="220" height="64" rx="18"/></g>
+  <g fill="#17332b" font-family="Arial, sans-serif" font-size="18" font-weight="600"><text x="914" y="169">EVIDENCE</text><text x="813" y="293">FINDING</text><text x="939" y="417">RESOLVED</text></g>
   <path d="M955 194C950 232 875 240 852 254M875 318C906 350 951 350 962 378" fill="none" stroke="url(#line)" stroke-width="4" stroke-linecap="round"/>
 </svg>`;
 await sharp(Buffer.from(ogSvg)).png({ compressionLevel: 9 }).toFile(resolve(siteRoot, "public/og-tracegate.png"));
